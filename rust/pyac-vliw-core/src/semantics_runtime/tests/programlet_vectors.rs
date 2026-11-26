@@ -1,6 +1,8 @@
 use super::*;
 
-const SOFTMAX_NAME: [u32; 2] = [0x2b73, 0x6844];
+// A section name is one or more root words; `0x2b73` is `dlek` (a class word),
+// so the second root carries the identity.
+const SOFTMAX_NAME: [u32; 2] = [0x6844, 0xa8a0];
 const LOGITS_NAME: u32 = 0xa8a0;
 const ANSWER_NAME: u32 = 0x4930;
 const MAXIMUM_NAME: u32 = 0xaa90;
@@ -25,12 +27,48 @@ fn append_sentence(words: &mut std::vec::Vec<u32>, tokens: &[u32], boundaries: &
     }
 }
 
+/// A typed field: the class words lead, then the name. `gi` marks names only,
+/// and a class word already identifies the field, so there is exactly one tag.
 fn typed_name(kind: &[u32], name: &[u32]) -> std::vec::Vec<u32> {
-    let mut field = std::vec![NAME_TYPE];
-    field.extend_from_slice(kind);
+    let mut field = kind.to_vec();
     field.push(NAME_TYPE);
     field.extend_from_slice(name);
     field
+}
+
+/// Append a sentence whose field boundaries are the case words and the mood.
+///
+/// Deriving them instead of listing them by hand keeps fixtures from drifting
+/// when a field gains or loses a word.
+fn append_auto(words: &mut std::vec::Vec<u32>, tokens: &[u32]) {
+    let boundaries: std::vec::Vec<usize> = tokens
+        .iter()
+        .enumerate()
+        .filter(|(_, token)| {
+            matches!(
+                **token,
+                NOMINATIVE
+                    | ACCUSATIVE
+                    | ESSIVE
+                    | DESTINATION
+                    | SOURCE
+                    | COMITATIVE
+                    | INSTRUMENTAL
+                    | FROM_INDEX
+                    | TO_INDEX
+                    | LOCATIVE
+                    | GENITIVE_CASE
+                    | REALIS
+                    | DEONTIC
+                    | CONDITIONAL
+                    | MOOD_DEFINITION
+                    | MOOD_RETURN
+                    | MOOD_PARAGRAPH
+            )
+        })
+        .map(|(index, _)| index)
+        .collect();
+    append_sentence(words, tokens, &boundaries);
 }
 
 fn append_softmax_program(words: &mut std::vec::Vec<u32>, mut invocation: std::vec::Vec<u32>) {
@@ -42,80 +80,37 @@ fn append_softmax_program(words: &mut std::vec::Vec<u32>, mut invocation: std::v
     definition.extend(typed_name(&[VECTOR_TYPE, FLOAT_TYPE], &[ANSWER_NAME]));
     definition.push(DESTINATION);
     definition.extend([CEREMONY, MOOD_DEFINITION]);
-    let definition_boundaries = [3, 9, 15, 17];
-    append_sentence(words, &definition, &definition_boundaries);
+    append_auto(words, &definition);
 
     let mut maximum = std::vec![NAME_TYPE, LOGITS_NAME, SOURCE];
     maximum.extend(typed_name(&[FLOAT_TYPE], &[MAXIMUM_NAME]));
     maximum.push(DESTINATION);
     maximum.extend([0xa9b2, 0xa831, DEONTIC]);
-    let maximum_boundaries = [2, 7, 10];
-    append_sentence(words, &maximum, &maximum_boundaries);
+    append_auto(words, &maximum);
 
-    let subtract = [
-        NAME_TYPE,
-        LOGITS_NAME,
-        SOURCE,
-        NAME_TYPE,
-        MAXIMUM_NAME,
-        COMITATIVE,
-        NAME_TYPE,
-        VECTOR_TYPE,
-        FLOAT_TYPE,
-        NAME_TYPE,
-        SHIFTED_NAME,
-        DESTINATION,
-        0xabd2,
-        DEONTIC,
-    ];
-    append_sentence(words, &subtract, &[2, 5, 11, 13]);
+    let mut subtract = std::vec![NAME_TYPE, LOGITS_NAME, SOURCE];
+    subtract.extend(typed_name(&[], &[MAXIMUM_NAME]));
+    subtract.push(COMITATIVE);
+    subtract.extend(typed_name(&[VECTOR_TYPE, FLOAT_TYPE], &[SHIFTED_NAME]));
+    subtract.extend([DESTINATION, 0xabd2, DEONTIC]);
+    append_auto(words, &subtract);
 
-    let exponential = [
-        NAME_TYPE,
-        SHIFTED_NAME,
-        SOURCE,
-        NAME_TYPE,
-        VECTOR_TYPE,
-        FLOAT_TYPE,
-        NAME_TYPE,
-        EXPONENTIALS_NAME,
-        DESTINATION,
-        0x8c29,
-        DEONTIC,
-    ];
-    append_sentence(words, &exponential, &[2, 8, 10]);
+    let mut exponential = std::vec![NAME_TYPE, SHIFTED_NAME, SOURCE];
+    exponential.extend(typed_name(&[VECTOR_TYPE, FLOAT_TYPE], &[EXPONENTIALS_NAME]));
+    exponential.extend([DESTINATION, 0x8c29, DEONTIC]);
+    append_auto(words, &exponential);
 
-    let sum = [
-        NAME_TYPE,
-        EXPONENTIALS_NAME,
-        SOURCE,
-        NAME_TYPE,
-        FLOAT_TYPE,
-        NAME_TYPE,
-        DENOMINATOR_NAME,
-        DESTINATION,
-        0xbc8a,
-        DEONTIC,
-    ];
-    append_sentence(words, &sum, &[2, 7, 9]);
+    let mut sum = std::vec![NAME_TYPE, EXPONENTIALS_NAME, SOURCE];
+    sum.extend(typed_name(&[FLOAT_TYPE], &[DENOMINATOR_NAME]));
+    sum.extend([DESTINATION, 0xbc8a, DEONTIC]);
+    append_auto(words, &sum);
 
-    let divide = [
-        NAME_TYPE,
-        EXPONENTIALS_NAME,
-        SOURCE,
-        NAME_TYPE,
-        DENOMINATOR_NAME,
-        COMITATIVE,
-        NAME_TYPE,
-        VECTOR_TYPE,
-        FLOAT_TYPE,
-        NAME_TYPE,
-        ANSWER_NAME,
-        DESTINATION,
-        0x8893,
-        DEONTIC,
-    ];
-    append_sentence(words, &divide, &[2, 5, 11, 13]);
+    let mut divide = std::vec![NAME_TYPE, EXPONENTIALS_NAME, SOURCE];
+    divide.extend(typed_name(&[], &[DENOMINATOR_NAME]));
+    divide.push(COMITATIVE);
+    divide.extend(typed_name(&[VECTOR_TYPE, FLOAT_TYPE], &[ANSWER_NAME]));
+    divide.extend([DESTINATION, 0x8893, DEONTIC]);
+    append_auto(words, &divide);
 
     let ret = [NAME_TYPE, ANSWER_NAME, NOMINATIVE, MOOD_RETURN];
     append_sentence(words, &ret, &[2, 3]);
@@ -127,20 +122,13 @@ fn append_softmax_program(words: &mut std::vec::Vec<u32>, mut invocation: std::v
         CEREMONY,
         MOOD_PARAGRAPH,
     ];
-    append_sentence(words, &close, &[3, 5]);
+    append_auto(words, &close);
 
-    let source_index = invocation.len();
     invocation.push(SOURCE);
     invocation.extend(typed_name(&[VECTOR_TYPE, FLOAT_TYPE], &[ANSWER_NAME]));
     invocation.push(DESTINATION);
     invocation.extend([SOFTMAX_NAME[0], SOFTMAX_NAME[1], DEONTIC]);
-    let destination_index = source_index + 1 + 5;
-    let mood_index = destination_index + 3;
-    append_sentence(
-        words,
-        &invocation,
-        &[source_index, destination_index, mood_index],
-    );
+    append_auto(words, &invocation);
 }
 
 fn append_softmax(words: &mut std::vec::Vec<u32>, logits: &[f32]) {
@@ -193,19 +181,15 @@ fn append_argmax_program(words: &mut std::vec::Vec<u32>, quote: std::vec::Vec<u3
     definition.push(SOURCE);
     definition.extend(typed_name(&[NUMBER_TYPE], &[ANSWER_NAME]));
     definition.extend([DESTINATION, CEREMONY, MOOD_DEFINITION]);
-    append_sentence(words, &definition, &[2, 8, 13, 15]);
+    append_auto(words, &definition);
 
     let mut maximum_index = std::vec![NAME_TYPE, LOGITS_NAME, SOURCE];
     maximum_index.extend(typed_name(&[NUMBER_TYPE], &[ANSWER_NAME]));
     maximum_index.extend([DESTINATION, 0xa9b2, 0xa831, DEONTIC]);
-    append_sentence(words, &maximum_index, &[2, 7, 10]);
+    append_auto(words, &maximum_index);
 
-    append_sentence(
-        words,
-        &[NAME_TYPE, ANSWER_NAME, NOMINATIVE, MOOD_RETURN],
-        &[2, 3],
-    );
-    append_sentence(
+    append_auto(words, &[NAME_TYPE, ANSWER_NAME, NOMINATIVE, MOOD_RETURN]);
+    append_auto(
         words,
         &[
             NAME_TYPE,
@@ -214,20 +198,13 @@ fn append_argmax_program(words: &mut std::vec::Vec<u32>, quote: std::vec::Vec<u3
             CEREMONY,
             MOOD_PARAGRAPH,
         ],
-        &[2, 4],
     );
 
-    let source_index = quote.len();
     let mut invocation = quote;
     invocation.push(SOURCE);
     invocation.extend(typed_name(&[NUMBER_TYPE], &[ANSWER_NAME]));
-    let destination_index = source_index + 1 + 4;
     invocation.extend([DESTINATION, ANSWER_ROUTINE, DEONTIC]);
-    append_sentence(
-        words,
-        &invocation,
-        &[source_index, destination_index, destination_index + 2],
-    );
+    append_auto(words, &invocation);
 }
 
 fn f32_quote(values: &[f32]) -> std::vec::Vec<u32> {
@@ -292,7 +269,6 @@ fn scalar_subtraction_signature_does_not_enter_vector_dispatch() {
         0,
         0x4000,
         COMITATIVE,
-        NAME_TYPE,
         FLOAT_TYPE,
         NAME_TYPE,
         ANSWER_NAME,
@@ -301,7 +277,7 @@ fn scalar_subtraction_signature_does_not_enter_vector_dispatch() {
         DEONTIC,
     ];
     let mut words = std::vec::Vec::new();
-    append_sentence(&mut words, &tokens, &[3, 7, 12, 14]);
+    append_auto(&mut words, &tokens);
     let (token_count, _) = collect_sentence(&words, 1, 0).unwrap();
     let sentence_view = SentenceView::new(&words, 0, token_count);
     let mut sentence = ParsedSentence::empty();
@@ -454,3 +430,6 @@ fn maximum_with_unsigned_output_supports_float64_and_first_tie() {
     assert_eq!(result.value_kind, VALUE_UNSIGNED);
     assert_eq!(result.values[0], 1);
 }
+
+
+

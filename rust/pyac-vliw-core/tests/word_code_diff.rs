@@ -95,3 +95,45 @@ fn the_words_of_sana_pyanli_carry_the_expected_identities() {
     assert_eq!(encode("pyan").unwrap(), 0x6904);
     assert_eq!(encode("li").unwrap(), 0x217e);
 }
+
+#[test]
+fn identity_classification_agrees_with_spelling_classification() {
+    let Some(corpus) = corpus() else {
+        eprintln!("skipping: /tmp/pyac_words.tsv is absent");
+        return;
+    };
+    let mut failures = Vec::new();
+    for (word, identity) in &corpus {
+        let by_spelling = pyac_vliw_core::word_code::classify(word.as_bytes()).ok();
+        let by_identity = pyac_vliw_core::word_code::classify_identity(*identity);
+        if by_spelling != by_identity {
+            failures.push(format!("{word} 0x{identity:04x}: {by_spelling:?} != {by_identity:?}"));
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "{} of {} disagree: {:?}",
+        failures.len(),
+        corpus.len(),
+        &failures[..failures.len().min(10)]
+    );
+}
+
+#[test]
+fn names_are_root_words_and_grammar_words_are_not() {
+    use pyac_vliw_core::word_code::{WordClass, classify_identity};
+    let is_root = |value: u16| {
+        matches!(
+            classify_identity(value),
+            Some(WordClass::LongRoot) | Some(WordClass::ShortRoot)
+        )
+    };
+    // Roots: valid name payloads.
+    for root in [0x6930u16, 0x4930, 0x2818, 0x68b1, 0xaa90] {
+        assert!(is_root(root), "0x{root:04x} should be a root");
+    }
+    // Grammar words: never a name payload.
+    for grammar in [0x253eu16, 0x24de, 0x225e, 0x327e] {
+        assert!(!is_root(grammar), "0x{grammar:04x} is a grammar word");
+    }
+}

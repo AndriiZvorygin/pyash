@@ -1,6 +1,6 @@
 import pyashWords from "../pyashWords.json" with { type: "json" };
 import { defaultVerbSpelling } from "../dictionary/verb_defaults.mjs";
-import { decodePyacWord } from "./word_code.mjs";
+import { decodePyacWord, segmentPyacWords } from "./word_code.mjs";
 import {
   FIXED16_SCALE,
   fixed16ValueFromNumerator
@@ -608,9 +608,19 @@ export function lookupLegacyWordSequence(name) {
     if (entries.every(Boolean)) return entries;
   }
   const parts = legacyPyashCompoundParts.get(normalized);
-  if (!parts) return null;
-  const entries = parts.map((part) => lookupLegacyName(part));
-  return entries.every(Boolean) ? entries : null;
+  if (parts) {
+    const entries = parts.map((part) => lookupLegacyName(part));
+    if (entries.every(Boolean)) return entries;
+  }
+  // Written Pyac runs compound words together (`kl6mpsas` is `kl6m psas`), so
+  // recover the sequence from the glyph shapes and require every part to be a
+  // known atom. Without this the lookup fails on any unspaced compound that is
+  // not one of the hand-tabled spellings above.
+  if (/\s/u.test(normalized)) return null;
+  const segmented = segmentPyacWords(normalized);
+  if (!segmented || segmented.length < 2) return null;
+  const spelled = segmented.map((part) => lookupLegacyName(part));
+  return spelled.every(Boolean) ? spelled : null;
 }
 
 function legacyNumberWord(value) {

@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { sentenceToPyash } from "../program/beautiful.mjs";
 import { buildDictionarySource } from "../program/library/dictionary/source.mjs";
 import { decodePyashProgram } from "../program/library/vliw/index.mjs";
-import { lookupLegacyName, lookupLegacyPyaName, lookupLegacyWord } from "../program/library/vliw/quotes.mjs";
+import { lookupLegacyName, lookupLegacyPyaName, lookupLegacyWord, lookupLegacyWordSequence } from "../program/library/vliw/quotes.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const referenceVolumePath = path.join(root, "program/library/dictionary/reference.pyac");
@@ -53,10 +53,14 @@ function runBinary(binary, args, input) {
 function binaryKey(name) {
   const words = String(name).trim().split(/\s+/u).filter(Boolean);
   if (!words.length) throw usageError("read requires a Pyash key");
-  return words.map((word) => {
+  return words.flatMap((word) => {
+    // A written compound is one token for the user but several atoms for the
+    // volume (`kl6mpsas` keys as `kl6m,psas`), so expand before keying.
+    const sequence = lookupLegacyWordSequence(word);
+    if (sequence) return sequence.map((entry) => Number.parseInt(entry.hnuc, 16).toString(16));
     const entry = lookupLegacyPyaName(word);
     if (!entry?.hnuc) throw new Error(`Pyash dictionary key has no HNUC mapping: ${word}`);
-    return Number.parseInt(entry.hnuc, 16).toString(16);
+    return [Number.parseInt(entry.hnuc, 16).toString(16)];
   }).join(",");
 }
 
@@ -271,15 +275,36 @@ async function runReferenceDictionary(args, { stdout = process.stdout } = {}) {
 
   const query = args.join(" ").trim();
   if (!query) throw usageError("dictionary lookup requires a query");
+  // `from pyac X` says "look this up as Pyash", which is exactly the Pyash-key
+  // path below. Without stripping it the whole string is searched as an English
+  // surface and always misses.
+  const pyacPrefix = /^from\s+pyac\s+/iu;
+  const explicitPyac = pyacPrefix.test(query);
+  const keyQuery = explicitPyac ? query.replace(pyacPrefix, "").trim() : query;
+  const isPyashKey = (text) => lookupLegacyWordSequence(text) !== null;
+  // A key that segments and resolves still may have no volume entry, which is
+  // a miss rather than a failure, so fall through to the surface search.
+  const keyLookup = () => {
+    try {
+      return runBinary(binary, ["entry", referenceVolumePath, binaryKey(keyQuery)]);
+    } catch (error) {
+      if (/has no entry for Pyac key/u.test(error.message)) return null;
+      throw error;
+    }
+  };
   let result;
-  if (/^[anrvs]:\d{8}-[anrvs]$/iu.test(query)) {
+  if (!explicitPyac && /^[anrvs]:\d{8}-[anrvs]$/iu.test(query)) {
     result = runBinary(binary, ["source-entries", referenceVolumePath, "wordnet", WORDNET_RELEASE, query]);
-  } else if (/^sumo:/iu.test(query)) {
+  } else if (!explicitPyac && /^sumo:/iu.test(query)) {
     result = runBinary(binary, ["source-entries", referenceVolumePath, "sumo", SUMO_RELEASE, query.slice(5)]);
-  } else if (args.every((word) => lookupLegacyPyaName(word))) {
-    result = runBinary(binary, ["entry", referenceVolumePath, binaryKey(query)]);
-    const entry = summarizeEntryCodelets(result);
-    stdout.write(`${renderReferenceEntry(entry, query)}\n`);
+  } else if (explicitPyac || args.every((word) => lookupLegacyPyaName(word)) || isPyashKey(keyQuery)) {
+    const found = keyLookup();
+    if (found === null) {
+      stdout.write(`${keyQuery}: no dictionary entry found\n`);
+      return { query: keyQuery, matches: [] };
+    }
+    const entry = summarizeEntryCodelets(found);
+    stdout.write(`${renderReferenceEntry(entry, keyQuery)}\n`);
     return entry;
   } else {
     const language = [...query].some((character) => /\p{Script=Han}/u.test(character)) ? "zh" : "en";

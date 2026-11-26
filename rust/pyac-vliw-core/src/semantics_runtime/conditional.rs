@@ -52,95 +52,57 @@ pub(super) fn conditional(words: &[impl VliwWord], start: usize, group_len: usiz
         }
         vector_index += 1;
     }
-    let mut i = 0;
-    if logical_len == 16 {
-        let expected = [3usize, 6, 8, 10, 12, 14, 16];
-        if boundary_count != expected.len() {
-            return CoreResult::failure(ERROR_BRANCH, 2);
-        }
-        while i < expected.len() {
-            if array_at!(boundaries, i) != array_at!(expected, i) {
-                return CoreResult::failure(ERROR_BRANCH, 2);
-            }
-            i += 1;
-        }
-        if !matches!(array_at!(logical, 6), EQUALLY | TINY | GIANT)
-            || array_at!(logical, 0) != NUMBER_QUOTE
-            || array_at!(logical, 2) != ACCUSATIVE
-            || array_at!(logical, 3) != NUMBER_QUOTE
-            || array_at!(logical, 5) != SOURCE
-            || array_at!(logical, 7) != CONDITIONAL
-            || !matches!(array_at!(logical, 8), TRUTH | LIE)
-            || array_at!(logical, 9) != ACCUSATIVE
-            || !matches!(array_at!(logical, 10), NUMBER_VERB | BOOLEAN_VERB)
-            || array_at!(logical, 11) != REALIS
-            || !matches!(array_at!(logical, 12), TRUTH | LIE)
-            || array_at!(logical, 13) != ACCUSATIVE
-            || !matches!(array_at!(logical, 14), NUMBER_VERB | BOOLEAN_VERB)
-            || array_at!(logical, 15) != REALIS
-        {
-            return CoreResult::failure(ERROR_BRANCH, 2);
-        }
-        let predicate = match array_at!(logical, 6) {
-            EQUALLY => array_at!(logical, 1) == array_at!(logical, 4),
-            TINY => array_at!(logical, 1) < array_at!(logical, 4),
-            GIANT => array_at!(logical, 1) > array_at!(logical, 4),
-            _ => false,
-        };
-        let value = if predicate {
-            array_at!(logical, 8)
-        } else {
-            array_at!(logical, 12)
-        };
-        return CoreResult::scalar(VALUE_BOOLEAN, u32::from(value == TRUTH), 0, 2);
-    }
-
-    let expected = [3usize, 6, 8, 11, 13, 16, 18];
-    if logical_len != 18 || boundary_count != expected.len() {
-        return CoreResult::failure(ERROR_BRANCH, 2);
-    }
-    while i < expected.len() {
-        if array_at!(boundaries, i) != array_at!(expected, i) {
-            return CoreResult::failure(ERROR_BRANCH, 2);
-        }
-        i += 1;
-    }
-    let shape = [
-        (0, NUMBER_QUOTE),
-        (2, ACCUSATIVE),
-        (3, NUMBER_QUOTE),
-        (5, SOURCE),
-        (7, CONDITIONAL),
-        (8, NUMBER_QUOTE),
-        (10, ACCUSATIVE),
-        (11, NUMBER_VERB),
-        (12, REALIS),
-        (13, NUMBER_QUOTE),
-        (15, ACCUSATIVE),
-        (16, NUMBER_VERB),
-        (17, REALIS),
-    ];
-    i = 0;
-    while i < shape.len() {
-        let expected = array_at!(shape, i);
-        if array_at!(logical, expected.0) != expected.1 {
-            return CoreResult::failure(ERROR_BRANCH, 2);
-        }
-        i += 1;
-    }
+    // A conditional is `<value> na <value> so <test> cu <pick> na <verb> li
+    // <pick> na <verb> li`. The pick may be a literal (`NUMBER_QUOTE n`) or a
+    // bare truth word, so it is read structurally rather than at fixed offsets.
     let predicate = match array_at!(logical, 6) {
         EQUALLY => array_at!(logical, 1) == array_at!(logical, 4),
         TINY => array_at!(logical, 1) < array_at!(logical, 4),
         GIANT => array_at!(logical, 1) > array_at!(logical, 4),
         _ => return CoreResult::failure(ERROR_BRANCH, 2),
     };
-    let value = if predicate {
-        array_at!(logical, 9)
-    } else {
-        array_at!(logical, 14)
-    };
-    if value > MAX_U16 {
+    if array_at!(logical, 0) != NUMBER_QUOTE
+        || array_at!(logical, 2) != ACCUSATIVE
+        || array_at!(logical, 3) != NUMBER_QUOTE
+        || array_at!(logical, 5) != SOURCE
+        || array_at!(logical, 7) != CONDITIONAL
+    {
+        return CoreResult::failure(ERROR_BRANCH, 2);
+    }
+    // The two arms start after the conditional marker. Each is
+    // `<pick> <accusative> <verb> <realis>`, and the pick is either a literal
+    // pair or a single truth word.
+    let mut arms = [0u32; 2];
+    let mut cursor = 8usize;
+    for arm in arms.iter_mut() {
+        let pick = if array_at!(logical, cursor) == NUMBER_QUOTE {
+            let value = array_at!(logical, cursor + 1);
+            cursor += 2;
+            value
+        } else {
+            let value = array_at!(logical, cursor);
+            cursor += 1;
+            value
+        };
+        if array_at!(logical, cursor) != ACCUSATIVE
+            || !matches!(array_at!(logical, cursor + 1), NUMBER_VERB | BOOLEAN_VERB)
+            || array_at!(logical, cursor + 2) != REALIS
+        {
+            return CoreResult::failure(ERROR_BRANCH, 2);
+        }
+        cursor += 3;
+        *arm = pick;
+    }
+    if cursor != logical_len {
+        return CoreResult::failure(ERROR_BRANCH, 2);
+    }
+    let picked = arms[usize::from(!predicate)];
+    // A boolean conditional answers truth/lie; a numeric one answers the value.
+    if matches!(picked, TRUTH | LIE) {
+        return CoreResult::scalar(VALUE_BOOLEAN, u32::from(picked == TRUTH), 0, 2);
+    }
+    if picked > MAX_U16 {
         return CoreResult::failure(ERROR_MALFORMED, 2);
     }
-    CoreResult::scalar(VALUE_UNSIGNED, value, 0, 2)
+    CoreResult::scalar(VALUE_UNSIGNED, picked, 0, 2)
 }

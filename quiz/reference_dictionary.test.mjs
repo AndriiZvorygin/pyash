@@ -8,6 +8,7 @@ import { runPyacDictionary } from "../command/pyac_dictionary.mjs";
 import { setGloss } from "../command/reference_dictionary.mjs";
 import { defaultVerbSpelling } from "../program/library/dictionary/verb_defaults.mjs";
 import { lookupLegacyWordSequence } from "../program/library/vliw/quotes.mjs";
+import { segmentPyacWords } from "../program/library/vliw/word_code.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const VOLUME = path.join(root, "program/library/dictionary/reference.pyac");
@@ -92,4 +93,53 @@ test("the primitive table and lowering agree on every mapped verb", () => {
       `${surface}: lowering and the default table must name the same atom`
     );
   }
+});
+
+test("unspaced Pyac segments on the same boundaries the C parser uses", () => {
+  // The C's first_word_derive: a consonant pair makes a four-glyph word, a
+  // consonant+vowel pair makes a two-glyph word, and a tone (`7`) or a final
+  // consonant extends either by one.
+  assert.deepEqual(segmentPyacWords("kl6mpsas"), ["kl6m", "psas"]);
+  assert.deepEqual(segmentPyacWords("gihnimna"), ["gi", "hnim", "na"]);
+  assert.deepEqual(segmentPyacWords("dohyikka"), ["do", "hyik", "ka"]);
+  assert.deepEqual(segmentPyacWords("pyanli"), ["pyan", "li"]);
+  // `1` is a vowel code in the codec, so `l1` is a CV word rather than a
+  // consonant followed by debris. The C's consonant list also carries `1`,
+  // which is the defect that once made this unparseable.
+  assert.deepEqual(segmentPyacWords("l1"), ["l1"]);
+  assert.equal(segmentPyacWords("hzyq"), null, "a word with no vowel does not segment");
+});
+
+test("a run-together compound resolves to its atoms", () => {
+  // Written Pyac joins compound words, so the dictionary key `kl6mpsas` has to
+  // reach the volume key `kl6m,psas`. The lookup previously only knew one
+  // hand-tabled compound, so this missed even though the entry existed.
+  const sequence = lookupLegacyWordSequence("kl6mpsas");
+  assert.ok(sequence, "kl6mpsas resolves");
+  assert.deepEqual(sequence.map((entry) => entry.pya), ["kl6m", "psas"]);
+});
+
+test("a run-together compound reads back from the published volume", async () => {
+  const result = await runPyacDictionary(["reference", "kl6mpsas"], silent);
+  assert.equal(result.key, "scalar produce", "the compound reads as its atoms");
+  assert.ok(result.entry.lexicalForms.length > 0, "the entry carries its English forms");
+});
+
+test("`from pyac` selects the Pyash key path", async () => {
+  // Without recognizing the prefix the whole string is searched as an English
+  // surface, which can never match a written Pyac key.
+  const plain = await runPyacDictionary(["reference", "kl6mpsas"], silent);
+  const prefixed = await runPyacDictionary(["reference", "from", "pyac", "kl6mpsas"], silent);
+  assert.equal(prefixed.key, plain.key, "the prefixed form reads the same entry");
+});
+
+test("a compound with no volume entry reports a miss instead of failing", async () => {
+  // `hnanga` segments into known atoms but is not a catalogued compound, so it
+  // must report "no entry" rather than surfacing the binary's key error. The
+  // guard keeps the miss meaningful: if it stopped segmenting, the lookup
+  // would take the surface path and the assertion would pass for the wrong
+  // reason.
+  assert.deepEqual(segmentPyacWords("hnanga"), ["hnan", "ga"], "the miss is exercised, not bypassed");
+  const result = await runPyacDictionary(["reference", "hnanga"], silent);
+  assert.deepEqual(result.matches, []);
 });

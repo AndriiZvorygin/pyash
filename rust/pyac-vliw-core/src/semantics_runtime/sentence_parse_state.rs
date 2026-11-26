@@ -158,6 +158,12 @@ pub(super) fn parse_sentence_range_legacy(
         }
         state = transition.state;
         if transition.writes_field {
+            // Production enforces the tag rules in `accept_boundary`; the oracle
+            // must agree, so the same check runs here.
+            let end = transition.field.start + transition.field.length;
+            if crate::sentence::validate_field_tags(tokens, transition.field.start, end) != 0 {
+                return ERROR_MALFORMED;
+            }
             array_put!(&mut result.fields, state.field_count - 1, transition.field);
         }
         if transition.complete {

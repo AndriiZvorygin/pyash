@@ -221,6 +221,14 @@ const NUMBER_TYPE: u32 = 0x327e;
 const BOOLEAN_TYPE: u32 = 0x538f;
 const VECTOR_TYPE: u32 = 0x2b73;
 const FLOAT_TYPE: u32 = 0xaa6c;
+const PAUCAL_WIDTH: u32 = 0x309e;
+const MULTAL_WIDTH: u32 = 0x6b57;
+const PLURAL_WIDTH: u32 = 0x289e;
+/// `fyih`, the floating-point class word. Distinct from `flut` (a lexical root).
+const FLOAT_CLASS: u32 = 0x4067;
+/// `kcot` gather and `kyut` computer: the storage-section verb pair.
+const STORAGE_GATHER: u32 = 0xaca2;
+const STORAGE_COMPUTER: u32 = 0xaa02;
 const VARIABLE: u32 = 0xc8c4;
 const PERMANENTLY: u32 = 0x0b50;
 const CEREMONY: u32 = 0xe8c9;
@@ -235,6 +243,31 @@ const TO_INDEX: u32 = 0x4e4f;
 const GENITIVE_CASE: u32 = 0x215e;
 const THIS_WORD: u32 = 0x4a57;
 pub const DEFAULT_PROGRAMLET_STEP_BUDGET: u32 = 65_536;
+
+/// Whether `width_word` names a width that can hold `value`.
+///
+/// The width words are the quantity class: `po` one byte, `do` two, `pu` four,
+/// `tl6h` eight. A value that does not fit is malformed, not clamped — silent
+/// truncation would make the width word decorative.
+pub(crate) fn width_fits(width_word: u32, value: u32) -> bool {
+    match width_word {
+        PAUCAL_WIDTH => value <= u8::MAX as u32,
+        NUMBER_TYPE => value <= u16::MAX as u32,
+        PLURAL_WIDTH | MULTAL_WIDTH => true,
+        _ => false,
+    }
+}
+
+/// Whether `word` is a leading type tag on a value.
+///
+/// These are the quantity width words plus the boolean class word: each one says
+/// "what follows is a value of this kind", never "this is a name".
+pub(crate) fn is_width_word(word: u32) -> bool {
+    matches!(
+        word,
+        PAUCAL_WIDTH | NUMBER_TYPE | PLURAL_WIDTH | MULTAL_WIDTH | BOOLEAN_TYPE
+    )
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -527,9 +560,12 @@ mod scalar_product;
 mod sentence;
 #[path = "semantics_runtime/sentence_encode.rs"]
 mod sentence_encode;
+#[path = "semantics_runtime/text_encode.rs"]
+pub mod text_encode;
 #[path = "semantics_runtime/word_code.rs"]
 pub mod word_code;
 
+pub use text_encode::{ParseError, encode_sentence, first_word_length};
 pub use sentence_encode::{
     Codelets, EncodeError, EncodeField, EncodeSentence, EncodedWord, SentenceWords, is_field_case,
     is_sentence_mood, validate as validate_encode,
