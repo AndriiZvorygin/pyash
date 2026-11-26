@@ -22,10 +22,10 @@ run_step "format rust/pyac-vliw-core" cargo fmt --manifest-path rust/pyac-vliw-c
 run_step "format rust/pyac-riscv" cargo fmt --manifest-path rust/pyac-riscv/Cargo.toml -- --check
 run_step "format rust/pyac-browser" cargo fmt --manifest-path rust/pyac-browser/Cargo.toml -- --check
 
-run_step "test rust/pyac" cargo test --manifest-path rust/pyac/Cargo.toml
-run_step "test rust/pyac-vliw-core" cargo test --manifest-path rust/pyac-vliw-core/Cargo.toml
-run_step "test rust/pyac-browser" cargo test --manifest-path rust/pyac-browser/Cargo.toml
+run_step "test rust/pyac" cargo test --locked --manifest-path rust/pyac/Cargo.toml
+run_step "test rust/pyac-vliw-core" cargo test --locked --manifest-path rust/pyac-vliw-core/Cargo.toml
+run_step "test rust/pyac-browser" cargo test --locked --manifest-path rust/pyac-browser/Cargo.toml
 
 run_step "install Rust cross-compilation targets" rustup target add riscv64gc-unknown-none-elf wasm32-unknown-unknown
-run_step "check browser WebAssembly build" cargo check --manifest-path rust/pyac-browser/Cargo.toml --target wasm32-unknown-unknown
-run_step "build RISC-V image" cargo build --manifest-path rust/pyac-riscv/Cargo.toml --release --target riscv64gc-unknown-none-elf
+run_step "check browser WebAssembly build" cargo check --locked --manifest-path rust/pyac-browser/Cargo.toml --target wasm32-unknown-unknown
+run_step "build RISC-V image" cargo build --locked --manifest-path rust/pyac-riscv/Cargo.toml --release --target riscv64gc-unknown-none-elf

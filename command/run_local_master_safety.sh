@@ -408,7 +408,7 @@ run_candidate_suite() {
 
   if [[ -f "$WORKTREE/rust/pyac/Cargo.toml" ]]; then
     printf '\n== Rust dictionary executable build ==\n'
-    if ! (cd "$WORKTREE" && cargo build --release --manifest-path rust/pyac/Cargo.toml --bin pyac-dictionary); then
+    if ! (cd "$WORKTREE" && cargo build --locked --release --manifest-path rust/pyac/Cargo.toml --bin pyac-dictionary); then
       printf 'Rust dictionary executable build failed; preserving candidate for review\n'
       KEEP_WORKTREE=1
       FINAL_STATUS=rust-build-failed

@@ -48,7 +48,7 @@ test("promotion runs repository and Rust CI checks before pushing the candidate"
   assert.match(runner, /run_suite_command "import graph check" npm run imports:check/u);
   assert.match(runner, /run_suite_command "house API check" npm run house:api:check/u);
   assert.match(rustChecks, /cargo fmt --manifest-path rust\/pyac-vliw-core\/Cargo\.toml -- --check/u);
-  assert.match(rustChecks, /cargo test --manifest-path rust\/pyac-vliw-core\/Cargo\.toml/u);
+  assert.match(rustChecks, /cargo test --locked --manifest-path rust\/pyac-vliw-core\/Cargo\.toml/u);
   assert.match(workflow, /run: bash command\/run_rust_ci_checks\.sh/u);
 });
 
@@ -83,11 +83,11 @@ test("runner adds an installed Cargo toolchain to cron PATH", () => {
 
 test("runner builds the Rust dictionary executable before the gated quiz suite", () => {
   const runner = read("run_local_master_safety.sh");
-  const build = runner.indexOf("cargo build --release --manifest-path rust/pyac/Cargo.toml --bin pyac-dictionary");
+  const build = runner.indexOf("cargo build --locked --release --manifest-path rust/pyac/Cargo.toml --bin pyac-dictionary");
   const suite = runner.indexOf("npm run test:ci");
   assert.notEqual(build, -1);
   assert.ok(build < suite, "build the on-disk dictionary executable before its CLI quiz runs");
-  assert.match(runner, /if \[\[ -f "\$WORKTREE\/rust\/pyac\/Cargo\.toml" \]\]; then[\s\S]*?cargo build/u);
+  assert.match(runner, /if \[\[ -f "\$WORKTREE\/rust\/pyac\/Cargo\.toml" \]\]; then[\s\S]*?cargo build --locked/u);
   assert.match(runner, /FINAL_STATUS=rust-build-failed/u);
 });
 
