@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { interpret } from "../program/bridge/index.mjs";
 import { resolveConfigBool, resolveConfigMap, resolveConfigMapNum, resolveConfigMapText, resolveConfigNum, resolveConfigText } from "../program/configure/env.mjs";
 import { parseLanes } from "../program/library/radio/rotation.mjs";
-import { alignedPathFor, srtPathFor, transcriptPathFor } from "../program/library/radio/ticker.mjs";
+import { alignedPathFor, keepFile, srtPathFor, transcriptPathFor } from "../program/library/radio/ticker.mjs";
 import { fileDay, songTags, stampSong } from "../program/library/radio/tags.mjs";
 import { alignWordsToFile } from "./lyrics_to_srt_from_timing.mjs";
 import { recoverRate, transcriptText } from "./yiniana_lyric_recovery.mjs";
@@ -199,12 +199,16 @@ export async function keepTranscript({ srtPath = "", sheetPath = "", log = () =>
  * not what a listener reads. The house's own alignment is: the words of the
  * sheet, placed at the times of the transcript.
  *
+ * The alignment is written in the work folder, where its report lies too, and
+ * the words are then kept beside the sheet of the song.
+ *
  * A song whose words cannot be placed is left with its sheet alone.
  */
 export async function alignWords({
   srtPath = "",
   sheetPath = "",
   alignedPath = "",
+  workDirectory = "",
   repoRoot = process.cwd(),
   log = () => {}
 } = {}) {
@@ -214,12 +218,18 @@ export async function alignWords({
   } catch {
     return "";
   }
-  return alignWordsToFile({
+  const work = workDirectory || path.join(repoRoot, "artifacts", "radio-producer");
+  await fs.mkdir(work, { recursive: true });
+  const staged = path.join(work, `${path.basename(srtPath, ".srt")}.aligned.srt`);
+  const placed = await alignWordsToFile({
     sheetPath,
     timingPath: srtPath,
-    outputPath: alignedPath,
+    outputPath: staged,
     log: (line) => log(`${path.basename(sheetPath, ".txt")}: ${line}`)
   });
+  if (!placed) return "";
+  await keepFile({ from: staged, to: alignedPath });
+  return alignedPath;
 }
 
 /**

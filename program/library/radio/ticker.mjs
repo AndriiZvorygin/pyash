@@ -172,6 +172,18 @@ export function transcriptNameFor(sheetPath) {
 }
 
 /**
+ * Keep a file in place: the bytes go to a part file and the part file is
+ * renamed onto the name, so a half written file is never on the air.
+ */
+export async function keepFile({ from = "", to = "" } = {}) {
+  if (!from || !to) return "";
+  const staging = `${to}.part`;
+  await fs.copyFile(from, staging);
+  await fs.rename(staging, to);
+  return to;
+}
+
+/**
  * The words of a song, read from the files that hold them: the alignment
  * when the house has placed the words of the song at the times it heard
  * them, and the sheet when it has not.

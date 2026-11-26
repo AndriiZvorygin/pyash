@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 import { interpret } from "../program/bridge/index.mjs";
 import { resolveConfigText } from "../program/configure/env.mjs";
 import { findLyricSheet, scanCatalogue } from "../program/library/radio/catalogue.mjs";
-import { alignedPathFor, transcriptPathFor } from "../program/library/radio/ticker.mjs";
+import { alignedPathFor, keepFile, transcriptPathFor } from "../program/library/radio/ticker.mjs";
 import { alignWordsToFile } from "./lyrics_to_srt_from_timing.mjs";
 import { loadDefaultConfig } from "./run_pya_helpers.mjs";
 
@@ -83,8 +83,7 @@ export async function transcribeSong({
     return { name: track.filename, status: "present" };
   } catch {
     // the words are not placed yet
-  }
-  await fs.mkdir(workDirectory, { recursive: true });
+  }  await fs.mkdir(workDirectory, { recursive: true });
   const stem = path.basename(track.filename, ".mp3");
   let transcript = heard;
   try {
@@ -106,7 +105,7 @@ export async function transcribeSong({
   const placed = await alignWordsToFile({
     sheetPath,
     timingPath: transcript,
-    outputPath: aligned,
+    outputPath: path.join(workDirectory, `${stem}.aligned.srt`),
     log
   });
   if (!placed) return { name: track.filename, status: "unplaced" };
@@ -115,23 +114,14 @@ export async function transcribeSong({
   // are placed against.
   const kept = transcript === heard
     ? heard
-    : await keepHeard({ from: transcript, to: heard });
+    : await keepFile({ from: transcript, to: heard });
+  const placedAligned = await keepFile({
+    from: path.join(workDirectory, `${stem}.aligned.srt`),
+    to: aligned
+  });
   log(`placed the words of ${track.filename}`);
-  return { name: track.filename, status: "heard", transcript: kept, aligned: placed };
+  return { name: track.filename, status: "heard", transcript: kept, aligned: placedAligned };
 }
-
-/**
- * Keep what was heard beside the sheet of the song: the words go to a part
- * file and the part file is renamed onto the name.
- */
-export async function keepHeard({ from = "", to = "" } = {}) {
-  if (!from || !to) return "";
-  const staging = `${to}.part`;
-  await fs.copyFile(from, staging);
-  await fs.rename(staging, to);
-  return to;
-}
-
 /**
  * Listen to every song of the catalogue that has no transcript yet.
  */
