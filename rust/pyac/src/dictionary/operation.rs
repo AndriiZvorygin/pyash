@@ -18,7 +18,39 @@
 //! `OperationSignatureKey` here stores the identity as `Vec<u16>` HNUCs.
 //! `SignatureView` in `pyac-vliw-core`'s `canonical_signature` stores the same
 //! identity packed into `u32`. They are two encodings of one thing: see
-//! `pack_noun_class`/`unpack_noun_class` there before assuming they differ.
+//! `pack_quote_noun_class`/`pack_word_noun_class` there before assuming they
+//! differ.
+//!
+//! # Arguments and results are different axes
+//!
+//! `arguments` are the case-keyed **inputs**: each one claims a grammatical case
+//! and names the noun class it accepts. They are part of the key, because the
+//! caller's case words have to match.
+//!
+//! `results` are the **outputs**: keyed by noun class only, with no case. They
+//! are not part of the key, so two signatures that differ only in what they
+//! produce are the same dispatch target.
+//!
+//! Input versus output is the *case* axis, not the mood. Reading a mood as a
+//! direction is the mistake this note exists to prevent. Today
+//! `dictionary/operation_signatures.mjs` emits `results: []`, so every real
+//! signature is input-only; the field is kept because the wire format and the
+//! volume carry it.
+//!
+//! # Surface labels are vocabulary, and today they are not
+//!
+//! Any word the machine reads inside a pyac record should be a vocabulary entry:
+//! a WordNet sense, an HNUC, and a spelling that agrees with the reference
+//! volume. `label` does **not** meet that bar. The volume's argument labels are
+//! the raw case tokens (`ob`, `with`, `as`, `su`), and several of them collide
+//! with unrelated English words — `pyash dict from en ob` answers "obstetrics",
+//! `as` answers "arsenic".
+//!
+//! That is tolerable only because nothing reads the label for meaning: it is
+//! checked non-empty and used for sort order, never compared in a lookup or used
+//! to dispatch. It is documentation that happens to be phrased in case tokens.
+//! If a label ever becomes machine-meaningful, it must first become a real
+//! vocabulary word.
 
 use std::cmp::Ordering;
 
@@ -40,6 +72,10 @@ pub struct ArgumentSlot {
     pub noun_class: Vec<u16>,
 }
 
+/// One case-keyed input.
+///
+/// `case_type` is the contract; `label` and `description` are documentation and
+/// never take part in matching. `label` does affect sort order (see `volume.rs`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OperationArgument {
     pub case_type: ArgumentSlot,
@@ -48,6 +84,7 @@ pub struct OperationArgument {
     pub description: String,
 }
 
+/// One output, keyed by noun class only — no case, and not part of the key.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OperationResult {
     pub noun_class: Vec<u16>,

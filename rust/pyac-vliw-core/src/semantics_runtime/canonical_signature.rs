@@ -18,6 +18,23 @@
 //!
 //! Both are derived from the same sentence, so a change to one is a change to
 //! the other. Never compare a packed value against an unpacked one.
+//!
+//! # The case is also encoded differently
+//!
+//! The dictionary keys a slot with `grammatical_case: Vec<u16>` — a sequence,
+//! because a case can in principle be written as more than one word. Here
+//! `SignatureCase.case` is one `u32`: the boundary word that closes the field.
+//! That is the word whose boundary bit marks the end of the phrase, and it is
+//! what `case_type` compares. Today the dictionary's sequence always holds
+//! exactly that one word, so the two agree; if a multi-word case appears, this
+//! is where the encodings would have to be reconciled.
+//!
+//! # Arguments versus results
+//!
+//! Only *inputs* are in the key. A signature's arguments are case-keyed, and
+//! their cases must match the caller's; results are outputs keyed by noun class
+//! and never take part in dispatch. Input versus output is the case axis, not
+//! the mood — a mood is not a direction.
 
 use super::numeric::quote_header;
 use super::*;

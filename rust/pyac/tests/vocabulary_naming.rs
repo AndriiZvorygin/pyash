@@ -104,6 +104,39 @@ fn identifiers_are_english_not_pya_spellings() {
     }
 }
 
+/// The dispatch discriminator is the noun class, and the case field is
+/// `grammatical_case`. Both files must say so, because the note on this module
+/// existed precisely because the two encodings were indistinguishable by name.
+#[test]
+fn both_encodings_state_the_same_dispatch_identity() {
+    for file in [
+        "src/dictionary/operation.rs",
+        "../pyac-vliw-core/src/semantics_runtime/canonical_signature.rs",
+    ] {
+        let source = read(file);
+        assert!(
+            source.contains("dispatch identity = verb + mood + sorted[(grammatical_case, noun_class)]"),
+            "{file} should state the dispatch identity verbatim, so the two encodings cannot drift apart"
+        );
+    }
+}
+
+/// Inputs and outputs are different axes, and a reader must not have to infer
+/// that from the mood. The dictionary side says it in words.
+#[test]
+fn the_argument_result_split_is_stated() {
+    let source = read("src/dictionary/operation.rs");
+    assert!(
+        source.contains("case-keyed")
+            && source.contains("keyed by noun class only"),
+        "operation.rs should say arguments are case-keyed inputs and results are noun-class-keyed outputs"
+    );
+    assert!(
+        source.contains("not the mood"),
+        "operation.rs should say input versus output is the case axis, not the mood"
+    );
+}
+
 /// Documentation fields are `label`, never `name`. `name` is the name noun class
 /// (`gi`), and a field called `name` invites a reader to put the noun class into
 /// a documentation slot.
