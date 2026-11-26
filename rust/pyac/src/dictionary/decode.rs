@@ -166,16 +166,25 @@ fn decode_entry(
                     ));
                 }
                 let case_type = decode_slot(slot)?;
-                entry
+                // The dispatch vector already declared every argument slot, so
+                // this row fills one of those placeholders rather than adding a
+                // new argument. Pushing here doubled every signature's argument
+                // list and left the originals unlabelled.
+                let arguments = &mut entry
                     .operation_signatures
                     .last_mut()
                     .expect("signature present")
-                    .arguments
-                    .push(OperationParameter {
-                        case_type,
-                        tag_label: label.clone(),
-                        descriptive_specification: description.clone(),
-                    });
+                    .arguments;
+                let target = arguments
+                    .iter_mut()
+                    .find(|argument| argument.case_type == case_type && argument.tag_label.is_empty())
+                    .ok_or_else(|| {
+                        DictionaryVolumeError::InvalidEntry(
+                            "operation argument descriptor has no matching slot in its dispatch",
+                        )
+                    })?;
+                target.tag_label = label.clone();
+                target.descriptive_specification = description.clone();
             }
             ([ESSIVE, DESTINATION, COMITATIVE], [Field::Vector(_, noun_class), Field::Text(_, label), Field::Text(_, description)]) => {
                 if !pending_signature {
@@ -354,3 +363,13 @@ fn take_sequence(
     *cursor = end;
     Ok(values)
 }
+
+
+
+
+
+
+
+
+
+

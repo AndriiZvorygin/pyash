@@ -535,13 +535,18 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
         let range = self
             .location(key)?
             .ok_or_else(|| DictionaryReadError::MissingEntry(key.to_vec()))?;
-        self.sentences_in(range)
+        self.sentences_in(range, false)
     }
 
     /// Decode every sentence in a codelet range, seeking by pack ordinal.
+    ///
+    /// Index sections use the v4 quote layout (raw continuation codelets keep
+    /// their leading index word); entry bodies use the ordinary layout. The
+    /// two are not interchangeable, so the caller says which range it is.
     pub(crate) fn sentences_in(
         &mut self,
         range: Range<u32>,
+        indexed: bool,
     ) -> Result<Vec<super::reader_codec::Sentence>, DictionaryReadError> {
         if range.start > range.end || range.end > self.codelet_count {
             return Err(DictionaryReadError::InvalidRecord(
@@ -551,7 +556,11 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
         let mut sentences = Vec::new();
         let mut ordinal = range.start;
         while ordinal < range.end {
-            let sentence = read_sentence_v4(&mut self.source, ordinal, range.end)?;
+            let sentence = if indexed {
+                read_sentence_v4(&mut self.source, ordinal, range.end)?
+            } else {
+                read_sentence(&mut self.source, ordinal, range.end)?
+            };
             ordinal += sentence.consumed;
             sentences.push(sentence);
         }
