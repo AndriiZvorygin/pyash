@@ -123,46 +123,32 @@ adds no quote sort or HNUC; flat v1 `.pyac` stores the frame in codelet words.
 
 ### 4.2 VLIW shape
 
-The codelet is sixteen 16-bit words (256 bits / 32 bytes). It is an encoding
-unit, not a bundle of parallel operations: the payload words carry one
-sentence's quote data, cases, verb, and mood, and a codelet is fetched and
-dispatched as a unit.
+The codelet is sixteen 16-bit words (256 bits / 32 bytes), a single-sentence
+encoding unit rather than parallel operations. Its first word is the canonical
+head/index: bit 0 marks sentence completion; bits 1..15 mark phrase-closing
+slots. A slot is a boundary exactly when its bit equals bit 0. Decoders SHOULD
+derive phrase spans from these offsets; token walking MUST yield the same
+fields, verb span, mood, and error. Writers MUST align boundary bits with case
+and mood words. Remaining words encode quote data, cases, verb, mood, and zero
+tail padding.
 
-Its first word is the head/index. Bit 0 marks whether this codelet completes
-the sentence. Bits 1..15 mark phrase-closing slots, where a phrase closes on a
-case word or on the sentence's mood word. A slot is a boundary exactly when its
-bit equals bit 0.
-
-The head is the canonical field map. A decoder SHOULD derive phrase spans by
-enumerating the boundary bits and reading each span at its offsets rather than
-by walking the payload token by token. Both forms MUST produce the same fields,
-verb span, mood, and error. Writers MUST set the boundary bits consistently
-with the case and mood words they emit. Remaining words encode quote data,
-cases, verb, mood, and zero tail padding.
-
-Long paragraph quotes use the original Lwonprom blockquote framing: the
-paragraph-letter quote has the legacy `L` flag and a 16-bit payload-word count.
-Above 28 bytes, the indexed stream ends after its header/count and payload
-occupies `ceil(payload_words / 16)` raw vectors (all 16 words are data). Final
-padding is zero; the next vector resumes indexed encoding. The count defines
-the raw extent. A decoder MUST skip exactly that many vectors and reject a
-missing block or nonzero final padding. Short quotes stay inline.
+Long paragraph quotes use the legacy Lwonprom blockquote framing: the
+paragraph-letter quote has the `L` flag and a uint16 payload-word count. Above
+28 bytes, indexed encoding ends after the header/count and payload occupies
+`ceil(payload_words / 16)` raw vectors, all words data. Final padding is zero;
+the next vector resumes indexed encoding. The count defines the extent. A
+decoder MUST skip exactly that many vectors and reject a missing block or
+nonzero final padding. Short quotes stay inline.
 
 Vector quote layout and continuation rules are defined in
 `28-pyash-vliw-targets.md`.
 
-The index has two required properties from the legacy VM:
-
-- a completion bit indicates whether the current 16-word vector is the final
-  part of a codelet; and
-- phrase/mood marker bits identify phrase or mood words relative to that
-  completion state.
-
-For multi-vector values or clauses, the decoder collects vectors in order to
-the final index and validates the flattened words. It MUST reject a missing
-continuation, impossible boundary, nonzero unassigned tail, or invalid quote
-length; it MUST NOT infer words from source text. Semantic adapters require a
-sentence-specific golden fixture before execution.
+The index marks completion in bit 0 and phrase/mood boundaries in bits 1..15,
+relative to that completion state. For multi-vector values or clauses, the
+decoder collects through the final index and validates the flattened words.
+It MUST reject missing continuations, impossible boundaries, nonzero
+unassigned tails, and invalid quote lengths; it MUST NOT infer words from
+source text. Semantic adapters require a sentence-specific golden fixture.
 
 A transport MAY batch codelets but MUST preserve their bytes and order.
 
@@ -178,88 +164,39 @@ minimum:
 | typed literal | quote sort, length, and field sequence |
 | unsupported/unassigned item | explicit rejection reason |
 
-The table is a compatibility artifact, not a place to allocate new IDs. Until
-the mapping is proven for an item, that item is unsupported by the VLIW
-backend even if it can be printed as readable Pyash.
-
 ## 5.1 Runtime signature dispatch
 
-Dispatch has two levels. The sentence mood selects a class table; within the
-class, the key is the ordered be-verb HNUCs plus grammatical-case/value-type
-pairs sorted by unsigned HNUC.
-
-Level one is the six moods:
-
-| mood | class | phase |
-| --- | --- | --- |
-| `def` | definition | pack load |
-| `prah` | definition close, invocation close | load and frame exit |
-| `ya` | static declaration | load and frame setup |
-| `do` | execution | run loop |
-| `then` | conditional control | within one sentence |
-| `ret` | return control | run loop |
-
-`def` never executes; a run loop that reaches it rejects the sentence. `prah`
-closes a definition at load and an invoked frame at run time. `ya` initializes
-declarations and frame slots. Only the `do` class is consulted for execution.
-
-Level two is keyed by verb. The execution (`do`) key is ordered be-verb HNUCs
-plus `(case, value-type)` pairs sorted by unsigned HNUC, so case source order
-does not affect lookup. Mood is not part of that key because the class is
-already selected; literals and payload values are excluded. The reference
-dictionary's mood-qualified operation key is the flattened global view across
-all classes, of which the `do` table is a projection.
-
-Dispatch MUST use numeric data, select at most one handler, and reject
-unsupported signatures without fallback. A handler MAY be a routine body
-defined earlier in the same programlet, so the execution model is threaded code
-plus signature matching rather than a fixed set of opcodes. Structural values
-MUST validate framing first. See
-[implementation details](../reference/pyac-vliw-semantic-slices.md#runtime-signature-dispatch).
-
-### 5.1.1 Revision
-
-Within one programlet, a later definition with an equal signature key
-supersedes an earlier one. Decoders MUST resolve the collision by definition
-order and MUST NOT reject it. The directory may stay sorted for comparison, but
-the winner is the latest definition, not an error.
-
-Status: implemented. The Rust routine directory compacts equal signature keys to
-the latest definition, so a later definition replaces an earlier one. The
-historical JavaScript interpreter also applies latest-wins, with a warning
-(`02-core-execution.md`); that agreement is incidental, not the authority.
+Mood selects a class: `def` loads definitions but never executes; `prah` closes
+definitions at load and invoked frames on exit; `ya` initializes declarations
+and frames; `do` executes; `then` selects conditional control; and `ret` returns.
+Only `do` performs runtime lookup. Its key is ordered be-verb HNUCs plus
+`(case, value-type)` pairs sorted by unsigned HNUC; mood, case source order,
+literals, and payload values do not affect identity. The reference dictionary's
+mood-qualified key is the flattened view across classes. Dispatch MUST use
+numeric data, select at most one handler, and reject unsupported signatures
+without fallback. Handlers MAY be earlier routines in the same programlet;
+structural values MUST validate framing first. Later equal-key definitions
+supersede earlier ones by source order. See [implementation details](../reference/pyac-vliw-semantic-slices.md#runtime-signature-dispatch).
 
 ## 5.2 General execution contract
 
-Status: target contract. The current Rust core executes programlets with a
-program counter and a bounded call stack. The ready-work queue described below
-is the target model, not the implemented one; the two must not be conflated
-when reading this section.
+Status: target model. Rust currently uses a program counter and bounded call
+stack; the ready-work queue below is not implemented.
 
-Instructions carry numbered input/output references, fulfillment state, and
-working-memory locations, and identify reads and writes. Each dependency region
-MUST have at most one writer per reference; decoders MUST reject conflicts
-unless the sentence defines an ordered effect.
+Instructions carry stable input/output references, fulfillment state, working
+locations, and read/write effects. Each dependency region MUST have one writer
+per reference; decoders MUST reject conflicts unless the sentence orders them.
+Inputs and control MUST be fulfilled before execution. Executors MAY reorder
+independent work while preserving dependencies, writer rules, side-effect
+order, and codelet boundaries; workers synchronize before exposing values to
+dependents.
 
-Inputs and control conditions MUST be fulfilled before execution. Executors
-MAY reorder independent work but MUST preserve dependencies, single-writer
-rules, observable side-effect order, and paragraph/codelet boundaries. Workers
-synchronize at evaluation boundaries before exposing values to dependent
-codelets.
-
-The execution model has:
-
-- immutable codelet storage;
-- working/output storage addressed by stable references;
-- a ready-work queue rather than a mandatory program counter;
-- worker-local call-frame stacks; and
-- completion history sufficient to diagnose or replay codelets.
-
-Branches write conditions/references that dependent clauses await; rejoins MUST
-use explicit dependencies or call boundaries. Static loops repeat codelets;
-dynamic loops require an explicit continuation/jump reference and bounded
-termination. Calls enqueue a local frame and rejoin after declared outputs are
-fulfilled; parallel execution requires proven independence.
+Target model: immutable codelets, stable working/output references, a
+ready-work queue, worker-local call stacks, and completion history. Branches
+and rejoins use explicit dependencies or call boundaries. Static loops repeat
+codelets; dynamic loops require explicit bounded continuations. Calls enqueue
+local frames and rejoin after outputs are fulfilled. Parallel work requires
+proven independence.
 
 ### IWSP float-vector compositions
 
@@ -277,15 +214,13 @@ fused opcode.
 
 ### Independent named sections
 
-A packet MAY contain up to 64 independent sections, each delimited by matching
-`myocpfun def` and `myocpfun prah` sentences with the same `su name`. Names
-MUST be unique, HNUC-encodable, and at most eight HNUC words. Each body MUST
-be a valid pure programlet and MUST neither access another section's local
-state nor depend on another section. Boundaries use ordinary codelets in the
-flat v1 stream and add no container table or codelet limit; packet and step
-budgets still apply. Executors MAY complete sections in any order and return
-results in completion order; callers identify them by source ordinal and name.
-The JavaScript interpreter completes in source order; Rust may differ.
+A packet MAY contain up to 64 independent sections delimited by matching
+`myocpfun def` / `myocpfun prah` sentences with the same `su name`. Names MUST
+be unique, HNUC-encodable, and at most eight HNUC words. Bodies MUST be pure
+programlets without cross-section state or dependencies. Boundaries use
+ordinary flat-v1 codelets and add no table or codelet limit; packet and step
+budgets apply. Executors MAY return sections in completion order, identified
+by source ordinal and name. JavaScript runs in source order; Rust may differ.
 
 ### Inline immutable storage sections
 
@@ -298,24 +233,22 @@ exists su name weights from filename "weights.bin"
   as name float with ve num <rows> <columns> be pfun myoc ya
 ```
 
-`from filename` is a compile-time locator and is omitted from the descriptor.
-The two `by` words encode the exact uint32 byte length, low word first.
-`with ve num` has one to eight positive uint16 dimensions whose product times
-the element width MUST equal that length. Numeric-family storage widths are
-`paucal_number_` 8, `number_` 16, `plural_number_` 32, and `multal_number_`
-64 bits; `float` resolves to 32 or 64 bits from shape and payload length.
+`from filename` is a compile-time locator omitted from the descriptor. The two
+`by` words encode the exact uint32 byte length, low word first. `with ve num`
+has one to eight positive uint16 dimensions; their product times element width
+MUST equal that length. Numeric widths are `paucal_number_` 8, `number_` 16,
+`plural_number_` 32, and `multal_number_` 64 bits; `float` resolves to 32 or
+64 bits from shape and payload length.
 
 Executable sentences MUST precede storage sections. Each descriptor is
-encoded as ordinary sentence codelets, followed by `ceil(byteLength / 32)`
-payload codelets containing the exact little-endian bytes. Only final-codelet
-padding is permitted, and it MUST be zero. The existing 32-byte v1 header and
-zero reserved field remain unchanged; its codelet count includes descriptors
-and payload, and total pack length is bounded by its uint32 field. Readers
-MUST recognize the complete section signature and declared extent, validate
-unique names, dimensions, widths, byte lengths, and padding, and skip payload
-without treating it as instructions. GPU consumers bind validated payloads
-read-only; rank-two float storage is row-major, with dimensions matching the
-stored element count. Allocation failures are errors, never a backend fallback.
+ordinary sentence codelets, followed by `ceil(byteLength / 32)` payload
+codelets containing exact little-endian bytes. Only final-codelet padding is
+allowed, and it MUST be zero. The 32-byte v1 header and zero reserved field
+remain unchanged; its count includes descriptors and payload, and total pack
+length fits uint32. Readers MUST recognize the full section signature/extent,
+validate unique names, dimensions, widths, lengths, and padding, then skip
+payload as data. GPU consumers bind it read-only; rank-two floats are row-major
+and match the stored element count. Allocation failures never trigger fallback.
 
 ### Payload-backed embedding-row view
 
