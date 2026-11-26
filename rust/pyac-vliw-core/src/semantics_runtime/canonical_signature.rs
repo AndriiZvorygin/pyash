@@ -118,7 +118,10 @@ fn value_type(
     let first = token_at(words, start, group_len, value_start).ok_or(ERROR_MALFORMED)?;
     // `<class words…> [gi] <name>`: the class words say what the field holds and
     // `gi` marks the name. `gi` alone is an untyped name.
-    let mut index = value_start;
+    // Ordinary Pyash typed names are encoded as `gi <class…> gi <name>`.
+    // Programlet internals also use class-first fields, so continue parsing
+    // class words at the beginning when there is no leading name marker.
+    let mut index = value_start + usize::from(first == NAME_TYPE);
     let mut class_type = 0u32;
     while index < value_start + value_length {
         match token_at(words, start, group_len, index) {

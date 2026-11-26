@@ -272,9 +272,12 @@ pub(super) fn resolve_programlet_value(
         };
         return 0;
     }
-    // `<class words…> [gi] <name>`: the class words say what the local holds and
-    // `gi` marks the name. `gi` alone is an untyped name.
-    let mut index = field.start;
+    // Ordinary Pyash uses `gi <class…> gi <name>`; older internal fields use
+    // `<class…> [gi] <name>`. A missing closing marker leaves type-looking root
+    // words in the name, including roots that share a class HNUC.
+    let leading_name = sentence_at!(*tokens, field.start) == NAME_TYPE;
+    let mut index = field.start + usize::from(leading_name);
+    let class_start = index;
     let mut expected_kind = 0;
     while index < field.start + field.length {
         match sentence_at!(*tokens, index) {
@@ -289,11 +292,20 @@ pub(super) fn resolve_programlet_value(
             _ => break,
         }
     }
-    if index == field.start && sentence_at!(*tokens, field.start) != NAME_TYPE {
+    let has_class = index > class_start;
+    if leading_name {
+        if has_class && sentence_at!(*tokens, index) == NAME_TYPE {
+            index += 1;
+        } else {
+            expected_kind = 0;
+            index = field.start + 1;
+        }
+    } else if has_class {
+        if sentence_at!(*tokens, index) == NAME_TYPE {
+            index += 1;
+        }
+    } else {
         return ERROR_UNSUPPORTED;
-    }
-    if sentence_at!(*tokens, index) == NAME_TYPE {
-        index += 1;
     }
     let typed_number = expected_kind == VALUE_NUMBER;
     let typed_boolean = expected_kind == VALUE_BOOLEAN;

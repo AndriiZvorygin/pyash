@@ -41,5 +41,3 @@ fn maximum_index_is_a_sentence_dispatched_float_vector_operation() {
     assert_eq!(tied.error, 0, "{tied:?}");
     assert_eq!(tied.values[0], 0);
 }
-
-

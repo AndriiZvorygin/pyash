@@ -500,36 +500,46 @@ pub(super) fn name_span(
     if field.length < 2 || end > tokens.len() {
         return ERROR_MALFORMED;
     }
-    let name_start = if typed_number {
-        // A typed local is `<class words…> [gi] <name>`: the class word says what
-        // it holds and `gi` marks the name. The class word leads.
+    if typed_number {
+        // Accept class-first internal fields and ordinary Pyash fields whose
+        // type follows the leading name marker.
         let mut index = field.start;
+        if sentence_at!(*tokens, index) == NAME_TYPE {
+            index += 1;
+        }
+        let class_start = index;
         while index < end && is_class_word(sentence_at!(*tokens, index)) {
             index += 1;
         }
-        if index == field.start {
+        if index == class_start {
             return ERROR_MALFORMED;
         }
         if index < end && sentence_at!(*tokens, index) == NAME_TYPE {
             index += 1;
         }
-        index
-    } else {
-        if sentence_at!(*tokens, field.start) != NAME_TYPE {
+        if index >= end || !is_root_name(tokens, index, end) {
             return ERROR_MALFORMED;
         }
-        if sentence_at!(*tokens, field.start + 1) == NAME_TYPE {
+        *name = NameSpan {
+            start: index,
+            length: end - index,
+        };
+        return 0;
+    }
+    if sentence_at!(*tokens, field.start) != NAME_TYPE {
+        return ERROR_MALFORMED;
+    }
+    if sentence_at!(*tokens, field.start + 1) == NAME_TYPE {
+        return ERROR_MALFORMED;
+    }
+    let mut marker = field.start + 2;
+    while marker < end {
+        if sentence_at!(*tokens, marker) == NAME_TYPE {
             return ERROR_MALFORMED;
         }
-        let mut marker = field.start + 2;
-        while marker < end {
-            if sentence_at!(*tokens, marker) == NAME_TYPE {
-                return ERROR_MALFORMED;
-            }
-            marker += 1;
-        }
-        field.start + 1
-    };
+        marker += 1;
+    }
+    let name_start = field.start + 1;
     if name_start >= end || !is_root_name(tokens, name_start, end) {
         return ERROR_MALFORMED;
     }
@@ -570,20 +580,48 @@ fn is_root_name(tokens: &SentenceView<'_, impl VliwWord>, start: usize, end: usi
 /// rather than a name. A field with no `gi` is not policed here: it may be a
 /// pronoun, a genitive construction, a quoted value, or a nested clause, and
 /// those are validated by the code that understands them.
-pub(super) fn validate_field_tags(tokens: &SentenceView<'_, impl VliwWord>, start: usize, end: usize) -> u32 {
+pub(super) fn validate_field_tags(
+    tokens: &SentenceView<'_, impl VliwWord>,
+    start: usize,
+    end: usize,
+) -> u32 {
     if start >= end {
         return ERROR_MALFORMED;
     }
     // A field holding a nested clause is a sentence in its own right, and is
     // validated when that clause is parsed.
-    if (start..end).any(|index| {
-        matches!(sentence_at!(*tokens, index), DEPENDENT_CLAUSE | CLAUSE_TAIL)
-    }) {
+    if (start..end)
+        .any(|index| matches!(sentence_at!(*tokens, index), DEPENDENT_CLAUSE | CLAUSE_TAIL))
+    {
         return 0;
     }
     // A quoted value is its own encoding, not a name.
     if numeric::quote_header(sentence_at!(*tokens, start)).valid != 0 {
         return 0;
+    }
+
+    // Ordinary Pyash types come after the leading name marker. A repeated
+    // marker closes that type prefix; without it, type-looking root words are
+    // still part of an untyped name.
+    if sentence_at!(*tokens, start) == NAME_TYPE {
+        let mut index = start + 1;
+        while index < end && is_class_word(sentence_at!(*tokens, index)) {
+            index += 1;
+        }
+        if index > start + 1 && index < end && sentence_at!(*tokens, index) == NAME_TYPE {
+            return if is_root_name(tokens, index + 1, end) {
+                0
+            } else {
+                ERROR_MALFORMED
+            };
+        }
+        let root_name = is_root_name(tokens, start + 1, end);
+        let named_class = end == start + 2 && is_class_word(sentence_at!(*tokens, start + 1));
+        return if root_name || named_class {
+            0
+        } else {
+            ERROR_MALFORMED
+        };
     }
 
     let mut name_tag = None;
@@ -636,9 +674,14 @@ pub(super) fn typed_name_span(
         return ERROR_MALFORMED;
     }
 
-    // Leading class words say what kind of value follows, then `gi` optionally
-    // marks a name. A field with no class word is an untyped name.
+    // Both ordinary Pyash fields (`gi <class…> gi <name>`) and programlet
+    // internals (`<class…> [gi] <name>`) carry the same typed-name meaning.
     let mut index = field.start;
+    let leading_name = sentence_at!(*tokens, index) == NAME_TYPE;
+    if leading_name {
+        index += 1;
+    }
+    let class_start = index;
     let mut has_vector = false;
     let mut has_float = false;
     let mut has_boolean = false;
@@ -652,7 +695,11 @@ pub(super) fn typed_name_span(
         }
         index += 1;
     }
-    if index == field.start {
+    let has_class = index > class_start;
+    if (!leading_name && !has_class)
+        || (leading_name
+            && (!has_class || index >= end || sentence_at!(*tokens, index) != NAME_TYPE))
+    {
         // No class word: an ordinary name.
         *kind = 0;
         return name_span(tokens, field, false, name);

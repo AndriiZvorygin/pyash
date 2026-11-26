@@ -81,17 +81,14 @@ pub fn prepare_storage_sections(
             (0..section.name_length).map(|index| u32::from(words[section.name_word_index + index])),
         );
         let payload_offset = payload_bytes;
-        // Payload words start at slot 1 of each payload codelet; slot 0 is the
-        // codelet header.
-        const PAYLOAD_WORDS_PER_CODELET: usize =
-            pyac_vliw_core::CODELET_WORDS - 1;
-        let payload_start_word = section.payload_start * pyac_vliw_core::CODELET_WORDS + 1;
+        let payload_words_per_codelet = pyac_vliw_core::CODELET_WORDS - section.payload_word_offset;
+        let payload_bytes_per_codelet = payload_words_per_codelet * 2;
+        let payload_start_word =
+            section.payload_start * pyac_vliw_core::CODELET_WORDS + section.payload_word_offset;
         for byte_index in 0..section.byte_length as usize {
-            let word = words
-                [payload_start_word
-                    + byte_index / (PAYLOAD_WORDS_PER_CODELET * 2)
-                        * pyac_vliw_core::CODELET_WORDS
-                    + (byte_index % (PAYLOAD_WORDS_PER_CODELET * 2)) / 2];
+            let word = words[payload_start_word
+                + byte_index / payload_bytes_per_codelet * pyac_vliw_core::CODELET_WORDS
+                + (byte_index % payload_bytes_per_codelet) / 2];
             let byte = if byte_index % 2 == 0 {
                 (word & 0xff) as u8
             } else {
@@ -145,7 +142,9 @@ mod tests {
                 0x0949, 0x327e, 0, 0x313e, 0x327e, 4, 0x243e, 0x309e, 0x414f, 0xaca2, 0xaa02,
                 0x5217, 0, 0, 0, 0,
             ],
-            [0x0001, 0x0201, 0x0403, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [
+                0x0001, 0x0201, 0x0403, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
         ];
         let prepared = prepare_storage_sections(&codelets).expect("storage packet is valid");
         assert_eq!(prepared.executable_codelet_count, 1);
@@ -167,11 +166,38 @@ mod tests {
                 0x0949, 0x327e, 0, 0x313e, 0x327e, 4, 0x243e, 0x309e, 0x414f, 0xaca2, 0xaa02,
                 0x5217, 0, 0, 0, 0,
             ],
-            [0x0001, 0x0201, 0x0403, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [
+                0x0001, 0x0201, 0x0403, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
         ];
         codelets.push([0; pyac_vliw_core::CODELET_WORDS]);
         let error = prepare_storage_sections(&codelets).expect_err("trailing codelet is invalid");
         assert_eq!(error.codelet_index, 3);
         assert_eq!(error.reason, "codelets follow the final storage payload");
+    }
+
+    #[test]
+    fn file_backed_sections_keep_names_and_all_payload_words() {
+        let codelets = [
+            [0x0001, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [
+                0x776e, 0x225e, 0xa92b, 0x28ea, 0x24de, 0x225e, 0x327e, 0x414f, 0x891d, 4, 0,
+                0x287e, 0x8e1d, 1, 2, 0x490f,
+            ],
+            [
+                0x0009, 0x6a84, 0xec01, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
+            [0x0201, 0x0403, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        ];
+
+        let prepared = prepare_storage_sections(&codelets).expect("file-backed packet is valid");
+
+        assert_eq!(prepared.executable_codelet_count, 1);
+        assert_eq!(prepared.names, [0xa92b, 0x28ea]);
+        assert_eq!(prepared.payload, [0x0403_0201]);
+        assert_eq!(
+            prepared.descriptors,
+            [1, 0, 2, 0, 4, 2, 2, 0x327e, 1, 2, 1, 1, 1, 1, 1, 1, 1]
+        );
     }
 }

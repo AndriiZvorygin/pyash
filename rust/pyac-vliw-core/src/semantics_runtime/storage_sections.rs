@@ -14,6 +14,7 @@ pub struct StorageSectionRange {
     pub name_length: usize,
     pub payload_start: usize,
     pub payload_codelets: usize,
+    pub payload_word_offset: usize,
     pub byte_length: u32,
     pub element_width: u32,
     pub element_count: u32,
@@ -27,6 +28,7 @@ struct StorageMetadata {
     next_codelet: usize,
     name_word_index: usize,
     name_length: usize,
+    payload_word_offset: usize,
     byte_length: u32,
     element_width: u32,
     element_count: u32,
@@ -34,8 +36,6 @@ struct StorageMetadata {
     rank: u32,
     shape: [u32; 8],
 }
-
-
 
 fn storage_metadata(
     words: &[u16],
@@ -47,8 +47,19 @@ fn storage_metadata(
     };
     let tokens = SentenceView::new(words, start, token_count);
     let mut sentence = ParsedSentence::empty();
-    if parse_sentence(&tokens, &mut sentence) != 0
-        || sentence.mood != MOOD_DEFINITION
+    if parse_sentence(&tokens, &mut sentence) != 0 {
+        return Ok(None);
+    }
+    if sentence.verb_length == 2
+        && tokens.token(sentence.verb_start) == Some(SECTION_PART)
+        && tokens.token(sentence.verb_start + 1) == Some(SECTION_MODULE)
+    {
+        if sentence.mood != REALIS {
+            return Err(ERROR_MALFORMED);
+        }
+        return named_storage_metadata(&tokens, &sentence, next).map(Some);
+    }
+    if sentence.mood != MOOD_DEFINITION
         || sentence.verb_length != 2
         || tokens.token(sentence.verb_start) != Some(STORAGE_GATHER)
         || tokens.token(sentence.verb_start + 1) != Some(STORAGE_COMPUTER)
@@ -82,6 +93,7 @@ fn storage_metadata(
         // by its byte range.
         name_word_index: 0,
         name_length: 0,
+        payload_word_offset: 1,
         byte_length: byte_length as u32,
         element_width,
         element_count,
@@ -96,10 +108,7 @@ fn storage_metadata(
 /// `num` is `do` (uint16), but a larger offset can be written `pu` (uint32) or
 /// `tl6h` (uint64). The width word leads and decides how many payload words the
 /// value occupies, little-endian: one for `do`, two for `pu`, four for `tl6h`.
-fn field_offset(
-    tokens: &SentenceView<'_, impl VliwWord>,
-    field: SentenceField,
-) -> Option<u64> {
+fn field_offset(tokens: &SentenceView<'_, impl VliwWord>, field: SentenceField) -> Option<u64> {
     let width_word = tokens.token(field.start)?;
     let (width, words) = match width_word {
         NUMBER_WIDTH_TYPE => (2u32, 1usize),
@@ -144,13 +153,128 @@ fn element_type_of(
     Some((element_type, width))
 }
 
+fn u16_values(
+    tokens: &SentenceView<'_, impl VliwWord>,
+    field: SentenceField,
+    values: &mut [u32; 8],
+) -> Result<usize, u32> {
+    let header = numeric::quote_header(tokens.token(field.start).ok_or(ERROR_MALFORMED)?);
+    if header.valid == 0 || header.sort != 4 || header.scalar_bytes != 2 {
+        return Err(ERROR_MALFORMED);
+    }
+    let (value_start, count) = if header.explicit != 0 {
+        (
+            field.start + 2,
+            tokens.token(field.start + 1).ok_or(ERROR_MALFORMED)? as usize,
+        )
+    } else {
+        (field.start + 1, header.fixed_length as usize)
+    };
+    if count == 0 || count > values.len() || field.length != value_start - field.start + count {
+        return Err(ERROR_MALFORMED);
+    }
+    for index in 0..count {
+        let value = tokens.token(value_start + index).ok_or(ERROR_MALFORMED)?;
+        if value > MAX_U16 {
+            return Err(ERROR_MALFORMED);
+        }
+        array_put!(values, index, value);
+    }
+    Ok(count)
+}
+
+fn named_storage_metadata(
+    tokens: &SentenceView<'_, impl VliwWord>,
+    sentence: &ParsedSentence,
+    next_codelet: usize,
+) -> Result<StorageMetadata, u32> {
+    if sentence.field_count != 4 {
+        return Err(ERROR_MALFORMED);
+    }
+    let name = sentence.field(NOMINATIVE).ok_or(ERROR_MALFORMED)?;
+    if name.length < 2 || tokens.token(name.start) != Some(NAME_TYPE) {
+        return Err(ERROR_MALFORMED);
+    }
+    let element_type_field = sentence.field(ESSIVE).ok_or(ERROR_MALFORMED)?;
+    if element_type_field.length != 2 || tokens.token(element_type_field.start) != Some(NAME_TYPE) {
+        return Err(ERROR_MALFORMED);
+    }
+    let element_type = tokens
+        .token(element_type_field.start + 1)
+        .ok_or(ERROR_MALFORMED)?;
+
+    let mut length_words = [0; 8];
+    let length_count = u16_values(
+        tokens,
+        sentence.field(INSTRUMENTAL).ok_or(ERROR_MALFORMED)?,
+        &mut length_words,
+    )?;
+    if length_count != 2 {
+        return Err(ERROR_MALFORMED);
+    }
+    let byte_length = array_at!(length_words, 0) | (array_at!(length_words, 1) << 16);
+    let mut shape = [1; 8];
+    let rank = u16_values(
+        tokens,
+        sentence.field(COMITATIVE).ok_or(ERROR_MALFORMED)?,
+        &mut shape,
+    )?;
+    let mut element_count = 1u32;
+    for dimension in shape.iter().take(rank) {
+        if *dimension == 0 {
+            return Err(ERROR_MALFORMED);
+        }
+        element_count = element_count
+            .checked_mul(*dimension)
+            .ok_or(ERROR_MALFORMED)?;
+    }
+    if byte_length == 0 || element_count == 0 {
+        return Err(ERROR_MALFORMED);
+    }
+    let element_width = match element_type {
+        PAUCAL_NUMBER_TYPE => 1,
+        NUMBER_WIDTH_TYPE => 2,
+        PLURAL_NUMBER_TYPE => 4,
+        MULTAL_NUMBER_TYPE => 8,
+        FLOAT_TYPE => {
+            if byte_length % element_count != 0 {
+                return Err(ERROR_MALFORMED);
+            }
+            let width = byte_length / element_count;
+            if !matches!(width, 4 | 8) {
+                return Err(ERROR_MALFORMED);
+            }
+            width
+        }
+        _ => return Err(ERROR_UNSUPPORTED),
+    };
+    if element_count.checked_mul(element_width) != Some(byte_length) {
+        return Err(ERROR_MALFORMED);
+    }
+
+    Ok(StorageMetadata {
+        next_codelet,
+        name_word_index: tokens.word_index(name.start + 1),
+        name_length: name.length - 1,
+        payload_word_offset: 0,
+        byte_length,
+        element_width,
+        element_count,
+        element_type,
+        rank: rank as u32,
+        shape,
+    })
+}
+
 fn has_nearby_storage_verb(words: &[u16], codelet_count: usize, start: usize) -> bool {
     let end = (start + 4).min(codelet_count);
     let mut prior = 0;
     for codelet in start..end {
         for slot in 1..CODELET_WORDS {
             let token = u32::from(words[codelet * CODELET_WORDS + slot]);
-            if prior == STORAGE_GATHER && token == STORAGE_COMPUTER {
+            if (prior == STORAGE_GATHER && token == STORAGE_COMPUTER)
+                || (prior == SECTION_PART && token == SECTION_MODULE)
+            {
                 return true;
             }
             prior = token;
@@ -182,21 +306,31 @@ pub fn scan_storage_sections(
         };
         let payload_start = metadata.next_codelet;
         let byte_length = metadata.byte_length;
-        let payload_codelets = (byte_length as usize).div_ceil((CODELET_WORDS - 1) * 2);
+        let payload_bytes_per_codelet = (CODELET_WORDS - metadata.payload_word_offset) * 2;
+        let payload_codelets = (byte_length as usize).div_ceil(payload_bytes_per_codelet);
         let payload_end = payload_start
             .checked_add(payload_codelets)
             .ok_or(ERROR_MALFORMED)?;
         if payload_end > codelet_count || found >= output.len() || found >= STORAGE_MAX_SECTIONS {
             return Err(ERROR_FRAME_CAPACITY);
         }
-        // Payload words begin at slot 1 of each payload codelet: slot 0 is the
-        // codelet header, which is not part of the payload.
-        const PAYLOAD_WORDS_PER_CODELET: usize = CODELET_WORDS - 1;
-        let payload_capacity = payload_codelets * PAYLOAD_WORDS_PER_CODELET * 2;
+        let payload_capacity = payload_codelets * payload_bytes_per_codelet;
+        for prior in output.iter().take(found) {
+            if prior.name_length == 0 || prior.name_length != metadata.name_length {
+                continue;
+            }
+            let same_name = (0..metadata.name_length).all(|index| {
+                words[prior.name_word_index + index] == words[metadata.name_word_index + index]
+            });
+            if same_name {
+                return Err(ERROR_DUPLICATE_SIGNATURE);
+            }
+        }
         for byte_index in byte_length as usize..payload_capacity {
-            let codelet = payload_start + byte_index / (PAYLOAD_WORDS_PER_CODELET * 2);
-            let word = words
-                [codelet * CODELET_WORDS + 1 + (byte_index % (PAYLOAD_WORDS_PER_CODELET * 2)) / 2];
+            let codelet = payload_start + byte_index / payload_bytes_per_codelet;
+            let word = words[codelet * CODELET_WORDS
+                + metadata.payload_word_offset
+                + (byte_index % payload_bytes_per_codelet) / 2];
             let padding_byte = if byte_index % 2 == 0 {
                 word & 0xff
             } else {
@@ -213,6 +347,7 @@ pub fn scan_storage_sections(
             name_length: metadata.name_length,
             payload_start,
             payload_codelets,
+            payload_word_offset: metadata.payload_word_offset,
             byte_length: metadata.byte_length,
             element_width: metadata.element_width,
             element_count: metadata.element_count,
@@ -263,7 +398,12 @@ mod tests {
     }
 
     /// A descriptor followed by its payload codelets.
-    fn pack(start_offset: u16, end_offset: u16, ty: u32, payload_codelets: usize) -> std::vec::Vec<u16> {
+    fn pack(
+        start_offset: u16,
+        end_offset: u16,
+        ty: u32,
+        payload_codelets: usize,
+    ) -> std::vec::Vec<u16> {
         let mut words = std::vec::Vec::new();
         words.extend(descriptor(start_offset, end_offset, ty));
         words.extend(std::vec![0u16; payload_codelets * CODELET_WORDS]);
@@ -271,6 +411,60 @@ mod tests {
         let last = words.len() - CODELET_WORDS;
         words[last] = 0x0001;
         words
+    }
+
+    fn named_section(
+        name: &[u32],
+        element_type: u32,
+        byte_length: u32,
+        shape: &[u32],
+    ) -> std::vec::Vec<u16> {
+        let mut tokens = std::vec![NAME_TYPE];
+        tokens.extend_from_slice(name);
+        let nominative = tokens.len();
+        tokens.extend([NOMINATIVE, NAME_TYPE, element_type, ESSIVE, 0x891d]);
+        let essive = nominative + 3;
+        tokens.extend([byte_length as u16 as u32, (byte_length >> 16) as u16 as u32]);
+        let instrumental = tokens.len();
+        tokens.push(INSTRUMENTAL);
+        let shape_header = match shape.len() {
+            1 => 0x881d,
+            2 => 0x891d,
+            _ => 0x8e1d,
+        };
+        tokens.push(shape_header);
+        if shape_header == 0x8e1d {
+            tokens.push(shape.len() as u32);
+        }
+        tokens.extend(shape.iter().copied());
+        let comitative = tokens.len();
+        let mood = comitative + 3;
+        tokens.extend([COMITATIVE, SECTION_PART, SECTION_MODULE, REALIS]);
+        let mut words = std::vec::Vec::new();
+        let chunks = tokens.chunks(CODELET_WORDS - 1);
+        let chunk_count = chunks.len();
+        for (chunk_index, chunk) in chunks.enumerate() {
+            let complete = chunk_index + 1 == chunk_count;
+            let token_start = chunk_index * (CODELET_WORDS - 1);
+            let mut codelet = [0u16; CODELET_WORDS];
+            codelet[0] = u16::from(complete);
+            for (offset, token) in chunk.iter().enumerate() {
+                codelet[offset + 1] = *token as u16;
+                let token_index = token_start + offset;
+                let boundary =
+                    [nominative, essive, instrumental, comitative, mood].contains(&token_index);
+                if boundary == complete {
+                    codelet[0] |= 1 << (offset + 1);
+                }
+            }
+            words.extend(codelet);
+        }
+        words
+    }
+
+    fn raw_payload(byte_length: usize) -> std::vec::Vec<u16> {
+        let codelet_count = byte_length.div_ceil(CODELET_WORDS * 2);
+        std::vec![0; codelet_count * CODELET_WORDS]
     }
 
     fn scan(words: &[u16], codelet_count: usize) -> Result<usize, u32> {
@@ -318,14 +512,23 @@ mod tests {
     #[test]
     fn a_reversed_or_empty_range_is_rejected() {
         // end <= start is malformed.
-        assert_eq!(scan(&pack(64, 64, PAUCAL_NUMBER_TYPE, 3), 4), Err(ERROR_MALFORMED));
-        assert_eq!(scan(&pack(64, 0, PAUCAL_NUMBER_TYPE, 3), 4), Err(ERROR_MALFORMED));
+        assert_eq!(
+            scan(&pack(64, 64, PAUCAL_NUMBER_TYPE, 3), 4),
+            Err(ERROR_MALFORMED)
+        );
+        assert_eq!(
+            scan(&pack(64, 0, PAUCAL_NUMBER_TYPE, 3), 4),
+            Err(ERROR_MALFORMED)
+        );
     }
 
     #[test]
     fn a_length_that_does_not_fill_whole_elements_is_rejected() {
         // 65 bytes of uint32 is not a whole number of elements.
-        assert_eq!(scan(&pack(0, 65, PLURAL_NUMBER_TYPE, 3), 4), Err(ERROR_MALFORMED));
+        assert_eq!(
+            scan(&pack(0, 65, PLURAL_NUMBER_TYPE, 3), 4),
+            Err(ERROR_MALFORMED)
+        );
     }
 
     #[test]
@@ -336,10 +539,19 @@ mod tests {
         let payload_codelets = 70_000usize.div_ceil((CODELET_WORDS - 1) * 2);
         let mut words = std::vec![0u16; (1 + payload_codelets) * CODELET_WORDS];
         let tokens = [
-            PLURAL_NUMBER_TYPE, 0x1170u32, 1u32, FROM,
-            PLURAL_NUMBER_TYPE, 0x22E0u32, 2u32, TO,
-            PAUCAL_NUMBER_TYPE, AS,
-            STORAGE_GATHER, STORAGE_COMPUTER, DEF,
+            PLURAL_NUMBER_TYPE,
+            0x1170u32,
+            1u32,
+            FROM,
+            PLURAL_NUMBER_TYPE,
+            0x22E0u32,
+            2u32,
+            TO,
+            PAUCAL_NUMBER_TYPE,
+            AS,
+            STORAGE_GATHER,
+            STORAGE_COMPUTER,
+            DEF,
         ];
         for (index, token) in tokens.iter().enumerate() {
             words[1 + index] = *token as u16;
@@ -354,6 +566,68 @@ mod tests {
         assert_eq!(sections[0].byte_length, 70_000);
         assert_eq!(sections[0].element_count, 70_000);
     }
+
+    #[test]
+    fn named_pfun_sections_bind_shape_and_full_raw_payload_codelets() {
+        let mut words = named_section(&[0x4123], FLOAT_TYPE, 16, &[2, 2]);
+        let payload_start = words.len() / CODELET_WORDS;
+        words.extend(raw_payload(16));
+        let mut sections = [StorageSectionRange::default(); STORAGE_MAX_SECTIONS];
+
+        assert_eq!(
+            scan_storage_sections(&words, words.len() / CODELET_WORDS, &mut sections),
+            Ok(1)
+        );
+        assert_eq!(sections[0].name_word_index, 2);
+        assert_eq!(sections[0].name_length, 1);
+        assert_eq!(sections[0].payload_start, payload_start);
+        assert_eq!(sections[0].payload_codelets, 1);
+        assert_eq!(sections[0].payload_word_offset, 0);
+        assert_eq!(sections[0].element_type, FLOAT_TYPE);
+        assert_eq!(sections[0].element_width, 4);
+        assert_eq!(sections[0].element_count, 4);
+        assert_eq!(sections[0].rank, 2);
+        assert_eq!(&sections[0].shape[..2], &[2, 2]);
+    }
+
+    #[test]
+    fn named_pfun_sections_accept_rank_one_number_storage() {
+        let mut words = named_section(&[0xa92b, 0x28ea], NUMBER_WIDTH_TYPE, 4, &[2]);
+        words.extend(raw_payload(4));
+        let (token_count, _) = collect_sentence(&words, words.len() / CODELET_WORDS, 0).unwrap();
+        let tokens = SentenceView::new(&words, 0, token_count);
+        let mut parsed = ParsedSentence::empty();
+        assert_eq!(parse_sentence(&tokens, &mut parsed), 0);
+        assert_eq!(parsed.mood, REALIS);
+        assert_eq!(parsed.field_count, 4);
+        let mut sections = [StorageSectionRange::default(); STORAGE_MAX_SECTIONS];
+
+        assert_eq!(
+            scan_storage_sections(&words, words.len() / CODELET_WORDS, &mut sections),
+            Ok(1)
+        );
+        assert_eq!(sections[0].element_type, NUMBER_WIDTH_TYPE);
+        assert_eq!(sections[0].element_width, 2);
+        assert_eq!(sections[0].element_count, 2);
+        assert_eq!(sections[0].rank, 1);
+        assert_eq!(sections[0].shape[0], 2);
+    }
+
+    #[test]
+    fn named_pfun_sections_reject_bad_shape_and_duplicate_names() {
+        let invalid_shape = named_section(&[0x4123], FLOAT_TYPE, 16, &[0, 2]);
+        assert_eq!(
+            scan(&invalid_shape, invalid_shape.len() / CODELET_WORDS),
+            Err(ERROR_MALFORMED)
+        );
+
+        let mut duplicate = named_section(&[0x4123], FLOAT_TYPE, 16, &[2, 2]);
+        duplicate.extend(raw_payload(16));
+        duplicate.extend(named_section(&[0x4123], FLOAT_TYPE, 16, &[2, 2]));
+        duplicate.extend(raw_payload(16));
+        assert_eq!(
+            scan(&duplicate, duplicate.len() / CODELET_WORDS),
+            Err(ERROR_DUPLICATE_SIGNATURE)
+        );
+    }
 }
-
-

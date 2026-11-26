@@ -241,8 +241,10 @@ fn output_name(
     group_len: usize,
     field: TokenSpan,
 ) -> Result<TokenSpan, u32> {
-    // `<class words…> [gi] <name>`: the class word leads and `gi` marks the name.
     let mut index = field.start;
+    if token_at(words, start, group_len, index) == Some(NAME_TYPE) {
+        index += 1;
+    }
     let mut typed = false;
     while index < field.start + field.length {
         match token_at(words, start, group_len, index) {

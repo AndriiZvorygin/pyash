@@ -9,8 +9,8 @@
 //! the declaration's initialising literal.
 
 use pyac_vliw_core::{
-    execute_numeric_programlet, ProgramletStack, CODELET_WORDS, DEFAULT_PROGRAMLET_STEP_BUDGET,
-    ERROR_MALFORMED, MAX_PROGRAMLET_SYMBOL_WORDS,
+    CODELET_WORDS, DEFAULT_PROGRAMLET_STEP_BUDGET, ERROR_MALFORMED, MAX_PROGRAMLET_SYMBOL_WORDS,
+    ProgramletStack, execute_numeric_programlet,
 };
 
 const WORDS: usize = CODELET_WORDS;
@@ -27,8 +27,8 @@ fn flow(width_word: u16, value: u16) -> Flow {
     [
         // gi hgut hyas na | do gi 4930 ma | Qyis 0 fromindex | ceremony def
         [
-            0x2911, 0x225e, 0xaa90, 0x8918, 0x24de, 0x327e, 0x225e, 0x4930, 0x243e, 0x881d,
-            0x0000, 0x6357, 0xe8c9, 0x5217, 0, 0,
+            0x2911, 0x225e, 0xaa90, 0x8918, 0x24de, 0x327e, 0x225e, 0x4930, 0x243e, 0x881d, 0x0000,
+            0x6357, 0xe8c9, 0x5217, 0, 0,
         ],
         // gi hgut na | <width> <value> ka | gi prif swih | hnuc li
         [
@@ -37,19 +37,20 @@ fn flow(width_word: u16, value: u16) -> Flow {
         ],
         // Qyis 1 ka | do gi 4930 ma | plus tu
         [
-            0x0289, 0x881d, 0x0001, 0x245e, 0x327e, 0x225e, 0x4930, 0x243e, 0x8a64, 0x295e,
-            0, 0, 0, 0, 0, 0,
+            0x0289, 0x881d, 0x0001, 0x245e, 0x327e, 0x225e, 0x4930, 0x243e, 0x8a64, 0x295e, 0, 0,
+            0, 0, 0, 0,
         ],
         // gi hgut na | ret
-        [0x0019, 0x225e, 0xaa90, 0x24de, 0xa828, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [
+            0x0019, 0x225e, 0xaa90, 0x24de, 0xa828, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ],
         // gi hgut hyas na | ceremony prah
         [
             0x0051, 0x225e, 0xaa90, 0x8918, 0x24de, 0xe8c9, 0x4e27, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ],
         // do gi 4930 ma | hgut hyas tu
         [
-            0x0091, 0x327e, 0x225e, 0x4930, 0x243e, 0xaa90, 0x8918, 0x295e, 0, 0, 0, 0, 0, 0,
-            0, 0,
+            0x0091, 0x327e, 0x225e, 0x4930, 0x243e, 0xaa90, 0x8918, 0x295e, 0, 0, 0, 0, 0, 0, 0, 0,
         ],
     ]
 }
@@ -119,12 +120,23 @@ fn the_reference_fixture_runs_unchanged() {
         0x0a49, 0x225e, 0xaa90, 0x24de, 0x881d, 0x0000, 0x245e, 0x225e, 0xc8c4, 0x414f, 0xea30,
         0x217e, 0, 0, 0, 0,
     ];
-    let flat: Vec<u32> = codelets.iter().flat_map(|c| c.iter().map(|w| u32::from(*w))).collect();
+    let flat: Vec<u32> = codelets
+        .iter()
+        .flat_map(|c| c.iter().map(|w| u32::from(*w)))
+        .collect();
     let expect: Vec<u32> = vec![
-        0x2911,0x225e,0xaa90,0x8918,0x24de,0x327e,0x225e,0x4930,0x243e,0x881d,0x0000,0x6357,0xe8c9,0x5217,0,0,
-        0x0a49,0x225e,0xaa90,0x24de,0x881d,0x0000,0x245e,0x225e,0xc8c4,0x414f,0xea30,0x217e,0,0,0,0,
+        0x2911, 0x225e, 0xaa90, 0x8918, 0x24de, 0x327e, 0x225e, 0x4930, 0x243e, 0x881d, 0x0000,
+        0x6357, 0xe8c9, 0x5217, 0, 0, 0x0a49, 0x225e, 0xaa90, 0x24de, 0x881d, 0x0000, 0x245e,
+        0x225e, 0xc8c4, 0x414f, 0xea30, 0x217e, 0, 0, 0, 0,
     ];
-    assert_eq!(&flat[..32], &expect[..], "codelets 0 and 1 must match the reference");
+    assert_eq!(
+        &flat[..32],
+        &expect[..],
+        "codelets 0 and 1 must match the reference"
+    );
     let result = run(&codelets);
-    assert_eq!(result.error, 0, "reference declaration must execute: {result:?}");
+    assert_eq!(
+        result.error, 0,
+        "reference declaration must execute: {result:?}"
+    );
 }

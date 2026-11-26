@@ -430,6 +430,3 @@ fn maximum_with_unsigned_output_supports_float64_and_first_tie() {
     assert_eq!(result.value_kind, VALUE_UNSIGNED);
     assert_eq!(result.values[0], 1);
 }
-
-
-

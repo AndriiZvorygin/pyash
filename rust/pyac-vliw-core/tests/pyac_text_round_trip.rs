@@ -78,7 +78,9 @@ fn a_multi_clause_tablet_matches_the_c() {
     let (flat, count) = tablet("dohyikpwih prifgika djancu plustu");
     assert_eq!(
         &flat[..11],
-        &[0x0549, 0x881d, 0x0001, 0x4127, 0xc8c4, 0x225e, 0x245e, 0x69b3, 0x29be, 0x8a64, 0x295e]
+        &[
+            0x0549, 0x881d, 0x0001, 0x4127, 0xc8c4, 0x225e, 0x245e, 0x69b3, 0x29be, 0x8a64, 0x295e
+        ]
     );
     let _ = count;
     // The conditional `cu` is where the C breaks the line, so the tablet's first

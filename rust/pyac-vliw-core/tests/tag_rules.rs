@@ -20,10 +20,7 @@ fn codelet(tokens: &[u32], boundaries: &[usize]) -> std::vec::Vec<u32> {
 #[test]
 fn a_name_field_is_gi_then_root_then_case() {
     // gi hnim na pyan li: a name, then the verb and mood.
-    let words = codelet(
-        &[w("gi"), w("hnim"), w("na"), w("pyan"), w("li")],
-        &[2, 4],
-    );
+    let words = codelet(&[w("gi"), w("hnim"), w("na"), w("pyan"), w("li")], &[2, 4]);
     let (sentence, _) = decode_sentence(&words, 1, 0).expect("decodes");
     let field = sentence.field(w("na")).expect("nominative field");
     assert_eq!(field.length, 2, "gi + hnim");

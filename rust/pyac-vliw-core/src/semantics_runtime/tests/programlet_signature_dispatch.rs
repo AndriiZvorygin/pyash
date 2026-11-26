@@ -240,7 +240,10 @@ fn case_source_order_does_not_change_programlet_signature_lookup() {
     append_auto(&mut words, &definition);
 
     append_auto(&mut words, &[NUMBER_QUOTE, 23, ACCUSATIVE, MOOD_RETURN]);
-    append_auto(&mut words, &[NAME_TYPE, ROUTINE, NOMINATIVE, CEREMONY, MOOD_PARAGRAPH]);
+    append_auto(
+        &mut words,
+        &[NAME_TYPE, ROUTINE, NOMINATIVE, CEREMONY, MOOD_PARAGRAPH],
+    );
     let mut call = std::vec![NUMBER_QUOTE, 3, SOURCE, NUMBER_QUOTE, 4, COMITATIVE];
     call.extend(output);
     call.extend([DESTINATION, ROUTINE, DEONTIC]);
@@ -313,6 +316,3 @@ fn rejects_missing_signatures_and_applies_latest_definition() {
     assert_eq!(result.error, 0, "{result:?}");
     assert_eq!(result.values[0], 42);
 }
-
-
-

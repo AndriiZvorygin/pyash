@@ -6,8 +6,8 @@
 //! decode.
 
 use pyac_vliw_core::{
-    decode_sentence, word_code::decode as spell, word_code::encode as spell_word, Codelets,
-    EncodeField, EncodeSentence,
+    Codelets, EncodeField, EncodeSentence, decode_sentence, word_code::decode as spell,
+    word_code::encode as spell_word,
 };
 
 const WORDS: usize = 16;

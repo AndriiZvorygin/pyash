@@ -4,7 +4,7 @@
 //! A name adds `gi` and its payload must be root words, so `gi hnim na` is
 //! `gihnimna`, while a bare pronoun stays a grammar word.
 
-use pyac_vliw_core::{decode_sentence, validate_encode, Codelets, EncodeField, EncodeSentence};
+use pyac_vliw_core::{Codelets, EncodeField, EncodeSentence, decode_sentence, validate_encode};
 
 const NAME_TYPE: u32 = 0x225e; // gi
 const SA: u32 = 0x253e; // you_ (grammar form)
@@ -201,7 +201,15 @@ fn a_long_sentence_streams_across_codelets() {
             .iter()
             .map(|field| field.case)
             .collect::<Vec<_>>(),
-        vec![NA, KA, ESSIVE, DESTINATION, SOURCE, COMITATIVE, INSTRUMENTAL]
+        vec![
+            NA,
+            KA,
+            ESSIVE,
+            DESTINATION,
+            SOURCE,
+            COMITATIVE,
+            INSTRUMENTAL
+        ]
     );
 }
 

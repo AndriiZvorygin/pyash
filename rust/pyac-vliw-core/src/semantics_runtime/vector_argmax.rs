@@ -9,8 +9,10 @@ use super::*;
 use super::iwsp_vector_ops::{MAXIMUM_VERB_FIRST, MAXIMUM_VERB_SECOND};
 
 fn skip_named_number_target(cursor: &mut Cursor, words: &[impl VliwWord]) -> Result<(), u32> {
-    // `<class words…> [gi] <name> <case>`: the class word leads and `gi` marks
-    // the name, so the width word comes first and the tag at most once.
+    // Accept both ordinary `gi <class…> gi <name>` and class-first typed names.
+    if cursor.peek(words, false) == Some(NAME_TYPE) {
+        cursor.read(words, false);
+    }
     let mut typed = false;
     while matches!(
         cursor.peek(words, false),

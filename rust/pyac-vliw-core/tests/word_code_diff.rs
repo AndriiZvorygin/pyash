@@ -107,7 +107,9 @@ fn identity_classification_agrees_with_spelling_classification() {
         let by_spelling = pyac_vliw_core::word_code::classify(word.as_bytes()).ok();
         let by_identity = pyac_vliw_core::word_code::classify_identity(*identity);
         if by_spelling != by_identity {
-            failures.push(format!("{word} 0x{identity:04x}: {by_spelling:?} != {by_identity:?}"));
+            failures.push(format!(
+                "{word} 0x{identity:04x}: {by_spelling:?} != {by_identity:?}"
+            ));
         }
     }
     assert!(
