@@ -172,6 +172,82 @@ export async function publishSong({ sourcePath, catalogueDirectory, filename }) 
 }
 
 /**
+ * Where the name of a song lies: beside its sheet, with the name of the name.
+ */
+export function songNamePath(radioDirectory, topic) {
+  return path.join(radioDirectory, "lyrics", `name-${topic}.txt`);
+}
+
+/**
+ * The name of a song, read from the file that holds it. A song that was never
+ * named has no name, and keeps the lane it was made for.
+ */
+export async function readSongName({ namePath = "" } = {}) {
+  if (!namePath) return "";
+  try {
+    const text = await fs.readFile(namePath, "utf8");
+    return text.trim();
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * The example that names a song. The house reads the sheet of a song and asks
+ * the mind for the name of that song.
+ */
+export const SONG_NAME_EXAMPLE = "examples/pyash/yiniana-radio-song-name.pya";
+
+/**
+ * Name a song: ask the house for the name of the song in a sheet, and keep the
+ * name beside the sheet. The name is asked once per song, and the name that is
+ * kept is the name the house gives.
+ */
+export async function nameSong({ repoRoot, sheetPath, namePath, log = () => {} }) {
+  await run(process.execPath, [
+    path.join(repoRoot, "command", "run_pya_program.mjs"),
+    SONG_NAME_EXAMPLE,
+    "ob", "filename", sheetPath, "to", "name", "sheet", "ya",
+    "ob", "filename", namePath, "to", "name", "target"
+  ], { cwd: repoRoot, label: "song name" });
+  log(`named the song of ${path.basename(sheetPath, ".txt")}`);
+  return namePath;
+}
+
+/**
+ * The name of a song, asked for when the song does not have one yet.
+ *
+ * A name that is already there is kept: the house names a song once, and the
+ * name it gave is the name the song carries. A name that cannot be read is no
+ * name, and the song keeps the lane it was made for.
+ */
+export async function ensureSongName({
+  repoRoot,
+  topic,
+  radioDirectory,
+  sheetPath,
+  name = nameSong,
+  log = () => {}
+} = {}) {
+  const namePath = songNamePath(radioDirectory, topic);
+  let exists = true;
+  try {
+    await fs.access(namePath);
+  } catch {
+    exists = false;
+  }
+  if (!exists) {
+    try {
+      await name({ repoRoot, sheetPath, namePath, log });
+    } catch (error) {
+      log(`the song of ${topic} keeps the lane name: ${error?.message ?? error}`);
+      return "";
+    }
+  }
+  return readSongName({ namePath });
+}
+
+/**
  * Keep the transcript of a song beside its sheet: the words the house heard,
  * with the time of every line. The file is written beside the sheet and
  * renamed onto it, so a half written transcript is never on the air.
@@ -328,6 +404,7 @@ export async function produce({
   render = renderSeed,
   score = scoreRender,
   publish = publishSong,
+  name = nameSong,
   loop = false,
   pauseSeconds = 0,
   log = () => {}
@@ -361,6 +438,16 @@ export async function produce({
       const duration = Number(durations[item.engine] ?? DEFAULT_DURATION_SECONDS);
       const sheetPath = await ensureSheet({ repoRoot, topic: item.topic, radioDirectory: radio, cardDepth, log });
       const lyrics = await fs.readFile(sheetPath, "utf8");
+      // The song is named before it is sung: a player shows the name a
+      // listener would remember, not the lane the song was made for.
+      const songName = await ensureSongName({
+        repoRoot,
+        topic: item.topic,
+        radioDirectory: radio,
+        sheetPath,
+        name,
+        log
+      });
       for (let attempt = 0; attempt < Math.max(1, seeds); attempt += 1) {
         const seed = pickSeed();
         const renderPath = path.join(repoRoot, "artifacts", "radio-producer", `${item.engine}-${item.topic}-${seed}.mp3`);
@@ -424,7 +511,7 @@ export async function produce({
       });
       // The song is stamped before it is heard: a player shows who made it,
       // what it is called, and the day the render finished.
-      const tags = songTags({ filename: item.filename, date: await fileDay(sourcePath) });
+      const tags = songTags({ filename: item.filename, title: songName, date: await fileDay(sourcePath) });
       await stampSong({ targetPath: target, tags });
       record.status = "published";
       record.seed = winner.seed;

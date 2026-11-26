@@ -1,0 +1,9 @@
+from filename "../../module/radio_song_name.pya" to name radio song name be import do
+
+ob ve filename text sheet filename text target be input ya
+
+su name radio song name sheet stage from filename of ob of sheet become wo text to name text radio song name sheet be read do
+
+su name radio song name out stage from text of ob of radio song name sheet to name text radio song name out be radio song name do
+
+su name radio song name artifact ob name text radio song name out to filename of ob of target be write do

@@ -28,6 +28,9 @@ folded back into pyash, because pyash already owns every step of it.
 - Tag program: `examples/pyash/yiniana-radio-tags.pya` — the tags, wired as pyash sentences.
 - Transcript command: `command/yiniana_transcribe_catalogue.mjs` — the words the house heard, kept with the songs.
 - Transcript program: `examples/pyash/yiniana-radio-transcribe.pya` — the transcripts, wired as pyash sentences.
+- Name command: `command/extract_song_name.mjs` — the name the mind gave a song, read back as a title.
+- Name program: `examples/pyash/yiniana-radio-song-name.pya` — the name of a song, wired as pyash sentences.
+- Hook command: `command/song_hook.mjs` — the line a song sings again in every chorus.
 - Lanes: `radio/topics.txt` — the curated topic rotation.
 - Music engines: `music/comfyui/audio_ace_step_1_5_xl_turbo.*`, `music/comfyui/audio_yue2_own_melody.*`.
 - Recovery check: `command/yiniana_lyric_recovery.mjs`.
@@ -40,6 +43,7 @@ Everything the chain produces lands in one folder, named by topic:
 radio/lyrics/source-<topic>.txt     the corpus excerpts
 radio/lyrics/teaching-<topic>.txt   the learnteaching card
 radio/lyrics/song-<topic>.txt       the hymn manuscript
+radio/lyrics/name-<topic>.txt       the name of the song
 radio/audio/<engine>-<topic>.mp3    the rendered song
 ```
 
@@ -414,6 +418,45 @@ playlist and in the now-playing state, so a listener always knows what they are
 hearing. The lane stays the topic either way, so the programme still plays
 the song it contracted to play.
 
+### The name of a song
+
+A song the house made before the radio existed carries a name the house wrote
+by hand. A song the radio makes now would carry the name of its lane, which is
+the name of the topic and not the name of the song. So the house asks for the
+name.
+
+`module/radio_song_name.pya` holds the ceremony `radio song name`, its prompt
+and its mind. The ceremony takes the sheet of a song and gives back the name of
+that song:
+
+1. The mind reads the sheet and is asked for the title: the phrase the song
+   repeats, shortened to its heart, in title case, taken from the words of the
+   song itself.
+2. `command/extract_song_name.mjs` reads the answer. A reply that cannot be
+   read as a name — a sentence, a question, a paragraph — is not a name.
+3. When there is no name, the house falls back on the line the song sings again
+   in every chorus. `command/song_hook.mjs` finds that line: the first line of
+   the first block of the sheet the sheet sings twice.
+
+The reader is deliberately strict, because a title that is too long is not a
+title. A name is at most ten words, one line, with the small words small:
+*Love Expands the Light*, *Every Walk One in Christ*. A name that is longer
+keeps its first clause — the part before the comma, or before the word that
+joins two halves of a line — because that is where a song's meaning sits.
+
+The name is written to `radio/lyrics/name-<topic>.txt`, beside the sheet, and
+it is written once: a song that has a name keeps it. The producer reads the
+name when it stamps the song, so the title in the player's tag is the name of
+the song and not the lane it was made for. A song whose name cannot be asked
+for keeps the lane, and the station says so.
+
+```sh
+cd /home/htaf/pyac/pyash-dev
+node command/run_pya_program.mjs examples/pyash/yiniana-radio-song-name.pya \
+  ob filename /home/htaf/pyac/pyash/radio/lyrics/song-presence.txt to name sheet ya \
+  ob filename /tmp/name.txt to name target
+```
+
 ### The tags of a song
 
 A listener plays a song in a player, and a player shows what the file says
@@ -723,7 +766,11 @@ The station plays what has been rendered. The producer is what makes more.
    words. The whole render is heard: the hear lane says what it hears, and the
    lyric recovery says how much of the sheet came back. An instrumental render
    answers "(upbeat music)" and recovers nothing.
-4. **Publish.** The winner is copied into the catalogue and renamed into
+4. **Name.** The song is named before it is sung: the house asks the mind for
+   the name of the song in the sheet and keeps the answer beside the sheet, in
+   `radio/lyrics/name-<topic>.txt`. A song that already has a name keeps it,
+   and the name is asked once per song. See §6, *The name of a song*.
+5. **Publish.** The winner is copied into the catalogue and renamed into
    place, so a half written song is never on the air. The song is stamped
    with the tags of a song — its name, the house that made it, and the day
    the render finished — before it is heard. The transcript of the render,
@@ -1076,11 +1123,12 @@ them there, so a file carries its own name with it.
 - `quiz/music_comfyui_runner.test.mjs` — the workflow and mapping pairs, node detection, the mapping spellings, the save format, and the byte sniffing.
 - `quiz/music_say.test.mjs` — the verb side of the music surface.
 - `quiz/yiniana_radio.test.mjs` — the frame reader, the catalogue scan, the programme loop, the slow listener, the http surface, the download of a song and what a download refuses, the rotation contract, the order of the programme and the pyash ceremony.
-- `quiz/yiniana_producer.test.mjs` — the lanes, the work list, the seed choice, the publishing, the song that is rejected, the audition window, the sheet that reuses its card, and the pyash ceremony.
+- `quiz/yiniana_producer.test.mjs` — the lanes, the work list, the seed choice, the publishing, the song that is rejected, the audition window, the sheet that reuses its card, the name a song is given, the song that cannot be named, and the pyash ceremony.
 - `quiz/yiniana_song_import.test.mjs` — the manifest, the song that is already there, the song that is named, the sheet naming, the mp3 the station cannot play, the part file that never lands, and the pyash ceremony.
 - `quiz/radio_id3.test.mjs` — the title a file carries, the title written onto a file, the frames that are kept, the tag the writer leaves alone, and the tags a player reads.
 - `quiz/radio_tags.test.mjs` — the tags of a song, the voice of an engine, the day a song carries, the day written once, and the catalogue stamped song by song.
 - `quiz/radio_ticker.test.mjs` — the words of a transcript, the sentences of a line, the sheet a song falls back to, and the line that is sung at that moment.
+- `quiz/radio_song_name.test.mjs` — the name the mind gave, the furniture around a name, the reply that is not a name, the name that keeps its first clause, the title case, the line a song repeats, and the pyash ceremony.
 - `quiz/yiniana_transcribe_catalogue.test.mjs` — the song that is heard, the song that was heard already, the catalogue heard song by song, and the pyash ceremony.
 - `quiz/yiniana_tag_catalogue.test.mjs` — the tags of every song of the catalogue, the day of an imported song, and the pyash ceremony.
 - `quiz/learn_card_headings.test.mjs` — the two card depths, the headings an argument may name, the headings a card carries, and the card that matches a depth.

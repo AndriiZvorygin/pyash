@@ -13,11 +13,14 @@ import {
   buildAuditionArgs,
   chooseSheetExample,
   chooseWinner,
+  ensureSongName,
   parseLanes,
   keepTranscript,
   pickSeed,
   produce,
   publishSong,
+  readSongName,
+  songNamePath,
   SHEET_EXAMPLES
 } from "../command/yiniana_producer.mjs";
 import { readId3Tags } from "../program/library/radio/id3.mjs";
@@ -40,6 +43,11 @@ async function makeStation(root, { lanes = ["dignity", "peace"], published = [] 
     await fs.writeFile(path.join(radio, "audio", name), "audio");
   }
   return radio;
+}
+
+async function writeName({ namePath, name = "We Carry the Light" }) {
+  await fs.writeFile(namePath, `${name}\n`, "utf8");
+  return namePath;
 }
 
 async function run(line) {
@@ -119,6 +127,7 @@ test("the producer makes the song the catalogue is missing and publishes it", as
       return outputPath;
     },
     score: async () => ({ percent: 40, hits: 40, total: 100, transcript: "words" }),
+    name: writeName,
     publish: async ({ sourcePath, catalogueDirectory, filename }) => {
       published.push(filename);
       return publishSong({ sourcePath, catalogueDirectory, filename });
@@ -135,7 +144,7 @@ test("the producer makes the song the catalogue is missing and publishes it", as
   const written = await fs.readFile(path.join(radio, "audio", "yue2-dignity.mp3"));
   assert.ok(written.includes(syntheticMp3()), "the audio that was rendered is what plays");
   const tags = readId3Tags(written);
-  assert.equal(tags.title, "Dignity", "the song is named by the lane it was made for");
+  assert.equal(tags.title, "We Carry the Light", "the song carries the name the house gave it");
   assert.equal(tags.artist, "Zvorygin Radio", "the song is by the house");
   assert.equal(tags.album, "Zvorygin Radio");
   assert.match(tags.date, /^\d{4}-\d{2}-\d{2}$/u, "the song carries the day it was made");
@@ -181,6 +190,7 @@ test("the producer does not publish a song whose words never arrive", async () =
       return outputPath;
     },
     score: async () => ({ percent: 0, hits: 0, total: 100, transcript: "(upbeat music)" }),
+    name: writeName,
     publish: async ({ sourcePath, catalogueDirectory, filename }) => {
       published.push(filename);
       return publishSong({ sourcePath, catalogueDirectory, filename });
@@ -243,8 +253,7 @@ test("the audition hears the whole render unless a window is asked for", () => {
   ]);
 });
 
-test("the producer writes only the hymn when the radio already has the card", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "yiniana-producer-"));
+test("the producer writes only the hymn when the radio already has the card", async () => {  const root = await fs.mkdtemp(path.join(os.tmpdir(), "yiniana-producer-"));
   const radio = await makeStation(root, { lanes: ["dignity"] });
   const teachingPath = path.join(radio, "lyrics", "teaching-dignity.txt");
   await fs.writeFile(teachingPath, [
@@ -278,6 +287,69 @@ test("the producer writes only the hymn when the radio already has the card", as
 
   const missingPath = path.join(radio, "lyrics", "teaching-peace.txt");
   assert.equal(await chooseSheetExample({ teachingPath: missingPath, cardDepth: "radio" }), SHEET_EXAMPLES.chain);
+
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+test("the house names a song once, beside its sheet", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "yiniana-producer-"));
+  const radio = await makeStation(root, { lanes: ["dignity"] });
+  const sheetPath = path.join(radio, "lyrics", "song-dignity.txt");
+  let asked = 0;
+
+  const name = await ensureSongName({
+    repoRoot: root,
+    topic: "dignity",
+    radioDirectory: radio,
+    sheetPath,
+    name: async ({ namePath }) => {
+      asked += 1;
+      return writeName({ namePath });
+    }
+  });
+
+  assert.equal(name, "We Carry the Light", "the name the house gave is the name of the song");
+  assert.equal(asked, 1, "the house asked for the name of the song");
+  assert.equal(
+    songNamePath(radio, "dignity"),
+    path.join(radio, "lyrics", "name-dignity.txt"),
+    "the name lies beside the sheet of the song"
+  );
+
+  const again = await ensureSongName({
+    repoRoot: root,
+    topic: "dignity",
+    radioDirectory: radio,
+    sheetPath,
+    name: async () => {
+      asked += 1;
+      throw new Error("the house asked twice");
+    }
+  });
+
+  assert.equal(again, "We Carry the Light", "the name that is there is kept");
+  assert.equal(asked, 1, "a song is named once");
+
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+test("a song that cannot be named keeps the lane it was made for", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "yiniana-producer-"));
+  const radio = await makeStation(root, { lanes: ["dignity"] });
+  const sheetPath = path.join(radio, "lyrics", "song-dignity.txt");
+
+  const name = await ensureSongName({
+    repoRoot: root,
+    topic: "dignity",
+    radioDirectory: radio,
+    sheetPath,
+    name: async () => {
+      throw new Error("the mind is away");
+    }
+  });
+
+  assert.equal(name, "", "a name that cannot be asked for is no name");
+  assert.equal(await readSongName({ namePath: songNamePath(radio, "dignity") }), "");
 
   await fs.rm(root, { recursive: true, force: true });
 });
