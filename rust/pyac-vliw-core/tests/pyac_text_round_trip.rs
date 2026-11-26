@@ -73,16 +73,18 @@ fn a_conditional_sentence_breaks_where_the_c_breaks() {
 
 #[test]
 fn a_multi_clause_tablet_matches_the_c() {
-    // "hyikdopwih prifgika djancu plustu" mixes a realis-less conditional (`cu`)
-    // into the line, so the tablet has two clauses. The whole tablet is what the
-    // encoder produces, and it matches the C's except for the stale `pwih` entry
-    // documented in the oracle test.
-    let (flat, _) = tablet("hyikdopwih prifgika djancu plustu");
+    // "dohyikpwih prifgika djancu plustu": the terminator leads, so the digits
+    // read in the order written. `cu` closes the first clause and `tu` the second.
+    let (flat, count) = tablet("dohyikpwih prifgika djancu plustu");
     assert_eq!(
         &flat[..11],
         &[0x0549, 0x881d, 0x0001, 0x4127, 0xc8c4, 0x225e, 0x245e, 0x69b3, 0x29be, 0x8a64, 0x295e]
     );
+    let _ = count;
     // The conditional `cu` is where the C breaks the line, so the tablet's first
     // clause ends there even though the whole line is one tablet.
+    // `cu` sits at slot 8 and `tu` at slot 10; both are moods, so both mark a
+    // boundary and the line breaks between them.
     assert_eq!(flat[0] & (1 << 8), 1 << 8, "boundary at the conditional");
+    assert_eq!(flat[0] & (1 << 10), 1 << 10, "boundary at the deontic");
 }

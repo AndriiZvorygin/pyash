@@ -8,7 +8,7 @@
 //! the completion bit and the boundary bits, so comparing them word for word
 //! compares the whole encoding.
 
-use pyac_vliw_core::text_encode::{CODELET_WIDTH, encode_sentence};
+use pyac_vliw_core::text_encode::{CODELET_WIDTH, encode_sentence, encode_sentence_with};
 
 /// Encode `text` and return the first codelet, or the error.
 fn encode(text: &str) -> Result<[u32; CODELET_WIDTH], &'static str> {
@@ -65,9 +65,9 @@ fn doyi_doka_tyutplos_ksuh_matches_the_c_tablet() {
 }
 
 #[test]
-fn hyikdopwih_prifgika_djancu_plustu_matches_the_c_tablet_except_a_stale_word() {
+fn dohyikpwih_prifgika_djancu_plustu_matches_the_c_tablet_except_a_stale_word() {
     // quiz.c `quiz_conditional_encoding_basic2`:
-    //   "hyikdopwih prifgika djancu plustu"
+    //   "dohyikpwih prifgika djancu plustu"
     //   {{0x0549, 0x881D, 0x0001, 0x4127, 0xC8C4, 0x225E, 0x245E, 0x69B3,
     //     0x29BE, 0x8A64, 0x295E}};
     //
@@ -76,7 +76,7 @@ fn hyikdopwih_prifgika_djancu_plustu_matches_the_c_tablet_except_a_stale_word() 
     // dictionary both give `ablative_case_GRAMMAR = 0x4127 // pwih`. The quiz
     // entry is stale, so the port follows the dictionary.
     assert_tablet(
-        "hyikdopwih prifgika djancu plustu",
+        "dohyikpwih prifgika djancu plustu",
         &[
             0x0549, 0x881d, 0x0001, 0x4127, 0xc8c4, 0x225e, 0x245e, 0x69b3, 0x29be, 0x8a64,
             0x295e,
@@ -86,21 +86,15 @@ fn hyikdopwih_prifgika_djancu_plustu_matches_the_c_tablet_except_a_stale_word() 
 
 
 #[test]
-fn a_two_digit_number_reads_least_significant_last() {
-    // `hyik tyut do`: hyik=1, tyut=2. The C reads the run backwards from `do`, so
-    // `tyut` is the least-significant digit: 1*16 + 2 = 18 = 0x12.
+fn a_two_digit_number_reads_left_to_right() {
+    // `do hyik tyut` in the written order: twelve, not twenty-one.
     let mut codelets = [[0u32; CODELET_WIDTH]; 4];
-    let count = encode_sentence("hyiktyutdo", &mut codelets).unwrap();
-    let flat: std::vec::Vec<u32> = codelets[..count].iter().flat_map(|c| c.iter().copied()).collect();
-    assert_eq!(&flat[..3], &[0x1, 0x881d, 0x12]);
-}
-
-#[test]
-fn a_single_digit_number_is_unchanged() {
-    let mut codelets = [[0u32; CODELET_WIDTH]; 4];
-    let count = encode_sentence("hyikdo", &mut codelets).unwrap();
-    let flat: std::vec::Vec<u32> = codelets[..count].iter().flat_map(|c| c.iter().copied()).collect();
-    assert_eq!(&flat[..3], &[0x1, 0x881d, 0x1]);
+    let count = encode_sentence("dohyiktyut", &mut codelets).unwrap();
+    let flat: std::vec::Vec<u32> = codelets[..count]
+        .iter()
+        .flat_map(|c| c.iter().copied())
+        .collect();
+    assert_eq!(&flat[..3], &[0x1, 0x881d, 12]);
 }
 
 #[test]
@@ -118,4 +112,47 @@ fn a_word_containing_the_vowel_glyph_one_parses() {
     // `l1` then `ka`: the accusative closes the field.
     assert_eq!(flat[1], 0x397e, "l1");
     assert_eq!(flat[2], 0x245e, "ka");
+}
+
+#[test]
+fn a_leading_do_reads_decimal_big_endian() {
+    // `do hyik tyut` = 12: the terminator leads and the digits read in order.
+    let mut codelets = [[0u32; CODELET_WIDTH]; 4];
+    let count = encode_sentence("dohyiktyut", &mut codelets).expect("encodes");
+    let flat: std::vec::Vec<u32> = codelets[..count]
+        .iter()
+        .flat_map(|c| c.iter().copied())
+        .collect();
+    assert_eq!(&flat[..3], &[0x1, 0x881d, 12]);
+}
+
+#[test]
+fn number_order_does_not_depend_on_length() {
+    // A single digit and a three-digit number both read left to right.
+    for (text, value) in [("dohyik", 1u32), ("dohyiktyuttyin", 123)] {
+        let mut codelets = [[0u32; CODELET_WIDTH]; 4];
+        let count = encode_sentence(text, &mut codelets).expect("encodes");
+        let flat: std::vec::Vec<u32> = codelets[..count]
+            .iter()
+            .flat_map(|c| c.iter().copied())
+            .collect();
+        assert_eq!(flat[2], value, "{text}");
+    }
+}
+
+#[test]
+fn the_legacy_hex_little_endian_format_still_works() {
+    // For reading packs written by the C: `do hyik tyut` is 1 + 2*16 = 0x21.
+    let mut codelets = [[0u32; CODELET_WIDTH]; 4];
+    let count = encode_sentence_with(
+        "dohyiktyut",
+        &mut codelets,
+        pyac_vliw_core::text_encode::NumberFormat::LEGACY_HEX_LITTLE_ENDIAN,
+    )
+    .expect("encodes");
+    let flat: std::vec::Vec<u32> = codelets[..count]
+        .iter()
+        .flat_map(|c| c.iter().copied())
+        .collect();
+    assert_eq!(flat[2], 0x21, "legacy little-endian hex");
 }

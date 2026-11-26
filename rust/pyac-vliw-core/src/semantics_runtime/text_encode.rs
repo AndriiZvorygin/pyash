@@ -175,8 +175,8 @@ const PERSPECTIVE_WORDS: &[u32] = &[
     0x4e27, // paragraph
 ];
 
-/// Number-word digits, `pyash_number_dictionary` in the C. The word's index is
-/// its value, so a run of them reads as base-16 digits.
+/// Number-word digits, `pyash_number_dictionary` in the C. A digit word's index in
+/// this list is its value, so a run of them reads as digits in [`NumberFormat`].
 const NUMBER_DIGITS: &[(u32, u32)] = &[
     (0x6cd4, 0),  // zron
     (0x2818, 1),  // hyik
@@ -196,6 +196,34 @@ const NUMBER_DIGITS: &[(u32, u32)] = &[
     (0xab20, 15), // hpet
 ];
 
+/// How a numeric literal's digit words combine into a value.
+///
+/// The C reads the run backwards in base 16, so `hyik tyut do` is 1*16 + 2. That is
+/// a historical choice: base 16 needs sixteen digit words and little-endian reads
+/// against the direction of speech. Decimal big-endian is the portable default —
+/// `do hyik tyut` reads as twelve, in the order it is written.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NumberFormat {
+    /// Radix. Digit words with a value at or above this are rejected.
+    pub base: u32,
+    /// Whether the first digit is the most significant.
+    pub big_endian: bool,
+}
+
+impl NumberFormat {
+    /// Decimal, most significant digit first: portable and reads left to right.
+    pub const DEFAULT: Self = Self {
+        base: 10,
+        big_endian: true,
+    };
+
+    /// The historical C encoding: base 16, least significant digit first.
+    pub const LEGACY_HEX_LITTLE_ENDIAN: Self = Self {
+        base: 16,
+        big_endian: false,
+    };
+}
+
 fn number_digit(honuc: u32) -> Option<u32> {
     NUMBER_DIGITS
         .iter()
@@ -209,7 +237,8 @@ fn classify(honuc: u32) -> WordClass {
     } else if honuc == REFERENTIAL_WORD {
         WordClass::Referential
     } else if number_digit(honuc).is_some() {
-        // A digit is a lexical word until the `do` terminator collects it.
+        // A digit is only a digit after `do` introduces a number; on its own it is
+        // an ordinary word (e.g. `hyik` alone is the word "one").
         WordClass::Digit
     } else if CASE_WORDS.contains(&honuc) {
         WordClass::Case
@@ -268,6 +297,39 @@ impl<'a> Builder<'a> {
         self.current()[0] = summary;
     }
 
+    /// Fold one digit into the numeric literal already on the codelet.
+    ///
+    /// The literal's words were pushed when `do` opened it, so the value word is
+    /// the last one written. `digits` counts how many have been folded already,
+    /// tracked explicitly because leading zeros carry no information in the value.
+    fn accumulate_number(
+        &mut self,
+        digit: u32,
+        format: NumberFormat,
+        digits: &mut u32,
+    ) -> Result<(), ParseError> {
+        let last = match self.count.checked_sub(1) {
+            Some(index) => index,
+            None => return Err(ParseError::CodeletCapacity),
+        };
+        let slot = self.used;
+        if slot == 0 {
+            return Err(ParseError::Empty);
+        }
+        let value = self.codelets[last][slot];
+        let folded = if format.big_endian {
+            value.wrapping_mul(format.base).wrapping_add(digit)
+        } else {
+            // Little endian: the first digit is least significant, so each new
+            // digit is scaled by the base raised to the count already folded.
+            let scale = format.base.saturating_pow(*digits);
+            value.wrapping_add(digit.wrapping_mul(scale))
+        };
+        self.codelets[last][slot] = folded;
+        *digits = digits.saturating_add(1);
+        Ok(())
+    }
+
     /// Seal the last codelet, marking it complete.
     fn finish(mut self) -> usize {
         let summary = self.summary | 1;
@@ -278,12 +340,25 @@ impl<'a> Builder<'a> {
 
 /// Encode one PyAC sentence into `codelets`, returning how many were filled.
 ///
-/// A case word closes the field before it and a mood closes the sentence; both
-/// set their slot's boundary bit, which is why the classification decides the
-/// bitmap rather than any separate pass.
+/// The leading-word conventions keep the scan forward-only: `do` introduces a
+/// numeric literal and `gi` introduces a name, so neither has to look backwards to
+/// find what it applies to. A case word closes the field before it and a mood
+/// closes the sentence; both set their slot's boundary bit.
+///
+/// Uses [`NumberFormat::DEFAULT`]. For the historical C encoding, see
+/// [`encode_sentence_with`].
 pub fn encode_sentence(
     text: &str,
     codelets: &mut [[u32; CODELET_WIDTH]],
+) -> Result<usize, ParseError> {
+    encode_sentence_with(text, codelets, NumberFormat::DEFAULT)
+}
+
+/// Encode with an explicit number format.
+pub fn encode_sentence_with(
+    text: &str,
+    codelets: &mut [[u32; CODELET_WIDTH]],
+    format: NumberFormat,
 ) -> Result<usize, ParseError> {
     let letters = text.as_bytes();
     if letters.is_empty() {
@@ -294,10 +369,10 @@ pub fn encode_sentence(
     }
     let mut builder = Builder::new(codelets);
     let mut index = 0usize;
-    // A run of number-word digits, held until a terminator (`do`) collects them
-    // or another word proves the run was ordinary vocabulary.
-    let mut pending = [0u32; 8];
-    let mut pending_used = 0usize;
+    // Whether `do` has introduced a numeric literal that is still collecting
+    // digits. A leading terminator is what makes the scan forward-only.
+    let mut in_number = false;
+    let mut number_digits = 0u32;
 
     while index < letters.len() {
         while index < letters.len() && !is_letter(letters[index]) {
@@ -311,7 +386,7 @@ pub fn encode_sentence(
             return Err(ParseError::BadGlyph);
         };
         if length == 0 {
-            // Vowel-initial: the C steps past the leading vowel and re-derives.
+            // Vowel-initial: step past the leading vowel and re-derive.
             index += 1;
             continue;
         }
@@ -319,47 +394,31 @@ pub fn encode_sentence(
         let honuc = u32::from(word_code::encode(word).map_err(|_| ParseError::Unencodable)?);
         index += length;
 
-        let is_digit = number_digit(honuc).is_some();
-        if is_digit {
-            if pending_used == pending.len() {
-                return Err(ParseError::CodeletCapacity);
-            }
-            pending[pending_used] = honuc;
-            pending_used += 1;
-            continue;
-        }
-
-        // A `do` settles the pending digit run into one numeric quote and is fully
-        // consumed by that; every other word class is appended normally.
+        // `do` opens a numeric literal and everything numeric after it belongs to
+        // that literal, so the digits arrive already in written order.
         if honuc == NUMBER_WORD {
-            // The C reads the run backwards, so the *last* number word is the
-            // least-significant digit: `hyik tyut do` is 1*16 + 2 = 0x12, not 0x21.
-            let mut value = 0u32;
-            for position in 0..pending_used {
-                let digit = number_digit(pending[pending_used - 1 - position]).unwrap_or(0);
-                value = value.wrapping_add(digit << (4 * position as u32));
-            }
-            pending_used = 0;
+            in_number = true;
+            number_digits = 0;
             builder.push(NUMBER_QUOTE, false)?;
-            builder.push(value, false)?;
+            builder.push(0, false)?; // placeholder value, filled as digits arrive
             continue;
         }
 
-        // Anything else flushes a pending run as the plain words it was.
-        for slot in 0..pending_used {
-            builder.push(pending[slot], false)?;
+        if in_number {
+            if let Some(digit) = number_digit(honuc) {
+                if digit >= format.base {
+                    return Err(ParseError::Unencodable);
+                }
+                builder.accumulate_number(digit, format, &mut number_digits)?;
+                continue;
+            }
+            in_number = false;
         }
-        pending_used = 0;
 
         match classify(honuc) {
             WordClass::Case | WordClass::Perspective => builder.push(honuc, true)?,
             _ => builder.push(honuc, false)?,
         }
-    }
-
-    // Trailing digits with no terminator are ordinary words.
-    for slot in 0..pending_used {
-        builder.push(pending[slot], false)?;
     }
 
     Ok(builder.finish())
