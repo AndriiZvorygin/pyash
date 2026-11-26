@@ -24,4 +24,4 @@ su name house_api_modules ob ve text "program/library/agenda_preview_shared.mjs"
 # against this repository, so a house that cannot start is caught here rather
 # than at the house. A house repository that is not published cannot be checked
 # this way; it is covered by the checkout under world/house/ instead.
-su name house_api_repositories ob ve text "andrii-youtube-reporter https://github.com/AndriiZvorygin/andrii-youtube-reporter.git" "grey-county-reporter https://github.com/AndriiZvorygin/grey-county-reporter.git" "owen-sound-reporter https://github.com/AndriiZvorygin/owen-sound-reporter.git" ya
+su name house_api_repositories ob ve text "radio https://github.com/AndriiZvorygin/radio.git" "andrii-youtube-reporter https://github.com/AndriiZvorygin/andrii-youtube-reporter.git" "grey-county-reporter https://github.com/AndriiZvorygin/grey-county-reporter.git" "owen-sound-reporter https://github.com/AndriiZvorygin/owen-sound-reporter.git" ya
