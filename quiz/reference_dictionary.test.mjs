@@ -162,11 +162,19 @@ test("`from pyac` prefers a catalogued compound over its atoms", async () => {
   assert.ok(pyac.entry.lexicalForms.length > 0);
 });
 
-test("`from pyac` reports the reading for a grammar-only atom", async () => {
-  // `sa` is a pronoun with no decodable volume entry. The reading must still be
-  // reported rather than raising the decoder's error.
+test("`from pyac` reads a grammar-only atom instead of throwing", async () => {
+  // `sa` is a bare pronoun entry: an `entry` row and a lexical form, no links
+  // and no definition. It used to raise "unrepresentable-name" because the
+  // decoder looked its name up in the deprecated pyashWords.json table, which
+  // does not carry it. The codec decodes any volume word, so the reading is
+  // reported from the volume itself.
   const pyac = await runPyacDictionary(["reference", "from", "pyac", "sa"], silent);
-  assert.deepEqual(pyac.atoms, ["sa"]);
+  assert.equal(pyac.key, "sa");
+  assert.deepEqual(
+    pyac.entry.lexicalForms.map((form) => form.surface),
+    ["you_"],
+    "the volume's own lexical form is reported"
+  );
 });
 
 test("`from en` and `from pyac` disagree where the two readings differ", async () => {

@@ -19,7 +19,7 @@ import {
   quoteWordFor,
   vectorThicknessFor
 } from "./quotes.mjs";
-import { encodePyacWord } from "./word_code.mjs";
+import { decodePyacWord, encodePyacWord } from "./word_code.mjs";
 import { expandVectorInitializer, MAX_VLIW_ARRAY_ELEMENTS } from "./vector_shape.mjs";
 import { encodeTextArrayMembers } from "./text_array.mjs";
 
@@ -66,6 +66,23 @@ const ENTRIES_BY_HNUC = new Map();
 for (const entry of pyashWords) {
   const word = Number.parseInt(entry.hnuc, 16);
   if (Number.isInteger(word) && !ENTRIES_BY_HNUC.has(word)) ENTRIES_BY_HNUC.set(word, entry);
+}
+
+/**
+ * The English name for an HNUC, decoded rather than looked up.
+ *
+ * The codec is the identity between a spelling and its HNUC, so it covers every
+ * word in the reference volume. `ENTRIES_BY_HNUC` is built from the deprecated
+ * `pyashWords.json`, which holds a fraction of that vocabulary — decoding from
+ * it made `pyash dict` crash on most grammar atoms (abessive_case_, bvah,
+ * 0x4c8f and 152 others) even though the volume carries them.
+ */
+function decodedName(hnuc) {
+  try {
+    return decodePyacWord(hnuc);
+  } catch {
+    return null;
+  }
 }
 
 const THIS_WORD = encodePyacWord("tsah");
@@ -543,6 +560,8 @@ function wordName(word, role) {
   if (role === "verb" && OPERATOR_SURFACE_BY_WORD.has(word)) return OPERATOR_SURFACE_BY_WORD.get(word);
   const entry = ENTRIES_BY_HNUC.get(word);
   if (entry?.en && !entry.en.endsWith("_")) return entry.en;
+  const decoded = decodedName(word);
+  if (decoded) return decoded;
   throw invalid("unrepresentable-name", `VLIW ${role} HNUC has no recoverable vocabulary name`, {
     role,
     word: `0x${word.toString(16).padStart(4, "0")}`
