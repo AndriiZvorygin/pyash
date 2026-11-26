@@ -1,15 +1,27 @@
 //! Operation signatures: what a verb accepts and returns.
 //!
+//! # Identity is the Pyac key, not a WordNet number
+//!
+//! A Pyac word is the stable identity. It can carry several references —
+//! a WordNet sense, a SUMO concept, an authored gloss — and those are
+//! citations, not names. WordNet sense ids are **not stable**: they move
+//! between WordNet releases, and several WordNet databases are already in the
+//! volume. Never treat `n:06367706-n` as the identity of a concept; treat it as
+//! one reference that the current release happens to attach to a Pyac word.
+//!
+//! For cross-linguistic work the Pyac word is the key. Look it up by its
+//! spelling, not by a sense id.
+//!
 //! # The dispatch identity
 //!
 //! ```text
 //! dispatch identity = verb + mood + sorted[(grammatical_case, noun_class)]
 //! ```
 //!
-//! `description` and `label` are documentation. They never enter the key and
-//! never affect matching; `label` does take part in sort order (see the ordering
-//! in `volume.rs`), so two otherwise-identical signatures may be ordered by
-//! their labels, but a lookup never compares them.
+//! `descriptive_specification` and `tag_label` are documentation. They never
+//! enter the key and never affect matching; `tag_label` does take part in sort
+//! order (see the ordering in `volume.rs`), so two otherwise-identical
+//! signatures may be ordered by their labels, but a lookup never compares them.
 //!
 //! `name` is the `name_` noun class (`gi`, 0x225e). It must never be used as a
 //! field name for documentation — doing so is what made readers try to put the
@@ -74,50 +86,55 @@ pub struct ArgumentSlot {
     pub noun_class: Vec<u16>,
 }
 
-/// One case-keyed input — a parameter.
+/// One case-keyed input — a `parameter`.
 ///
-/// The sense is WordNet `n:06367706-n`, *"a reference or value that is passed to
-/// a function, procedure, subroutine, command, or program"*. Ask the reference
-/// volume for it directly:
+/// The identity is the compound **`parameter`**, not a sense number. Its Pyac
+/// key is `tlas hrut`:
 ///
 /// ```text
-/// pyash dict from pyac "tlas hrut"      # 1:1, one sense
-/// pyash dict n:06367706-n               # the same entry by sense id
+/// pyash dict from pyac "tlas hrut"      # the 1:1 entry
 /// ```
 ///
-/// Use the compound key, not the bare word: `pyash dict from en argument`
-/// returns eight senses and `parameter` returns four, so only the compound
-/// identifies this one.
+/// The WordNet citation on that entry today is `n:06367706-n`, *"a reference or
+/// value that is passed to a function, procedure, subroutine, command, or
+/// program"*. Cite it as evidence; do not key on it — WordNet renumbers between
+/// releases.
 ///
-/// `case_type` is the contract; `label` and `description` are documentation and
-/// never take part in matching. `label` does affect sort order (see `volume.rs`).
+/// Use the compound, not a bare word: `pyash dict from en argument` returns eight
+/// senses and `parameter` four, so only the compound names this one.
+///
+/// `case_type` is the contract; `tag_label` and `descriptive_specification` are
+/// documentation and never take part in matching. `tag_label` does affect sort
+/// order (see `volume.rs`).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OperationArgument {
+pub struct OperationParameter {
     pub case_type: ArgumentSlot,
-    /// Documentation: a brief description for identification, WordNet
-    /// `n:07217239-n`. Key `tyec dlut`: `pyash dict from pyac "tyec dlut"`.
+    /// Documentation: the compound **`tag label`**, Pyac key `tyec dlut`:
+    /// `pyash dict from pyac "tyec dlut"`. WordNet citation `n:07217239-n`, *"a
+    /// brief description given for purposes of identification"*.
     ///
     /// Not the `name_` noun class, and never part of the key.
-    pub label: String,
-    /// Documentation: a statement that represents something in words, WordNet
-    /// `n:06737512-n`. Key `drut pfif`: `pyash dict from pyac "drut pfif"`.
-    pub description: String,
+    pub tag_label: String,
+    /// Documentation: the compound **`descriptive specification`**, Pyac key
+    /// `drut pfif`: `pyash dict from pyac "drut pfif"`. WordNet citation
+    /// `n:06737512-n`, *"a statement that represents something in words"*.
+    pub descriptive_specification: String,
 }
 
 /// One output, keyed by noun class only — no case, and not part of the key.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OperationResult {
     pub noun_class: Vec<u16>,
-    /// Documentation, as on `OperationArgument`.
-    pub label: String,
-    pub description: String,
+    /// Documentation, as on `OperationParameter`.
+    pub tag_label: String,
+    pub descriptive_specification: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OperationSignature {
     pub verb: Vec<u16>,
     pub mood: Vec<u16>,
-    pub arguments: Vec<OperationArgument>,
+    pub arguments: Vec<OperationParameter>,
     pub results: Vec<OperationResult>,
 }
 
@@ -176,14 +193,14 @@ pub(super) fn validate_signature(signature: &OperationSignature) -> Option<&'sta
     if signature
         .arguments
         .iter()
-        .any(|argument| argument.label.trim().is_empty() || argument.description.trim().is_empty())
+        .any(|argument| argument.tag_label.trim().is_empty() || argument.descriptive_specification.trim().is_empty())
     {
         return Some("each argument needs a semantic name and description");
     }
     if signature.results.iter().any(|result| {
         result.noun_class.is_empty()
-            || result.label.trim().is_empty()
-            || result.description.trim().is_empty()
+            || result.tag_label.trim().is_empty()
+            || result.descriptive_specification.trim().is_empty()
     }) {
         return Some("each result needs a type, semantic name, and description");
     }
@@ -217,7 +234,7 @@ pub(super) fn compare_signature_to_key(
         })
 }
 
-fn compare_arguments(left: &[OperationArgument], right: &[OperationArgument]) -> Ordering {
+fn compare_arguments(left: &[OperationParameter], right: &[OperationParameter]) -> Ordering {
     left.iter()
         .map(|argument| &argument.case_type)
         .cmp(right.iter().map(|argument| &argument.case_type))

@@ -182,10 +182,10 @@ fn canonicalize_entry(entry: &mut DictionaryVolumeEntry) {
             .arguments
             .sort_by(|left, right| left.case_type.cmp(&right.case_type));
         signature.results.sort_by(|left, right| {
-            (&left.noun_class, &left.label, &left.description).cmp(&(
+            (&left.noun_class, &left.tag_label, &left.descriptive_specification).cmp(&(
                 &right.noun_class,
-                &right.label,
-                &right.description,
+                &right.tag_label,
+                &right.descriptive_specification,
             ))
         });
     }
@@ -196,23 +196,23 @@ fn canonicalize_entry(entry: &mut DictionaryVolumeEntry) {
             .then_with(|| {
                 left.arguments
                     .iter()
-                    .map(|arg| (&arg.case_type, &arg.label, &arg.description))
+                    .map(|arg| (&arg.case_type, &arg.tag_label, &arg.descriptive_specification))
                     .cmp(
                         right
                             .arguments
                             .iter()
-                            .map(|arg| (&arg.case_type, &arg.label, &arg.description)),
+                            .map(|arg| (&arg.case_type, &arg.tag_label, &arg.descriptive_specification)),
                     )
             })
             .then_with(|| {
                 left.results
                     .iter()
-                    .map(|result| (&result.noun_class, &result.label, &result.description))
+                    .map(|result| (&result.noun_class, &result.tag_label, &result.descriptive_specification))
                     .cmp(
                         right
                             .results
                             .iter()
-                            .map(|result| (&result.noun_class, &result.label, &result.description)),
+                            .map(|result| (&result.noun_class, &result.tag_label, &result.descriptive_specification)),
                     )
             })
     });

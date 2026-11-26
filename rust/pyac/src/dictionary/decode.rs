@@ -18,7 +18,7 @@
 
 use std::io::{Read, Seek};
 
-use super::operation::{ArgumentSlot, OperationArgument, OperationResult, OperationSignature};
+use super::operation::{ArgumentSlot, OperationParameter, OperationResult, OperationSignature};
 use super::reader::DictionaryFileReader;
 use super::reader_codec::{
     Sentence, expect_end, take_record_subject, take_text,
@@ -171,10 +171,10 @@ fn decode_entry(
                     .last_mut()
                     .expect("signature present")
                     .arguments
-                    .push(OperationArgument {
+                    .push(OperationParameter {
                         case_type,
-                        label: label.clone(),
-                        description: description.clone(),
+                        tag_label: label.clone(),
+                        descriptive_specification: description.clone(),
                     });
             }
             ([ESSIVE, DESTINATION, COMITATIVE], [Field::Vector(_, noun_class), Field::Text(_, label), Field::Text(_, description)]) => {
@@ -190,8 +190,8 @@ fn decode_entry(
                     .results
                     .push(OperationResult {
                         noun_class: noun_class.clone(),
-                        label: label.clone(),
-                        description: description.clone(),
+                        tag_label: label.clone(),
+                        descriptive_specification: description.clone(),
                     });
             }
             _ => {
@@ -296,13 +296,13 @@ fn decode_signature(dispatch: &[u16]) -> Result<OperationSignature, DictionaryVo
     for _ in 0..count {
         let case = take_sequence(dispatch, &mut cursor)?;
         let noun_class = take_sequence(dispatch, &mut cursor)?;
-        arguments.push(OperationArgument {
+        arguments.push(OperationParameter {
             case_type: ArgumentSlot {
                 grammatical_case: case,
                 noun_class,
             },
-            label: String::new(),
-            description: String::new(),
+            tag_label: String::new(),
+            descriptive_specification: String::new(),
         });
     }
     if cursor != dispatch.len() {

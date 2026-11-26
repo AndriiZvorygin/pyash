@@ -163,19 +163,23 @@ fn documented_senses_are_the_ones_in_the_reference_volume() {
     }
 }
 
-/// Documentation fields are `label`, never `name`. `name` is the name noun class
-/// (`gi`), and a field called `name` invites a reader to put the noun class into
-/// a documentation slot.
+/// Documentation fields are named for their compound, never `name`. `name` is
+/// the name noun class (`gi`), and a field called `name` invites a reader to put
+/// the noun class into a documentation slot.
 #[test]
-fn documentation_fields_are_labelled_not_named() {
+fn documentation_fields_are_named_for_their_compound() {
     let source = read("src/dictionary/operation.rs");
     assert!(
         !source.contains("pub name: String"),
-        "operation.rs has a documentation field called `name`; that is the name noun class, use `label`"
+        "operation.rs has a documentation field called `name`; that is the name noun class, use `tag_label`"
     );
     assert!(
-        source.contains("pub label: String"),
-        "operation.rs should carry documentation as `label`"
+        source.contains("pub tag_label: String"),
+        "operation.rs should carry a tag label as `tag_label`; Pyac key `tyec dlut`"
+    );
+    assert!(
+        source.contains("pub descriptive_specification: String"),
+        "operation.rs should carry a description as `descriptive_specification`; Pyac key `drut pfif`"
     );
 }
 

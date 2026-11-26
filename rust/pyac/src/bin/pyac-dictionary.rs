@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use pyac::dictionary::{
     DictionaryFileReader, DictionaryMetadata, DictionaryVolume, DictionaryVolumeEntry, LexicalForm,
-    OperationArgument, ArgumentSlot, OperationResult, OperationSignature, SourceGloss,
+    OperationParameter, ArgumentSlot, OperationResult, OperationSignature, SourceGloss,
     SourceLink, encode_dictionary,
 };
 use serde::Deserialize;
@@ -79,17 +79,19 @@ struct OperationSignatureInput {
 }
 
 // Wire structs. The JSON keys are a published contract with the source
-// producer (`program/library/dictionary/source.mjs`), so the serde names stay
-// as they were even though the Rust field names now say what the values are.
-// `value_type` is a noun class and `name` is a documentation label.
+// producer (`program/library/dictionary/source.mjs`), so the serde names keep
+// their old spellings while the Rust fields say what the values are:
+// `value_type` is a noun class, `name` is a tag label, `description` is a
+// descriptive specification.
 #[derive(Deserialize)]
 struct OperationArgumentInput {
     grammatical_case: Vec<u16>,
     #[serde(rename = "value_type")]
     noun_class: Vec<u16>,
     #[serde(rename = "name")]
-    label: String,
-    description: String,
+    tag_label: String,
+    #[serde(rename = "description")]
+    descriptive_specification: String,
 }
 
 #[derive(Deserialize)]
@@ -97,8 +99,9 @@ struct OperationResultInput {
     #[serde(rename = "value_type")]
     noun_class: Vec<u16>,
     #[serde(rename = "name")]
-    label: String,
-    description: String,
+    tag_label: String,
+    #[serde(rename = "description")]
+    descriptive_specification: String,
 }
 
 fn usage() -> &'static str {
@@ -185,13 +188,13 @@ fn convert_input(input: BuildInput) -> Result<DictionaryVolume, String> {
                         arguments: signature
                             .arguments
                             .into_iter()
-                            .map(|argument| OperationArgument {
+                            .map(|argument| OperationParameter {
                                 case_type: ArgumentSlot {
                                     grammatical_case: argument.grammatical_case,
                                     noun_class: argument.noun_class,
                                 },
-                                label: argument.label,
-                                description: argument.description,
+                                tag_label: argument.tag_label,
+                                descriptive_specification: argument.descriptive_specification,
                             })
                             .collect(),
                         results: signature
@@ -199,8 +202,8 @@ fn convert_input(input: BuildInput) -> Result<DictionaryVolume, String> {
                             .into_iter()
                             .map(|result| OperationResult {
                                 noun_class: result.noun_class,
-                                label: result.label,
-                                description: result.description,
+                                tag_label: result.tag_label,
+                                descriptive_specification: result.descriptive_specification,
                             })
                             .collect(),
                     })

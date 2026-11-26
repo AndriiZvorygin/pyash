@@ -3,7 +3,7 @@ use std::io::Cursor;
 
 use pyac::dictionary::{
     DictionaryField, DictionaryFileReader, DictionaryMetadata, DictionaryValue,
-    DictionaryVolume, DictionaryVolumeEntry, LexicalForm, OperationArgument,
+    DictionaryVolume, DictionaryVolumeEntry, LexicalForm, OperationParameter,
     ArgumentSlot, OperationSignature, OperationSignatureKey, SourceGloss, SourceLink,
     encode_dictionary, encode_text_sentence,
 };
@@ -67,13 +67,13 @@ fn sample_volume() -> DictionaryVolume {
             operation_signatures: vec![OperationSignature {
                 verb: vec![0x1111],
                 mood: vec![0x217e],
-                arguments: vec![OperationArgument {
+                arguments: vec![OperationParameter {
                     case_type: ArgumentSlot {
                         grammatical_case: vec![0x245e],
                         noun_class: vec![0x0e1d],
                     },
-                    label: "subject".into(),
-                    description: "the value being evaluated".into(),
+                    tag_label: "subject".into(),
+                    descriptive_specification: "the value being evaluated".into(),
                 }],
                 results: vec![],
             }],

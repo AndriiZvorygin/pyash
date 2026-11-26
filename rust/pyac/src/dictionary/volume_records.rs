@@ -246,8 +246,8 @@ pub(super) fn encode_entry_v4(
                 Subject::Name(key),
                 &[
                     vector_field(ESSIVE, &key_words),
-                    text_field(SOURCE, &argument.label),
-                    text_field(DESTINATION, &argument.description),
+                    text_field(SOURCE, &argument.tag_label),
+                    text_field(DESTINATION, &argument.descriptive_specification),
                 ],
             )?);
         }
@@ -256,8 +256,8 @@ pub(super) fn encode_entry_v4(
                 Subject::Name(key),
                 &[
                     vector_field(ESSIVE, &result.noun_class),
-                    text_field(INSTRUMENTAL, &result.label),
-                    text_field(COMITATIVE, &result.description),
+                    text_field(INSTRUMENTAL, &result.tag_label),
+                    text_field(COMITATIVE, &result.descriptive_specification),
                 ],
             )?);
         }
