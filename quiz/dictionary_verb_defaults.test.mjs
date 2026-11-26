@@ -115,6 +115,47 @@ test("a primitive keeps one atom and the sense that atom performs", () => {
   assert.match(army, /n:08230126-n/u, "the army-unit sense stays addressable as a compound");
 });
 
+test("every arithmetic primitive atom carries its operation sense", () => {
+  // A primitive's atom must describe the operation it performs, not the sense
+  // its lemma happens to use most. Arithmetic senses live on the atom; a
+  // competing noun sense moves to a compound so both stay addressable.
+  const expected = {
+    plus: "n:00873785-n", // the arithmetic operation of summing
+    gret: "n:00873540-n", // difference between two numbers is calculated
+    hgoc: "n:00873254-n", // inverse of division; product is computed
+    dvis: "n:00872590-n", // inverse of multiplication; quotient is computed
+    twic: "n:13755803-n", // dividend left over when not evenly divisible
+    swos: "n:00874089-n", // raising a quantity to some assigned power
+    syip: "n:13969940-n", // essentially equal or equivalent
+    cyon: "s:01395201-s", // very small
+    djan: "s:01388707-s", // of great mass
+    no: "r:00024432-r" // negation of a word or group of words
+  };
+  const source = readFileSync(
+    new URL("../program/library/dictionary/reference.pya", import.meta.url),
+    "utf8"
+  );
+  for (const [atom, senseId] of Object.entries(expected)) {
+    const block = entryBlock(source, atom);
+    assert.match(
+      block,
+      new RegExp(`to text ${JSON.stringify(senseId)}`, "u"),
+      `${atom} must carry ${senseId}`
+    );
+  }
+});
+
+test("a sense displaced from a primitive atom stays addressable on a compound", () => {
+  const source = readFileSync(
+    new URL("../program/library/dictionary/reference.pya", import.meta.url),
+    "utf8"
+  );
+  // The army-unit reading of "division" and the exponential-function reading both
+  // lose their atom to the arithmetic operator, and both survive as compounds.
+  assert.match(entryBlock(source, "hyim dvis"), /n:08230126-n/u);
+  assert.match(entryBlock(source, "gyik swos"), /n:13811674-n/u);
+});
+
 function entryBlock(source, key) {
   const lines = source.split("\n");
   const start = lines.findIndex((line) => line.includes(`ob text ${JSON.stringify(key)} at text "entry"`));

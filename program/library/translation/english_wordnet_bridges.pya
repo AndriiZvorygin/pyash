@@ -17583,6 +17583,50 @@ su text "sense-lemma:n:08226608-n:4" ob text "police force" ya
 su text "n:00872590-n" ob name "divisions" as text "n" with text "deterministic" via text "curated primitive sense: dvis is the arithmetic division operator" ya
 su text "sense-gloss:n:00872590-n" ob text "an arithmetic operation that is the inverse of multiplication" ya
 su text "sense-lemma:n:00872590-n:1" ob text "division" ya
+su text "n:00873785-n" ob name "plus" as text "n" with text "deterministic" via text "curated primitive sense: plus is the ADDITION word and carries the arithmetic operation of summing" ya
+su text "sense-gloss:n:00873785-n" ob text "the arithmetic operation of summing; calculating the sum of two or more numbers" ya
+su text "sense-lemma:n:00873785-n:1" ob text "summation" ya
+su text "sense-lemma:n:00873785-n:2" ob text "addition" ya
+su text "n:00873540-n" ob name "subtract" as text "n" with text "deterministic" via text "curated primitive sense: gret is the SUBTRACT word (0xABD2) and carries the arithmetic subtraction operation rather than a synonym's verb sense" ya
+su text "sense-gloss:n:00873540-n" ob text "an arithmetic operation in which the difference between two numbers is calculated" ya
+su text "sense-lemma:n:00873540-n:1" ob text "subtraction" ya
+su text "sense-lemma:n:00873540-n:2" ob text "minus" ya
+su text "n:00873254-n" ob name "multiply" as text "n" with text "deterministic" via text "curated primitive sense: hgoc is the MULTIPLY word (0xEC90) and carries the arithmetic multiplication operation" ya
+su text "sense-gloss:n:00873254-n" ob text "an arithmetic operation that is the inverse of division; the product of two numbers is computed" ya
+su text "sense-lemma:n:00873254-n:1" ob text "multiplication" ya
+su text "sense-lemma:n:00873254-n:2" ob text "times" ya
+su text "n:00874089-n" ob name "exponential" as text "n" with text "deterministic" via text "curated primitive sense: swos is the EXPONENTIAL word (0x8C29) and carries exponentiation as an arithmetic operation, not the participial adjective" ya
+su text "sense-gloss:n:00874089-n" ob text "the process of raising a quantity to some assigned power" ya
+su text "sense-lemma:n:00874089-n:1" ob text "exponentiation" ya
+su text "sense-lemma:n:00874089-n:2" ob text "involution" ya
+su text "n:13755803-n" ob name "remains" as text "n" with text "deterministic" via text "curated primitive sense: twic is the REMAINS word (0xE82A) and carries the arithmetic remainder of division" ya
+su text "sense-gloss:n:13755803-n" ob text "the part of the dividend that is left over when the dividend is not evenly divisible by the divisor" ya
+su text "sense-lemma:n:13755803-n:1" ob text "remainder" ya
+su text "n:13969940-n" ob name "equally" as text "n" with text "deterministic" via text "curated primitive sense: syip is the EQUALLY word (0x4809) and carries the equality comparison the runtime implements" ya
+su text "sense-gloss:n:13969940-n" ob text "a state of being essentially equal or equivalent; equally balanced" ya
+su text "sense-lemma:n:13969940-n:1" ob text "equality" ya
+su text "sense-lemma:n:13969940-n:2" ob text "equivalence" ya
+su text "sense-lemma:n:13969940-n:3" ob text "equation" ya
+su text "sense-lemma:n:13969940-n:4" ob text "par" ya
+su text "s:01395201-s" ob name "tiny" as text "s" with text "deterministic" via text "curated primitive sense: cyon is the TINY word (0x6C0D), the less-than comparison" ya
+su text "sense-gloss:s:01395201-s" ob text "very small" ya
+su text "sense-lemma:s:01395201-s:1" ob text "bantam" ya
+su text "sense-lemma:s:01395201-s:2" ob text "diminutive" ya
+su text "sense-lemma:s:01395201-s:3" ob text "lilliputian" ya
+su text "sense-lemma:s:01395201-s:4" ob text "midget" ya
+su text "sense-lemma:s:01395201-s:5" ob text "petite" ya
+su text "sense-lemma:s:01395201-s:6" ob text "tiny" ya
+su text "sense-lemma:s:01395201-s:7" ob text "flyspeck" ya
+su text "s:01388707-s" ob name "giant" as text "s" with text "deterministic" via text "curated primitive sense: djan is the GIANT word (0x69B3), the greater-than comparison" ya
+su text "sense-gloss:s:01388707-s" ob text "of great mass; huge and bulky" ya
+su text "sense-lemma:s:01388707-s:1" ob text "elephantine" ya
+su text "sense-lemma:s:01388707-s:2" ob text "gargantuan" ya
+su text "sense-lemma:s:01388707-s:3" ob text "giant" ya
+su text "sense-lemma:s:01388707-s:4" ob text "jumbo" ya
+su text "r:00024432-r" ob name "negatory_quantifier_" as text "r" with text "deterministic" via text "curated primitive sense: no is the NEGATORY_QUANTIFIER word (0x30DE), the logical negation" ya
+su text "sense-gloss:r:00024432-r" ob text "negation of a word or group of words" ya
+su text "sense-lemma:r:00024432-r:1" ob text "not" ya
+su text "sense-lemma:r:00024432-r:2" ob text "non" ya
 su text "n:08230126-n" ob name "divisions" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma division at English30k rank 2357; Princeton WordNet 3.1 tag count 10 (sense key division%1:14:00::)" ya
 su text "sense-gloss:n:08230126-n" ob text "an army unit large enough to sustain combat; two infantry divisions were held in reserve" ya
 su text "sense-lemma:n:08230126-n:1" ob text "division" ya

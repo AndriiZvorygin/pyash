@@ -9,7 +9,7 @@ The volume format and record grammar are specified in
 `reference.pya` is the generated source snapshot of accepted Pyash vocabulary.
 Its profile-v3 marker describes the source entry grammar; the Rust build
 converts it to the current profile-v4 runtime volume in `reference.pyac`. Both
-contain 64,594 entries. The current v4 volume is 131,217,952 bytes. The snapshot includes
+contain 64,595 entries. The current v4 volume is 131,231,040 bytes. The snapshot includes
 7,084 promoted SUMO links: 5,658 `superclass-of` and 1,426 `equivalent-to`.
 
 ## Operation signatures
@@ -40,13 +40,24 @@ forms (`exclusive_or_`, `and_or_`, `negatory_quantifier_`), so these are
 existing words rather than new ones.
 
 A primitive's atom also carries the WordNet sense of the operation it performs,
-not whichever sense the lemma uses most. `dvis` previously held
-`n:08230126-n` "an army unit large enough to sustain combat" because that is the
-highest-frequency sense of the lemma `division`; it now holds `n:00872590-n`
-"an arithmetic operation that is the inverse of multiplication" (SUMO
-`DivisionFn`), and the army-unit sense stays addressable as the `hyim dvis`
-compound. Selecting such a sense needs a bridge row plus an accepted-curated
-review, because a review alone cannot introduce a sense the bridge lacks.
+not whichever sense the lemma uses most. The arithmetic atoms now hold their
+operation senses: `plus` summing (`n:00873785-n`), `gret` subtraction
+(`n:00873540-n`), `hgoc` multiplication (`n:00873254-n`), `dvis` division
+(`n:00872590-n`), `twic` the division remainder (`n:13755803-n`), `swos`
+exponentiation (`n:00874089-n`), `syip` equality (`n:13969940-n`), `cyon` "very
+small" (`s:01395201-s`), `djan` "of great mass" (`s:01388707-s`), and `no`
+negation (`r:00024432-r`).
+
+Where the highest-frequency sense of a lemma competed for the same atom it moved
+to a compound instead of being dropped: "division" as an army unit is
+`hyim dvis` (`n:08230126-n`) and the exponential function is `gyik swos`
+(`n:13811674-n`). Selecting such a sense needs a bridge row plus an
+accepted-curated review, because a review alone cannot introduce a sense the
+bridge lacks.
+
+WordNet does not index the logical connectives — `and`, `or`, and `xor` have no
+senses at all — so `wa`, `ba`, and `hkit` carry no `wordnet` link. That is a
+property of the lexical resource, not a missing linkage.
 
 A surface with no existing word is absent on purpose — `promptify` and the
 engine-named TTS verbs (`piper say`, `qwen say`) skip rather than take an
@@ -198,10 +209,10 @@ count. `artifacts/` is git-ignored; use a unique filename for each run and
 retain or copy the record where local benchmark history is maintained.
 
 Current reference-volume verification on Mriczo, 2026-11-25: rebuilding
-`reference.pyac` from the checked-in `reference.pya` parsed 101,439,418 source
-bytes and wrote the volume in about 15 s. The result contains 64,594 entries
-and 4,100,560 codelets, occupies 131,217,952 bytes, and has SHA-256
-`c245343f2b1f871af5631f695083036b5578f9b32ba9d86c72d6d89bc692a39b`. A
+`reference.pyac` from the checked-in `reference.pya` parsed 101,451,187 source
+bytes and wrote the volume in about 15 s. The result contains 64,595 entries
+and 4,100,969 codelets, occupies 131,231,040 bytes, and has SHA-256
+`85a1db5fb8ebd61538c824e94ba4a250e9e1a791c45241a8bee80bcfdfd03925`. A
 10,000-iteration warmed `en`/`tensor` lookup measured 106,218 ns mean
 (9,414.5 lookups/s) on the previous volume, one result per lookup; re-measure
 against this one before quoting a rate. The local Pyash run record for that
