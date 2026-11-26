@@ -522,6 +522,42 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
         self.read_range(range)
     }
 
+    /// Every sentence an entry's codelet range holds, decoded.
+    ///
+    /// The reader already knows how to walk a range into sentences, including the
+    /// raw-text continuation codelets that long text literals spill into. The
+    /// volume decoder needs the same walk in pack coordinates, so this exposes it
+    /// rather than making the decoder re-implement the scanner.
+    pub(crate) fn entry_sentences(
+        &mut self,
+        key: &[u16],
+    ) -> Result<Vec<super::reader_codec::Sentence>, DictionaryReadError> {
+        let range = self
+            .location(key)?
+            .ok_or_else(|| DictionaryReadError::MissingEntry(key.to_vec()))?;
+        self.sentences_in(range)
+    }
+
+    /// Decode every sentence in a codelet range, seeking by pack ordinal.
+    pub(crate) fn sentences_in(
+        &mut self,
+        range: Range<u32>,
+    ) -> Result<Vec<super::reader_codec::Sentence>, DictionaryReadError> {
+        if range.start > range.end || range.end > self.codelet_count {
+            return Err(DictionaryReadError::InvalidRecord(
+                "requested codelet range is outside the pack",
+            ));
+        }
+        let mut sentences = Vec::new();
+        let mut ordinal = range.start;
+        while ordinal < range.end {
+            let sentence = read_sentence_v4(&mut self.source, ordinal, range.end)?;
+            ordinal += sentence.consumed;
+            sentences.push(sentence);
+        }
+        Ok(sentences)
+    }
+
     fn read_range(
         &mut self,
         range: Range<u32>,

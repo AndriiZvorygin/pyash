@@ -1,3 +1,4 @@
+mod decode;
 mod index;
 mod model;
 mod operation;
@@ -9,6 +10,7 @@ mod volume_records;
 mod wire;
 mod words;
 
+pub use decode::decode_dictionary;
 pub use index::DictionaryIndex;
 pub use model::{DictionaryEntry, DictionaryIndexError, LexicalForm, SourceGloss, SourceLink};
 pub use operation::{

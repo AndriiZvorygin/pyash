@@ -101,7 +101,7 @@ pub(super) fn read_codelet<R: Read + Seek>(
 /// so a decoder never has to look for a delimiter that could also appear inside
 /// a value — which is what broke keys such as `na`, whose word is itself the
 /// nominative marker `0x24DE`.
-pub(super) struct Sentence {
+pub(crate) struct Sentence {
     pub words: Vec<u16>,
     pub boundaries: Vec<bool>,
     pub consumed: u32,
