@@ -2,10 +2,10 @@ use std::fs::File;
 use std::io::Cursor;
 
 use pyac::dictionary::{
-    DictionaryField, DictionaryFileReader, DictionaryMetadata, DictionaryValue, DictionaryVolume,
-    DictionaryVolumeEntry, LexicalForm, OperationArgument, OperationArgumentType,
-    OperationSignature, OperationSignatureKey, SourceGloss, SourceLink, encode_dictionary,
-    encode_text_sentence,
+    DictionaryField, DictionaryFileReader, DictionaryMetadata, DictionarySection, DictionaryValue,
+    DictionaryVolume, DictionaryVolumeEntry, LexicalForm, OperationArgument,
+    OperationArgumentType, OperationSignature, OperationSignatureKey, SourceGloss, SourceLink,
+    encode_dictionary, encode_text_sentence,
 };
 
 const ENTRY_KEY: [u16; 2] = [0xa96a, 0x6c22]; // tlat kwon
@@ -373,6 +373,132 @@ fn canonical_ranges_end_at_the_next_entry_even_for_multicodelet_keys() {
         assert_eq!(by_key.len(), (range.end - range.start) as usize);
         assert_eq!(by_offset, by_key);
     }
+}
+
+/// Every canonical entry must be readable back by its own key.
+///
+/// This is the regression guard for the `na` defect: the reader used to find the
+/// end of a name subject by scanning for the SU word value, so any key whose
+/// word *is* SU could not be read, and its neighbours in the same codelet group
+/// failed with it. A sampled test missed it; walking the whole index cannot.
+#[test]
+fn every_canonical_entry_reads_back_by_its_own_key() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../program/library/dictionary/reference.pyac");
+    let mut reader = DictionaryFileReader::open(
+        File::open(path).expect("tracked reference dictionary is available"),
+    )
+    .expect("open reference dictionary by seeking");
+
+    let canonical = reader
+        .sections()
+        .iter()
+        .find(|section| section.role == "canonical-index")
+        .expect("the volume has a canonical index")
+        .clone();
+
+    // Every key mentioned by the canonical index must read back. The index row
+    // addresses an entry offset, so this covers the whole volume without
+    // guessing entry boundaries.
+    let keys = canonical_index_keys(&mut reader, &canonical);
+    assert!(
+        keys.len() > 1_000,
+        "the canonical index must list the whole vocabulary, saw {}",
+        keys.len()
+    );
+
+    let mut failures: Vec<String> = Vec::new();
+    for key in &keys {
+        match reader.read_entry(key) {
+            Ok(words) if !words.is_empty() => {}
+            Ok(_) => failures.push(format!("key {key:x?} decoded as empty")),
+            Err(error) => failures.push(format!("key {key:x?}: {error}")),
+        }
+    }
+    let checked = keys.len();
+
+    assert!(
+        failures.is_empty(),
+        "{} entries failed to read back: {:?}",
+        failures.len(),
+        &failures[..failures.len().min(10)]
+    );
+}
+
+/// Every canonical key listed by the v4 canonical index.
+///
+/// Index rows are ordinary sentences whose subject is the key and whose first
+/// field is the entry's codelet offset. Decoding them with the boundary bitmap
+/// is what makes a key such as `na` (0x24DE, the same word value as the
+/// nominative marker) recoverable.
+fn canonical_index_keys(
+    reader: &mut DictionaryFileReader<File>,
+    section: &DictionarySection,
+) -> Vec<Vec<u16>> {
+    const NAME_TYPE: u16 = 0x225e;
+    const SU: u16 = 0x24de;
+
+    let codelets = reader
+        .read_section(&section.role)
+        .expect("read the canonical index section");
+    let mut keys = Vec::new();
+    for (_ordinal, sentence) in decode_sentences(&codelets) {
+        let mut words = sentence.words.clone();
+        if words.first() != Some(&NAME_TYPE) {
+            continue;
+        }
+        words.remove(0);
+        // The key ends at the first boundary flag, which is the nominative case.
+        let Some(end) = sentence.boundaries.iter().position(|boundary| *boundary) else {
+            continue;
+        };
+        // `words` lost its leading NAME_TYPE, so the boundary index shifts by one.
+        let end = end.saturating_sub(1);
+        if end == 0 || words.get(end) != Some(&SU) {
+            continue;
+        }
+        keys.push(words[..end].to_vec());
+    }
+    keys
+}
+
+/// Split a codelet run into sentences, following the writer's completion bit.
+fn decode_sentences(codelets: &[[u16; 16]]) -> Vec<(usize, DecodedSentence)> {
+    let mut out = Vec::new();
+    let mut index = 0usize;
+    while index < codelets.len() {
+        let start = index;
+        let mut words = Vec::new();
+        let mut boundaries = Vec::new();
+        loop {
+            if index >= codelets.len() {
+                break;
+            }
+            let codelet = &codelets[index];
+            index += 1;
+            let complete = codelet[0] & 1 != 0;
+            let used = if complete {
+                (1..16).filter(|slot| codelet[*slot] != 0).max().unwrap_or(0)
+            } else {
+                15
+            };
+            for slot in 1..=used {
+                words.push(codelet[slot]);
+                let set = (codelet[0] >> slot) & 1 == 1;
+                boundaries.push(if complete { set } else { !set });
+            }
+            if complete {
+                break;
+            }
+        }
+        out.push((start, DecodedSentence { words, boundaries }));
+    }
+    out
+}
+
+struct DecodedSentence {
+    words: Vec<u16>,
+    boundaries: Vec<bool>,
 }
 
 #[test]

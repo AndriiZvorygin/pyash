@@ -106,11 +106,22 @@ pub(super) fn read_codelet<R: Read + Seek>(
     Ok(words)
 }
 
+/// A decoded sentence: its words, and for each word whether a grammatical case
+/// boundary follows it. The boundary flags come from the codelet header bitmap,
+/// so a decoder never has to look for a delimiter that could also appear inside
+/// a value — which is what broke keys such as `na`, whose word is itself the
+/// nominative marker `0x24DE`.
+pub(super) struct Sentence {
+    pub words: Vec<u16>,
+    pub boundaries: Vec<bool>,
+    pub consumed: u32,
+}
+
 pub(super) fn read_sentence<R: Read + Seek>(
     source: &mut R,
     start: u32,
     limit: u32,
-) -> Result<(Vec<u16>, u32), DictionaryReadError> {
+) -> Result<Sentence, DictionaryReadError> {
     read_sentence_with_raw_width(source, start, limit, WORDS_PER_CODELET, false)
 }
 
@@ -118,8 +129,18 @@ pub(super) fn read_sentence_v4<R: Read + Seek>(
     source: &mut R,
     start: u32,
     limit: u32,
-) -> Result<(Vec<u16>, u32), DictionaryReadError> {
+) -> Result<Sentence, DictionaryReadError> {
     read_sentence_with_raw_width(source, start, limit, WORDS_PER_CODELET - 1, true)
+}
+
+/// Whether slot `slot` of `codelet` holds the last word of a case.
+///
+/// The writer marks boundaries positively in a sentence's final codelet and
+/// negatively in earlier ones (`pack_words` sets a bit when
+/// `boundary == complete`), so the polarity depends on the completion bit.
+fn slot_is_boundary(codelet: &[u16; WORDS_PER_CODELET], slot: usize, complete: bool) -> bool {
+    let set = (codelet[0] >> slot) & 1 == 1;
+    if complete { set } else { !set }
 }
 
 fn read_sentence_with_raw_width<R: Read + Seek>(
@@ -128,8 +149,9 @@ fn read_sentence_with_raw_width<R: Read + Seek>(
     limit: u32,
     raw_width: usize,
     indexed_raw: bool,
-) -> Result<(Vec<u16>, u32), DictionaryReadError> {
+) -> Result<Sentence, DictionaryReadError> {
     let mut words = Vec::new();
+    let mut boundaries = Vec::new();
     let mut scan = QuoteScan::default();
     let mut ordinal = start;
     loop {
@@ -140,7 +162,11 @@ fn read_sentence_with_raw_width<R: Read + Seek>(
         ordinal += 1;
         let raw = scan_raw_text(&codelet, &mut scan);
         let used_slots = raw.map_or(WORDS_PER_CODELET - 1, |(_, slot)| slot);
-        words.extend_from_slice(&codelet[1..=used_slots]);
+        let complete = codelet[0] & 1 != 0;
+        for slot in 1..=used_slots {
+            words.push(codelet[slot]);
+            boundaries.push(slot_is_boundary(&codelet, slot, complete));
+        }
         if let Some((length, _)) = raw {
             let mut remaining = length;
             for _ in 0..length.div_ceil(raw_width) {
@@ -158,14 +184,23 @@ fn read_sentence_with_raw_width<R: Read + Seek>(
                 }
                 let payload_start = usize::from(indexed_raw);
                 let used = remaining.min(raw_width);
-                words.extend_from_slice(&raw_codelet[payload_start..payload_start + used]);
+                for slot in payload_start..payload_start + used {
+                    words.push(raw_codelet[slot]);
+                    // Continuation payload is literal text, never a case boundary.
+                    boundaries.push(false);
+                }
                 remaining -= used;
             }
-        } else if codelet[0] & 1 != 0 {
+        } else if complete {
             while words.last() == Some(&0) {
                 words.pop();
+                boundaries.pop();
             }
-            return Ok((words, ordinal - start));
+            return Ok(Sentence {
+                words,
+                boundaries,
+                consumed: ordinal - start,
+            });
         }
     }
 }
@@ -208,6 +243,9 @@ pub(super) fn subject_end(words: &[u16], expected: &[u16]) -> Result<usize, Dict
             "sentence has an unexpected Pyash subject",
         ));
     }
+    // `expected` is a fixed constant that never contains a structural marker, so
+    // the value check is unambiguous here. Variable dict keys go through
+    // `take_record_subject`, which uses the boundary flags instead.
     let case = 1 + expected.len();
     if words[case] != SU {
         return Err(DictionaryReadError::InvalidRecord(
@@ -358,22 +396,34 @@ pub(super) enum RecordSubject {
 }
 
 pub(super) fn take_record_subject(
-    words: &[u16],
+    sentence: &Sentence,
     cursor: &mut usize,
 ) -> Result<RecordSubject, DictionaryReadError> {
+    let words = &sentence.words;
     match words.get(*cursor).copied() {
         Some(NAME_TYPE) => {
+            // The key runs from after NAME_TYPE to the first word whose boundary
+            // flag is set. Scanning for the SU *value* is wrong: a key word may
+            // itself be SU, which is exactly the `na` case (0x24DE).
             *cursor += 1;
             let start = *cursor;
-            let end = words
-                .get(start..)
-                .and_then(|tail| tail.iter().position(|word| *word == SU))
-                .map(|index| start + index)
+            let end = sentence
+                .boundaries
+                .iter()
+                .enumerate()
+                .skip(start)
+                .find(|(_, boundary)| **boundary)
+                .map(|(index, _)| index)
                 .ok_or(DictionaryReadError::InvalidRecord(
-                    "name subject has no nominative boundary",
+                    "name subject has no case boundary",
                 ))?;
             if end == start {
                 return Err(DictionaryReadError::InvalidRecord("empty name subject"));
+            }
+            if words.get(end) != Some(&SU) {
+                return Err(DictionaryReadError::InvalidRecord(
+                    "name subject does not end at a nominative boundary",
+                ));
             }
             *cursor = end + 1;
             Ok(RecordSubject::Name(words[start..end].to_vec()))

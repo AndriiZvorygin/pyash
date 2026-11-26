@@ -1,7 +1,7 @@
 use super::OperationSignatureKey;
 use super::reader_codec::{
     parse_location, parse_marker, parse_metadata, parse_toc, parse_toc_v4, read_codelet,
-    read_sentence, validate_header, validate_sections, validate_sections_v4,
+    Sentence, read_sentence, validate_header, validate_sections, validate_sections_v4,
 };
 use super::reader_index::{
     DirectIndexLookup, lookup_legacy_operation, lookup_legacy_source, lookup_legacy_surface,
@@ -164,7 +164,7 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
             });
             let mut toc_sections = Vec::with_capacity(toc_count);
             for (index, role) in TOC_ROLES_V4.iter().enumerate() {
-                let (words, consumed) = read_sentence(&mut source, ordinal, count)?;
+                let Sentence { words, consumed, .. } = read_sentence(&mut source, ordinal, count)?;
                 let section = parse_toc_v4(&words, index as u16, role).map_err(|error| {
                     DictionaryReadError::Context(format!("TOC record {index}"), Box::new(error))
                 })?;
@@ -182,7 +182,7 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
             )?;
         } else {
             for role in TOC_ROLES {
-                let (words, consumed) = read_sentence(&mut source, ordinal, count)?;
+                let Sentence { words, consumed, .. } = read_sentence(&mut source, ordinal, count)?;
                 let section = parse_toc(&words).map_err(|error| {
                     DictionaryReadError::Context(format!("TOC record for {role}"), Box::new(error))
                 })?;
@@ -290,8 +290,9 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
         let mut ordinal = entry_range.start;
         let mut definition_start = entry_range.end;
         while ordinal < entry_range.end {
-            let (words, consumed) = read_sentence(&mut self.source, ordinal, entry_range.end)?;
-            if !is_v4_entry_metadata(&words, key)? {
+            let sentence = read_sentence(&mut self.source, ordinal, entry_range.end)?;
+            let consumed = sentence.consumed;
+            if !is_v4_entry_metadata(&sentence, key)? {
                 definition_start = ordinal;
                 break;
             }
@@ -470,7 +471,7 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
         let end = section.codelet_start + section.codelet_count;
         let mut ordinal = section.codelet_start;
         while ordinal < end {
-            let (words, consumed) = read_sentence(&mut self.source, ordinal, end)?;
+            let Sentence { words, consumed, .. } = read_sentence(&mut self.source, ordinal, end)?;
             let (candidate, entry, definition) = parse_location(&words)?;
             match candidate.as_slice().cmp(key) {
                 std::cmp::Ordering::Less => ordinal += consumed,
@@ -489,7 +490,7 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
         let end = section.codelet_start + section.codelet_count;
         let mut ordinal = section.codelet_start;
         while ordinal < end {
-            let (words, consumed) = read_sentence(&mut self.source, ordinal, end)?;
+            let Sentence { words, consumed, .. } = read_sentence(&mut self.source, ordinal, end)?;
             let (_, entry, _) = parse_location(&words)?;
             if entry.start == offset {
                 return Ok(Some(entry));
@@ -509,7 +510,7 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
         let mut previous_key: Option<Vec<u16>> = None;
         let mut count = 0usize;
         while ordinal < locations_end {
-            let (words, consumed) = read_sentence(&mut self.source, ordinal, locations_end)?;
+            let Sentence { words, consumed, .. } = read_sentence(&mut self.source, ordinal, locations_end)?;
             let (key, entry, definition) = parse_location(&words)?;
             if previous_key
                 .as_ref()
@@ -553,10 +554,10 @@ fn read_profile_records<R: Read + Seek>(
     source: &mut R,
     limit: u32,
 ) -> Result<ProfileRecords, DictionaryReadError> {
-    let (marker, marker_count) = read_sentence(source, 0, limit)?;
+    let Sentence { words: marker, consumed: marker_count, .. } = read_sentence(source, 0, limit)?;
     let kind = parse_marker(&marker)
         .map_err(|error| DictionaryReadError::Context("profile marker".into(), Box::new(error)))?;
-    let (metadata_words, metadata_count) = read_sentence(source, marker_count, limit)?;
+    let Sentence { words: metadata_words, consumed: metadata_count, .. } = read_sentence(source, marker_count, limit)?;
     let (metadata, toc_count, profile_version, metadata_entry_count) =
         parse_metadata(&metadata_words).map_err(|error| {
             DictionaryReadError::Context("profile metadata".into(), Box::new(error))
@@ -574,13 +575,14 @@ fn read_profile_records<R: Read + Seek>(
     })
 }
 
-fn is_v4_entry_metadata(words: &[u16], key: &[u16]) -> Result<bool, DictionaryReadError> {
+fn is_v4_entry_metadata(sentence: &Sentence, key: &[u16]) -> Result<bool, DictionaryReadError> {
     use super::reader_codec::{
         RecordSubject, expect_end, expect_word, take_record_subject, take_text, take_vector,
     };
 
+    let words = &sentence.words;
     let mut cursor = 0;
-    if take_record_subject(words, &mut cursor)? != RecordSubject::Name(key.to_vec()) {
+    if take_record_subject(sentence, &mut cursor)? != RecordSubject::Name(key.to_vec()) {
         return Ok(false);
     }
     let text_shapes: [&[u16]; 3] = [
