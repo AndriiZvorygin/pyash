@@ -211784,19 +211784,34 @@ su name tlat kwon ob text "hkom tsi7t" from text "hkom" at text "component" be t
 su name tlat kwon ob text "hkom tsi7t" from text "tsi7t" at text "component" be text ya
 su name tlat kwon ob text "hkom tyac" at text "entry" be text ya
 su name tlat kwon ob text "hkom tyac" as text "ar" from text "ﺮﻴﻔﺸﺗ ﻚﻓ" to text "ﺮﻴﻔﺸﺗ ﻚﻓ" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "ar" from text "فك تشفير" to text "فك تشفير" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "en" from text "decipher" to text "decipher" at text "lexical-form" be text ya
 su name tlat kwon ob text "hkom tyac" as text "en" from text "decode" to text "decode" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "en" from text "decrypt" to text "decrypt" at text "lexical-form" be text ya
 su name tlat kwon ob text "hkom tyac" as text "es" from text "descodificar" to text "descodificar" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "es" from text "desencriptar" to text "desencriptar" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "fi" from text "purkaa" to text "purkaa" at text "lexical-form" be text ya
 su name tlat kwon ob text "hkom tyac" as text "fi" from text "tulkita" to text "tulkita" at text "lexical-form" be text ya
 su name tlat kwon ob text "hkom tyac" as text "fr" from text "décoder" to text "décoder" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "fr" from text "décrypter" to text "décrypter" at text "lexical-form" be text ya
 su name tlat kwon ob text "hkom tyac" as text "he" from text "ַחֵנֲעַפְל" to text "ַחֵנֲעַפְל" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "he" from text "לפענח" to text "לפענח" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "hi" from text "डिक्रिप्ट" to text "डिक्रिप्ट" at text "lexical-form" be text ya
 su name tlat kwon ob text "hkom tyac" as text "hi" from text "व्याख्या करना" to text "व्याख्या करना" at text "lexical-form" be text ya
 su name tlat kwon ob text "hkom tyac" as text "id" from text "membaca sandi" to text "membaca sandi" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "id" from text "mendekripsi" to text "mendekripsi" at text "lexical-form" be text ya
 su name tlat kwon ob text "hkom tyac" as text "isv" from text "разкодовати" to text "разкодовати" at text "lexical-form" be text ya
 su name tlat kwon ob text "hkom tyac" as text "nl" from text "decoderen" to text "decoderen" at text "lexical-form" be text ya
 su name tlat kwon ob text "hkom tyac" as text "ru" from text "раскодировать" to text "раскодировать" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "ru" from text "расшифровывать" to text "расшифровывать" at text "lexical-form" be text ya
 su name tlat kwon ob text "hkom tyac" as text "tr" from text "decode" to text "decode" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "tr" from text "şifresini" to text "şifresini" at text "lexical-form" be text ya
 su name tlat kwon ob text "hkom tyac" as text "uk" from text "розкодувати" to text "розкодувати" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "uk" from text "розшифровувати" to text "розшифровувати" at text "lexical-form" be text ya
 su name tlat kwon ob text "hkom tyac" as text "zh" from text "解码" to text "解码" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "Decoding" by text "subsumed-by" at text "source-link" be text ya
+su name tlat kwon ob text "hkom tyac" as text "wordnet" from text "Open English WordNet 2025" to text "v:00996499-v" by text "exact-sense" at text "source-link" be text ya
+su name tlat kwon ob text "hkom tyac" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "v:00996499-v" with text "convert code into ordinary language" at text "source-gloss" be text ya
 su name tlat kwon ob text "hkom tyac" from text "hkom" at text "component" be text ya
 su name tlat kwon ob text "hkom tyac" from text "tyac" at text "component" be text ya
 su name tlat kwon ob text "hkom xr6s" at text "entry" be text ya
@@ -691887,22 +691902,9 @@ su name tlat kwon ob text "tyac tyas" as text "en" from text "wordnet" to text "
 su name tlat kwon ob text "tyac tyas" from text "tyac" at text "component" be text ya
 su name tlat kwon ob text "tyac tyas" from text "tyas" at text "component" be text ya
 su name tlat kwon ob text "tyac tyif" at text "entry" be text ya
-su name tlat kwon ob text "tyac tyif" as text "ar" from text "حل الشفرة" to text "حل الشفرة" at text "lexical-form" be text ya
 su name tlat kwon ob text "tyac tyif" as text "en" from text "decipher" to text "decipher" at text "lexical-form" be text ya
 su name tlat kwon ob text "tyac tyif" as text "en" from text "reading" to text "reading" at text "lexical-form" be text ya
 su name tlat kwon ob text "tyac tyif" as text "en" from text "trace" to text "trace" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "es" from text "descifrar" to text "descifrar" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "fi" from text "tulkita" to text "tulkita" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "fr" from text "déchiffrer" to text "déchiffrer" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "he" from text "לְפַעֲנֵחַ" to text "לְפַעֲנֵחַ" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "hi" from text "पढ़ना" to text "पढ़ना" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "ia" from text "decifrar" to text "decifrar" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "id" from text "menguraikan" to text "menguraikan" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "nl" from text "ontcijferen" to text "ontcijferen" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "ru" from text "расшифровывать" to text "расшифровывать" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "tr" from text "çözmek" to text "çözmek" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "uk" from text "розшифровувати" to text "розшифровувати" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "zh" from text "解码" to text "解码" at text "lexical-form" be text ya
 su name tlat kwon ob text "tyac tyif" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "Decoding" by text "subsumed-by" at text "source-link" be text ya
 su name tlat kwon ob text "tyac tyif" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "Stating" by text "subsumed-by" at text "source-link" be text ya
 su name tlat kwon ob text "tyac tyif" as text "wordnet" from text "Open English WordNet 2025" to text "n:07188417-n" by text "exact-sense" at text "source-link" be text ya

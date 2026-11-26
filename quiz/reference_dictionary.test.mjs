@@ -205,3 +205,15 @@ test("`decode` reads as English even though its letters spell Pyac atoms", async
   const plain = await runPyacDictionary(["reference", "decode"], silent);
   assert.ok(plain.matches.length > 0, "the English word resolves by default");
 });
+
+test("`decode` carries its WordNet sense, not just its components", async () => {
+  // The compound `hkom tyac` is only useful if it names the sense it was built
+  // for. Without the linked gloss the entry is a bare decomposition.
+  const english = await runPyacDictionary(["reference", "from", "en", "decode"], silent);
+  const entry = english.matches[0];
+  const senses = entry.interimDefinitions.map((gloss) => gloss.identifier);
+  assert.ok(senses.includes("v:00996499-v"), `expected the decode sense, saw ${senses.join(", ")}`);
+  const gloss = entry.interimDefinitions.find((item) => item.identifier === "v:00996499-v");
+  assert.match(gloss.text, /convert code into ordinary language/u);
+  assert.deepEqual(entry.entry.components, ["hkom", "tyac"], "the sense belongs to the compound");
+});
