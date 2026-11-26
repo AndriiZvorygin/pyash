@@ -143,3 +143,46 @@ test("a compound with no volume entry reports a miss instead of failing", async 
   const result = await runPyacDictionary(["reference", "hnanga"], silent);
   assert.deepEqual(result.matches, []);
 });
+
+test("`from pyac` reads the text as Pyac glyphs, not as an English word", async () => {
+  // `name` written as Pyac is `na me`, not the atom `hnim` whose English gloss
+  // is "name". Reading it through the English-first resolver would return the
+  // atom and make `from pyac` indistinguishable from `from en`.
+  const pyac = await runPyacDictionary(["reference", "from", "pyac", "name"], silent);
+  assert.deepEqual(pyac.atoms, ["na", "me"], "name spells na + me");
+  const english = await runPyacDictionary(["reference", "from", "en", "name"], silent);
+  assert.ok(english.matches.length > 1, `expected several English senses, saw ${english.matches.length}`);
+});
+
+test("`from pyac` prefers a catalogued compound over its atoms", async () => {
+  // `kl6mpsas` is `kl6m psas`, and the volume carries that compound, so the
+  // entry is more useful than the bare atom reading.
+  const pyac = await runPyacDictionary(["reference", "from", "pyac", "kl6mpsas"], silent);
+  assert.equal(pyac.key, "scalar produce");
+  assert.ok(pyac.entry.lexicalForms.length > 0);
+});
+
+test("`from pyac` reports the reading for a grammar-only atom", async () => {
+  // `sa` is a pronoun with no decodable volume entry. The reading must still be
+  // reported rather than raising the decoder's error.
+  const pyac = await runPyacDictionary(["reference", "from", "pyac", "sa"], silent);
+  assert.deepEqual(pyac.atoms, ["sa"]);
+});
+
+test("`from en` and `from pyac` disagree where the two readings differ", async () => {
+  // `key` is English but not a Pyac atom. The English path finds entries; the
+  // Pyac path must report a miss rather than throwing the binary's key error.
+  const english = await runPyacDictionary(["reference", "from", "en", "key"], silent);
+  const pyac = await runPyacDictionary(["reference", "from", "pyac", "key"], silent);
+  assert.ok(english.matches.length > 0, "the English word resolves");
+  assert.deepEqual(pyac.matches, [], "the Pyac reading is a clean miss");
+});
+
+test("`from en` resolves a word that the default path would read as Pyac", async () => {
+  // `argument` is the Pyac atom `hrut`, so the default path returns one entry.
+  // The English reading is a different, larger result set.
+  const english = await runPyacDictionary(["reference", "from", "en", "argument"], silent);
+  const plain = await runPyacDictionary(["reference", "argument"], silent);
+  assert.ok(english.matches.length > 1, `expected several English senses, saw ${english.matches.length}`);
+  assert.ok(plain.key, "the default path reads the Pyac atom");
+});

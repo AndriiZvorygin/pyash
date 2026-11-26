@@ -623,6 +623,36 @@ export function lookupLegacyWordSequence(name) {
   return spelled.every(Boolean) ? spelled : null;
 }
 
+/**
+ * Resolve written Pyac as Pyac words, never as English.
+ *
+ * `lookupLegacyWordSequence` consults the English table first, so `name`
+ * resolves to the atom `hnim` — the word whose English gloss is "name". That is
+ * the right answer when the caller is typing an English word, and the wrong one
+ * when they are spelling Pyac: `name` written as Pyac glyphs is `na me`.
+ *
+ * This resolves each space-separated token by its Pyac spelling only, splitting
+ * a run-together compound on word shapes when the whole token is not one atom.
+ */
+export function lookupPyaWordSequence(name) {
+  if (typeof name !== "string" || !name.trim()) return null;
+  const tokens = name.trim().toLowerCase().split(/\s+/u).filter(Boolean);
+  const entries = [];
+  for (const token of tokens) {
+    const direct = lookupLegacyPyaName(token);
+    if (direct) {
+      entries.push(direct);
+      continue;
+    }
+    const segmented = segmentPyacWords(token);
+    if (!segmented || segmented.length < 2) return null;
+    const parts = segmented.map((part) => lookupLegacyPyaName(part));
+    if (parts.some((part) => part === null)) return null;
+    entries.push(...parts);
+  }
+  return entries.length ? entries : null;
+}
+
 function legacyNumberWord(value) {
   if (!Number.isInteger(value) || value < 0 || value >= legacyNumberWords.length) {
     throw quoteError("surface-range", "legacy numeric surface rendering supports values 0 through 20", { value });
