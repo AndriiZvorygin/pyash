@@ -143,3 +143,33 @@ test("a compound with no volume entry reports a miss instead of failing", async 
   const result = await runPyacDictionary(["reference", "hnanga"], silent);
   assert.deepEqual(result.matches, []);
 });
+
+test("`from en` reads an English word even when it also spells a Pyac atom", async () => {
+  // `name` is both an English word and the Pyac atom `hnim`. Without an explicit
+  // source the CLI silently picks one, so the same English token returns
+  // different answers depending on spelling luck. `from en` pins the English
+  // interpretation: twelve English senses, not the single atom entry.
+  const english = await runPyacDictionary(["reference", "from", "en", "name"], silent);
+  const pyac = await runPyacDictionary(["reference", "from", "pyac", "name"], silent);
+  assert.ok(english.matches.length > 1, `expected several English senses, saw ${english.matches.length}`);
+  assert.equal(pyac.matches, undefined, "the Pyac source returns a single keyed entry");
+  assert.equal(pyac.key, "name");
+});
+
+test("`from en` and `from pyac` disagree where the two readings differ", async () => {
+  // `key` is English but not a Pyac atom. The English path finds entries; the
+  // Pyac path must report a miss rather than throwing the binary's key error.
+  const english = await runPyacDictionary(["reference", "from", "en", "key"], silent);
+  const pyac = await runPyacDictionary(["reference", "from", "pyac", "key"], silent);
+  assert.ok(english.matches.length > 0, "the English word resolves");
+  assert.deepEqual(pyac.matches, [], "the Pyac reading is a clean miss");
+});
+
+test("`from en` resolves a word that the default path would read as Pyac", async () => {
+  // `argument` is the Pyac atom `hrut`, so the default path returns one entry.
+  // The English reading is a different, larger result set.
+  const english = await runPyacDictionary(["reference", "from", "en", "argument"], silent);
+  const plain = await runPyacDictionary(["reference", "argument"], silent);
+  assert.ok(english.matches.length > 1, `expected several English senses, saw ${english.matches.length}`);
+  assert.ok(plain.key, "the default path reads the Pyac atom");
+});

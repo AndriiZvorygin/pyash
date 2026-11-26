@@ -275,37 +275,53 @@ async function runReferenceDictionary(args, { stdout = process.stdout } = {}) {
 
   const query = args.join(" ").trim();
   if (!query) throw usageError("dictionary lookup requires a query");
-  // `from pyac X` says "look this up as Pyash", which is exactly the Pyash-key
-  // path below. Without stripping it the whole string is searched as an English
-  // surface and always misses.
-  const pyacPrefix = /^from\s+pyac\s+/iu;
-  const explicitPyac = pyacPrefix.test(query);
-  const keyQuery = explicitPyac ? query.replace(pyacPrefix, "").trim() : query;
+  // An explicit `from <language>` selects the interpretation, so an English word
+  // that happens to also be a Pyac atom is not silently read as Pyac (and vice
+  // versa). Without this, `pyash dict name` returns the atom `hnim` while
+  // `pyash dict label` returns the English surface — the conflation depends on
+  // whether the word happens to spell a Pyac atom.
+  const SOURCE_LANGUAGES = new Set(["pyac", "en", "zh"]);
+  const sourceMatch = /^from\s+([a-z-]+)\s+/iu.exec(query);
+  const explicitSource = sourceMatch && SOURCE_LANGUAGES.has(sourceMatch[1].toLowerCase())
+    ? sourceMatch[1].toLowerCase()
+    : null;
+  const subject = explicitSource ? query.slice(sourceMatch[0].length).trim() : query;
+  if (!subject) throw usageError("dictionary lookup requires a query after `from <language>`");
+
   const isPyashKey = (text) => lookupLegacyWordSequence(text) !== null;
   // A key that segments and resolves still may have no volume entry, which is
   // a miss rather than a failure, so fall through to the surface search.
   const keyLookup = () => {
     try {
-      return runBinary(binary, ["entry", referenceVolumePath, binaryKey(keyQuery)]);
+      return runBinary(binary, ["entry", referenceVolumePath, binaryKey(subject)]);
     } catch (error) {
-      if (/has no entry for Pyac key/u.test(error.message)) return null;
+      // A token with no HNUC mapping is not a Pyac word, so it is a miss rather
+      // than a failure — the caller wanted a key and this text is not one.
+      if (/has no entry for Pyac key|no HNUC mapping/u.test(error.message)) return null;
       throw error;
     }
   };
-  let result;
-  if (!explicitPyac && /^[anrvs]:\d{8}-[anrvs]$/iu.test(query)) {
-    result = runBinary(binary, ["source-entries", referenceVolumePath, "wordnet", WORDNET_RELEASE, query]);
-  } else if (!explicitPyac && /^sumo:/iu.test(query)) {
-    result = runBinary(binary, ["source-entries", referenceVolumePath, "sumo", SUMO_RELEASE, query.slice(5)]);
-  } else if (explicitPyac || args.every((word) => lookupLegacyPyaName(word)) || isPyashKey(keyQuery)) {
+  const keyEntry = () => {
     const found = keyLookup();
     if (found === null) {
-      stdout.write(`${keyQuery}: no dictionary entry found\n`);
-      return { query: keyQuery, matches: [] };
+      stdout.write(`${subject}: no dictionary entry found\n`);
+      return { query: subject, matches: [] };
     }
     const entry = summarizeEntryCodelets(found);
-    stdout.write(`${renderReferenceEntry(entry, keyQuery)}\n`);
+    stdout.write(`${renderReferenceEntry(entry, subject)}\n`);
     return entry;
+  };
+  let result;
+  if (explicitSource === "en" || explicitSource === "zh") {
+    result = runBinary(binary, ["surface-entries", referenceVolumePath, explicitSource, subject]);
+  } else if (explicitSource === "pyac") {
+    return keyEntry();
+  } else if (/^[anrvs]:\d{8}-[anrvs]$/iu.test(query)) {
+    result = runBinary(binary, ["source-entries", referenceVolumePath, "wordnet", WORDNET_RELEASE, query]);
+  } else if (/^sumo:/iu.test(query)) {
+    result = runBinary(binary, ["source-entries", referenceVolumePath, "sumo", SUMO_RELEASE, query.slice(5)]);
+  } else if (args.every((word) => lookupLegacyPyaName(word)) || isPyashKey(query)) {
+    return keyEntry();
   } else {
     const language = [...query].some((character) => /\p{Script=Han}/u.test(character)) ? "zh" : "en";
     result = runBinary(binary, ["surface-entries", referenceVolumePath, language, query]);
@@ -313,11 +329,11 @@ async function runReferenceDictionary(args, { stdout = process.stdout } = {}) {
 
   const entries = sourceMatchEntries(result);
   if (!entries.length) {
-    stdout.write(`${query}: no dictionary entry found\n`);
-    return { query, matches: [] };
+    stdout.write(`${subject}: no dictionary entry found\n`);
+    return { query: subject, matches: [] };
   }
-  stdout.write(`${entries.map((entry) => renderReferenceEntry(entry, query)).join("\n")}\n`);
-  return { query, matches: entries };
+  stdout.write(`${entries.map((entry) => renderReferenceEntry(entry, subject)).join("\n")}\n`);
+  return { query: subject, matches: entries };
 }
 
 export async function runPyacDictionary(args = process.argv.slice(2), { stdout = process.stdout } = {}) {
