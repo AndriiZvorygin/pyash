@@ -14,13 +14,7 @@ fn codelet(tokens: &[u32], boundaries: &[usize]) -> [u32; CODELET_WORDS] {
 
 fn snapshot(
     sentence: &ParsedSentence,
-) -> (
-    usize,
-    std::vec::Vec<(u32, usize, usize)>,
-    usize,
-    usize,
-    u32,
-) {
+) -> (usize, std::vec::Vec<(u32, usize, usize)>, usize, usize, u32) {
     let mut fields = std::vec::Vec::new();
     let mut index = 0;
     while index < sentence.field_count {
@@ -108,10 +102,7 @@ fn fixtures() -> std::vec::Vec<std::vec::Vec<[u32; CODELET_WORDS]>> {
             ],
             &[2, 5, 7],
         ),
-        codelet(
-            &[NUMBER_QUOTE, 7, ACCUSATIVE, NUMBER_VERB, REALIS],
-            &[2, 4],
-        ),
+        codelet(&[NUMBER_QUOTE, 7, ACCUSATIVE, NUMBER_VERB, REALIS], &[2, 4],),
     ]);
     out.push(std::vec![codelet(
         &[
@@ -138,10 +129,7 @@ fn fixtures() -> std::vec::Vec<std::vec::Vec<[u32; CODELET_WORDS]>> {
         &[NUMBER_QUOTE, 1, ACCUSATIVE, REALIS, PLUS, DEONTIC],
         &[2, 3, 5],
     )]);
-    out.push(std::vec![codelet(
-        &[NUMBER_QUOTE, 1, ACCUSATIVE],
-        &[2],
-    )]);
+    out.push(std::vec![codelet(&[NUMBER_QUOTE, 1, ACCUSATIVE], &[2],)]);
     out.push(std::vec![codelet(
         &[
             DEPENDENT_CLAUSE,
@@ -158,14 +146,7 @@ fn fixtures() -> std::vec::Vec<std::vec::Vec<[u32; CODELET_WORDS]>> {
         &[3, 6, 7, 9],
     )]);
     out.push(std::vec![codelet(
-        &[
-            DEPENDENT_CLAUSE,
-            NUMBER_QUOTE,
-            1,
-            ACCUSATIVE,
-            PLUS,
-            DEONTIC,
-        ],
+        &[DEPENDENT_CLAUSE, NUMBER_QUOTE, 1, ACCUSATIVE, PLUS, DEONTIC,],
         &[3, 5],
     )]);
     out

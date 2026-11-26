@@ -371,6 +371,39 @@ run_candidate_suite() {
     return 1
   fi
 
+  printf '\n== development CI toolchain bootstrap ==\n'
+  if ! (cd "$WORKTREE" && npm run bootstrap -- --with-whisper); then
+    printf 'CI toolchain bootstrap failed; preserving candidate for review\n'
+    KEEP_WORKTREE=1
+    FINAL_STATUS=toolchain-bootstrap-failed
+    return 1
+  fi
+
+  sibling_repo="$WORKTREE_PARENT/pyachso2n"
+  if [[ ! -f "$sibling_repo/English30k.txt" ]]; then
+    if [[ -e "$sibling_repo" ]]; then
+      printf 'sibling dictionary checkout exists but is incomplete: %s\n' "$sibling_repo" >&2
+      KEEP_WORKTREE=1
+      FINAL_STATUS=sibling-dictionary-incomplete
+      return 1
+    fi
+    printf '\n== provision sibling dictionary checkout ==\n'
+    if ! git clone --depth 1 https://gitlab.com/pyac/pyachso2n.git "$sibling_repo"; then
+      printf 'sibling dictionary checkout failed; preserving candidate for review\n'
+      KEEP_WORKTREE=1
+      FINAL_STATUS=sibling-dictionary-checkout-failed
+      return 1
+    fi
+  fi
+
+  printf '\n== install Python CI dependency ==\n'
+  if ! python3 -m pip install --quiet numpy && ! python3 -m pip install --quiet --break-system-packages numpy; then
+    printf 'Python CI dependency install failed; preserving candidate for review\n'
+    KEEP_WORKTREE=1
+    FINAL_STATUS=python-dependency-install-failed
+    return 1
+  fi
+
   if [[ -f "$WORKTREE/rust/pyac/Cargo.toml" ]]; then
     printf '\n== Rust dictionary executable build ==\n'
     if ! (cd "$WORKTREE" && cargo build --release --manifest-path rust/pyac/Cargo.toml --bin pyac-dictionary); then
@@ -386,11 +419,25 @@ run_candidate_suite() {
     printf '\n== full test suite attempt %s ==\n' "$suite_attempt"
     suite_log="$ARTIFACT_DIR/test-suite-attempt-$(printf '%02d' "$suite_attempt").log"
     suite_status=0
-    if (cd "$WORKTREE" && npm run test:ci) 2>&1 | tee "$suite_log"; then
-      suite_status=0
-    else
-      suite_status=$?
-    fi
+    run_suite_command() {
+      local label=$1
+      shift
+      printf '\n== %s ==\n' "$label" | tee -a "$suite_log"
+      if (cd "$WORKTREE" && "$@") 2>&1 | tee -a "$suite_log"; then
+        return 0
+      fi
+      local check_status=$?
+      printf 'check failed (exit %s): %s\n' "$check_status" "$label" | tee -a "$suite_log"
+      suite_status=1
+      return 0
+    }
+
+    run_suite_command "full Node CI-tier tests" npm run test:ci
+    run_suite_command "GPU Housekeeper tests" npm run test:gpu-housekeeper
+    run_suite_command "documentation prose check" npm run doc:prose
+    run_suite_command "import graph check" npm run imports:check
+    run_suite_command "house API check" npm run house:api:check
+    run_suite_command "Rust formatting, tests, and target builds" bash command/run_rust_ci_checks.sh
     TEST_SUMMARY=$(sed -n -E 's/^.* (tests|pass|fail|skipped|todo) ([0-9]+)$/\1 \2/p; s/^.* duration_ms ([0-9.]+)$/duration_ms \1/p' "$suite_log" | awk 'NF { if (summary) summary = summary "; "; summary = summary $0 } END { print summary }')
     TIER_SUMMARY=$(sed -n -E '/^  gating [0-9]+ files, reporting [0-9]+ without gating, excluding [0-9]+$/p' "$suite_log" | tail -1)
     if (( suite_status == 0 )); then

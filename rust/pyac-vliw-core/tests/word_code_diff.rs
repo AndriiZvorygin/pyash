@@ -30,7 +30,9 @@ fn every_vocabulary_spelling_encodes_to_the_reference_identity() {
     for (word, expected) in &corpus {
         match encode(word) {
             Ok(actual) if actual == *expected => {}
-            Ok(actual) => failures.push(format!("{word}: rust 0x{actual:04x} != ref 0x{expected:04x}")),
+            Ok(actual) => failures.push(format!(
+                "{word}: rust 0x{actual:04x} != ref 0x{expected:04x}"
+            )),
             Err(error) => failures.push(format!("{word}: rust rejected {error:?}")),
         }
     }

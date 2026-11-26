@@ -35,21 +35,59 @@ pub enum WordError {
 }
 
 const CONSONANT_ONE: [(u8, u8); 23] = [
-    (b'm', 1), (b'k', 2), (b'y', 3), (b'p', 4), (b'w', 5), (b'n', 6),
-    (b's', 9), (b't', 10), (b'l', 11), (b'f', 12), (b'c', 13), (b'r', 14),
-    (b'b', 17), (b'g', 18), (b'd', 19), (b'z', 20), (b'j', 21), (b'v', 22),
-    (b'q', 25), (b'x', 26), (b'4', 27), (b'8', 28), (b'Q', 29),
+    (b'm', 1),
+    (b'k', 2),
+    (b'y', 3),
+    (b'p', 4),
+    (b'w', 5),
+    (b'n', 6),
+    (b's', 9),
+    (b't', 10),
+    (b'l', 11),
+    (b'f', 12),
+    (b'c', 13),
+    (b'r', 14),
+    (b'b', 17),
+    (b'g', 18),
+    (b'd', 19),
+    (b'z', 20),
+    (b'j', 21),
+    (b'v', 22),
+    (b'q', 25),
+    (b'x', 26),
+    (b'4', 27),
+    (b'8', 28),
+    (b'Q', 29),
 ];
 
 const VOWEL: [(u8, u8); 8] = [
-    (b'i', 0), (b'a', 1), (b'u', 2), (b'e', 3), (b'o', 4), (b'6', 5), (b'1', 6), (b'3', 7),
+    (b'i', 0),
+    (b'a', 1),
+    (b'u', 2),
+    (b'e', 3),
+    (b'o', 4),
+    (b'6', 5),
+    (b'1', 6),
+    (b'3', 7),
 ];
 
 const TONE: [(u8, u8); 4] = [(b'E', 0), (b'M', 1), (b'7', 2), (b'2', 3)];
 
 const CONSONANT_THREE: [(u8, u8); 14] = [
-    (b'm', 0), (b'k', 1), (b'p', 2), (b'n', 3), (b's', 4), (b't', 5), (b'f', 6), (b'c', 7),
-    (b'z', 4), (b'g', 1), (b'v', 6), (b'b', 2), (b'd', 5), (b'j', 7),
+    (b'm', 0),
+    (b'k', 1),
+    (b'p', 2),
+    (b'n', 3),
+    (b's', 4),
+    (b't', 5),
+    (b'f', 6),
+    (b'c', 7),
+    (b'z', 4),
+    (b'g', 1),
+    (b'v', 6),
+    (b'b', 2),
+    (b'd', 5),
+    (b'j', 7),
 ];
 
 const CONSONANT_THREE_CANONICAL: [u8; 8] = [b'm', b'k', b'p', b'n', b's', b't', b'f', b'c'];
@@ -58,11 +96,17 @@ const CONSONANT_TWO_VOCAL: [u8; 8] = [b'y', b'w', b'z', b'l', b'v', b'j', b'r', 
 const CONSONANT_TWO_ASPIRATE: [u8; 8] = [b'y', b'w', b's', b'l', b'f', b'c', b'r', b'x'];
 
 fn table_lookup(table: &[(u8, u8)], glyph: u8) -> Option<u8> {
-    table.iter().find(|(key, _)| *key == glyph).map(|(_, value)| *value)
+    table
+        .iter()
+        .find(|(key, _)| *key == glyph)
+        .map(|(_, value)| *value)
 }
 
 fn table_inverse(table: &[(u8, u8)], code: u8) -> Option<u8> {
-    table.iter().find(|(_, value)| *value == code).map(|(key, _)| *key)
+    table
+        .iter()
+        .find(|(_, value)| *value == code)
+        .map(|(key, _)| *key)
 }
 
 /// Classify a spelling by its glyph shape.
@@ -102,7 +146,8 @@ pub fn encode(word: &str) -> Result<u16, WordError> {
     };
 
     let first = bytes[0];
-    let (vowel, tone, second, third): (u8, u8, Option<u8>, Option<u8>) = match (bytes.len(), class) {
+    let (vowel, tone, second, third): (u8, u8, Option<u8>, Option<u8>) = match (bytes.len(), class)
+    {
         (2, _) => (bytes[1], b'M', None, None),
         (3, _) => (bytes[1], bytes[2], None, None),
         (5, WordClass::ShortRoot) => (bytes[2], bytes[3], Some(bytes[1]), Some(bytes[4])),
@@ -114,7 +159,8 @@ pub fn encode(word: &str) -> Result<u16, WordError> {
 
     // First consonant: shifted by class.
     if first != b'\0' && class != WordClass::ShortRoot {
-        let code = u32::from(table_lookup(&CONSONANT_ONE, first).ok_or(WordError::UnsupportedGlyph)?);
+        let code =
+            u32::from(table_lookup(&CONSONANT_ONE, first).ok_or(WordError::UnsupportedGlyph)?);
         value |= match class {
             WordClass::LongRoot => code,
             WordClass::LongGrammar => code << 3,
@@ -124,7 +170,8 @@ pub fn encode(word: &str) -> Result<u16, WordError> {
     // Second consonant.
     if let Some(glyph) = second {
         if class == WordClass::ShortRoot {
-            let code = u32::from(table_lookup(&CONSONANT_ONE, glyph).ok_or(WordError::UnsupportedGlyph)?);
+            let code =
+                u32::from(table_lookup(&CONSONANT_ONE, glyph).ok_or(WordError::UnsupportedGlyph)?);
             value |= code << 3;
         } else if class != WordClass::ShortGrammar {
             let code = if is_vocal(first) {
@@ -160,7 +207,9 @@ pub fn encode(word: &str) -> Result<u16, WordError> {
     // Final consonant.
     if let Some(glyph) = third {
         if class != WordClass::LongGrammar && class != WordClass::ShortGrammar {
-            let code = u32::from(table_lookup(&CONSONANT_THREE, glyph).ok_or(WordError::UnsupportedGlyph)?);
+            let code = u32::from(
+                table_lookup(&CONSONANT_THREE, glyph).ok_or(WordError::UnsupportedGlyph)?,
+            );
             value |= code << 13;
         }
     }
@@ -194,11 +243,15 @@ pub fn decode(value: u16, out: &mut [u8]) -> Result<usize, WordError> {
         let third = *CONSONANT_THREE_CANONICAL
             .get(((value >> 13) & 0x7) as usize)
             .ok_or(WordError::UnsupportedIdentity)?;
-        out[len] = b'h'; len += 1;
-        out[len] = first; len += 1;
-        out[len] = vowel; len += 1;
+        out[len] = b'h';
+        len += 1;
+        out[len] = first;
+        len += 1;
+        out[len] = vowel;
+        len += 1;
         len = push_tone(out, len, tone);
-        out[len] = third; len += 1;
+        out[len] = third;
+        len += 1;
         return Ok(len);
     }
     if short_sort == 7 {
@@ -215,11 +268,15 @@ pub fn decode(value: u16, out: &mut [u8]) -> Result<usize, WordError> {
             .ok_or(WordError::UnsupportedIdentity)?;
         let vowel = table_inverse(&VOWEL, ((value >> 11) & 0x7) as u8)
             .ok_or(WordError::UnsupportedIdentity)?;
-        out[len] = first; len += 1;
-        out[len] = second; len += 1;
-        out[len] = vowel; len += 1;
+        out[len] = first;
+        len += 1;
+        out[len] = second;
+        len += 1;
+        out[len] = vowel;
+        len += 1;
         len = push_tone(out, len, ((value >> 14) & 0x3) as u8);
-        out[len] = b'h'; len += 1;
+        out[len] = b'h';
+        len += 1;
         return Ok(len);
     }
     if long_sort == 0x1e {
@@ -228,8 +285,10 @@ pub fn decode(value: u16, out: &mut [u8]) -> Result<usize, WordError> {
             .ok_or(WordError::UnsupportedIdentity)?;
         let vowel = table_inverse(&VOWEL, ((value >> 10) & 0x7) as u8)
             .ok_or(WordError::UnsupportedIdentity)?;
-        out[len] = first; len += 1;
-        out[len] = vowel; len += 1;
+        out[len] = first;
+        len += 1;
+        out[len] = vowel;
+        len += 1;
         len = push_tone(out, len, ((value >> 13) & 0x3) as u8);
         return Ok(len);
     }
@@ -250,11 +309,15 @@ pub fn decode(value: u16, out: &mut [u8]) -> Result<usize, WordError> {
         let third = *CONSONANT_THREE_CANONICAL
             .get(((value >> 13) & 0x7) as usize)
             .ok_or(WordError::UnsupportedIdentity)?;
-        out[len] = first; len += 1;
-        out[len] = second; len += 1;
-        out[len] = vowel; len += 1;
+        out[len] = first;
+        len += 1;
+        out[len] = second;
+        len += 1;
+        out[len] = vowel;
+        len += 1;
         len = push_tone(out, len, ((value >> 11) & 0x3) as u8);
-        out[len] = third; len += 1;
+        out[len] = third;
+        len += 1;
         return Ok(len);
     }
     Err(WordError::UnsupportedIdentity)

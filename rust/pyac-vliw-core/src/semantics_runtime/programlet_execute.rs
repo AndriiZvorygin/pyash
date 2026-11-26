@@ -344,14 +344,7 @@ fn execute_numeric_programlet_at_with_directory_view(
                 } else if sentence.verb_length == 1
                     && matches!(
                         sentence_at!(sentence_view, sentence.verb_start),
-                        PLUS
-                            | SUBTRACT
-                            | MULTIPLY
-                            | DIVIDE
-                            | EXPONENTIAL
-                            | XOR
-                            | REMAINS
-                            | INVERT
+                        PLUS | SUBTRACT | MULTIPLY | DIVIDE | EXPONENTIAL | XOR | REMAINS | INVERT
                     )
                 {
                     frame.action_started = 1;

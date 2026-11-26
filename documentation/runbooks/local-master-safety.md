@@ -38,13 +38,19 @@ Codex is asked to resolve only the conflicted paths in the isolated candidate.
 The runner checks that no unrelated paths or candidate history changed, stages
 the resolved paths, rejects remaining conflict markers, and completes the merge
 before testing. An unsafe or incomplete resolution leaves the candidate for
-review. The runner installs dependencies and runs
-`npm run test:ci` against that exact candidate. Existing checkouts, including
-a dirty local `master` worktree, are not checked out or modified.
+review. The runner installs dependencies, bootstraps the Whisper toolchain,
+provisions the sibling dictionary checkout and Python test dependency, then
+runs `npm run test:ci`, the GPU Housekeeper tests, documentation/import/API
+checks, and the Rust CI checks against that exact candidate. The Rust workflow
+and promotion runner both call `command/run_rust_ci_checks.sh`, so formatting,
+crate tests, WebAssembly checks, and the RISC-V build gate promotion before
+push. Existing checkouts, including a dirty local `master` worktree, are not
+checked out or modified.
 The CI-tier runner uses at most four concurrent test workers to reduce host
 contention; it uses fewer when the resource-based limit is lower.
 The runner adds `$HOME/.cargo/bin` to `PATH` when present so cron can build
-Rust-backed test prerequisites with the installed toolchain.
+Rust-backed test prerequisites with the installed toolchain. It records every
+CI check in the attempt log and does not push if any check fails.
 After a green suite, it fetches the branch inputs again. If a source advances
 during testing, the runner merges the new tip and reruns the suite, up to two
 refreshes; continued movement preserves the candidate without promotion.

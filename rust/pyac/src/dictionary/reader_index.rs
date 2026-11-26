@@ -1,7 +1,8 @@
 use super::reader::{DictionaryReadError, DictionarySection};
 use super::reader_codec::{
-    RecordSubject, Sentence, expect_end, expect_word, read_codelet, read_sentence, read_sentence_v4,
-    subject_end, take_record_subject, take_text, take_uint32, take_uint32_vector, take_vector,
+    RecordSubject, Sentence, expect_end, expect_word, read_codelet, read_sentence,
+    read_sentence_v4, subject_end, take_record_subject, take_text, take_uint32, take_uint32_vector,
+    take_vector,
 };
 use super::volume_records::INDEX_SUBJECT;
 use super::{OperationArgumentType, OperationSignatureKey};

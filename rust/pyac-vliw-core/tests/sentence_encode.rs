@@ -1,6 +1,4 @@
-use pyac_vliw_core::{
-    decode_sentence, validate_encode, Codelets, EncodeField, EncodeSentence,
-};
+use pyac_vliw_core::{Codelets, EncodeField, EncodeSentence, decode_sentence, validate_encode};
 
 const NAME_TYPE: u32 = 0x225e;
 const SA: u32 = 0x253e; // you_ (grammar form)
@@ -47,7 +45,11 @@ fn encode_then_decode_recovers_the_same_structure() {
     let fields = decoded.fields();
     assert_eq!(fields.len(), 1);
     assert_eq!(fields[0].case, NA);
-    assert_eq!((fields[0].start, fields[0].length), (0, 2), "name-type + sa");
+    assert_eq!(
+        (fields[0].start, fields[0].length),
+        (0, 2),
+        "name-type + sa"
+    );
     assert_eq!(decoded.verb(), (3, 1), "pyan");
     assert_eq!(decoded.mood(), LI);
 }
@@ -72,11 +74,21 @@ fn a_long_sentence_streams_across_codelets() {
     let value_a = [NAME_TYPE, SA];
     let value_b = [NAME_TYPE, SA];
     let fields = Box::leak(Box::new([
-        EncodeField { case: NA, value: &value_a },
-        EncodeField { case: 0x245e, value: &value_b }, // accusative
+        EncodeField {
+            case: NA,
+            value: &value_a,
+        },
+        EncodeField {
+            case: 0x245e,
+            value: &value_b,
+        }, // accusative
     ]));
     let verb = [PYAN];
-    let sentence = EncodeSentence { fields, verb: &verb, mood: LI };
+    let sentence = EncodeSentence {
+        fields,
+        verb: &verb,
+        mood: LI,
+    };
     validate_encode(&sentence).expect("valid");
 
     let codelets: Vec<_> = Codelets::new(&sentence).collect();
@@ -99,7 +111,10 @@ fn a_malformed_sentence_is_rejected_before_streaming() {
     // An empty field value is malformed too.
     let empty: [u32; 0] = [];
     let bad = EncodeSentence {
-        fields: Box::leak(Box::new([EncodeField { case: NA, value: &empty }])),
+        fields: Box::leak(Box::new([EncodeField {
+            case: NA,
+            value: &empty,
+        }])),
         verb: &[PYAN],
         mood: LI,
     };

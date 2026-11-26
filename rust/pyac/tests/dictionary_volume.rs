@@ -2,10 +2,10 @@ use std::fs::File;
 use std::io::Cursor;
 
 use pyac::dictionary::{
-    DictionaryField, DictionaryFileReader, DictionaryMetadata, DictionaryValue,
-    DictionaryVolume, DictionaryVolumeEntry, LexicalForm, OperationArgument,
-    OperationArgumentType, OperationSignature, OperationSignatureKey, SourceGloss, SourceLink,
-    encode_dictionary, encode_text_sentence,
+    DictionaryField, DictionaryFileReader, DictionaryMetadata, DictionaryValue, DictionaryVolume,
+    DictionaryVolumeEntry, LexicalForm, OperationArgument, OperationArgumentType,
+    OperationSignature, OperationSignatureKey, SourceGloss, SourceLink, encode_dictionary,
+    encode_text_sentence,
 };
 
 const ENTRY_KEY: [u16; 2] = [0xa96a, 0x6c22]; // tlat kwon

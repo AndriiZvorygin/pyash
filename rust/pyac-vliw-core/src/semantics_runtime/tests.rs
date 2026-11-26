@@ -107,10 +107,10 @@ mod basic;
 mod iwsp_vector_ops;
 #[path = "tests/matrix_vector_storage.rs"]
 mod matrix_vector_storage;
-#[path = "tests/pluk_tlas.rs"]
-mod pluk_tlas;
 #[path = "tests/parser_equivalence.rs"]
 mod parser_equivalence;
+#[path = "tests/pluk_tlas.rs"]
+mod pluk_tlas;
 #[path = "tests/programlet.rs"]
 mod programlet;
 #[path = "tests/programlet_signature_dispatch.rs"]

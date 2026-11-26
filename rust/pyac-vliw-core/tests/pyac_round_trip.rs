@@ -1,6 +1,6 @@
 use pyac_vliw_core::{
-    decode_sentence, validate_encode, word_code::decode as decode_word, word_code::encode as encode_word,
-    Codelets, EncodeField, EncodeSentence,
+    Codelets, EncodeField, EncodeSentence, decode_sentence, validate_encode,
+    word_code::decode as decode_word, word_code::encode as encode_word,
 };
 
 /// Compose the spoken form of a decoded sentence, fusing a value with the case
