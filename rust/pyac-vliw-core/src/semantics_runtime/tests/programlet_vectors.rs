@@ -1,22 +1,27 @@
 use super::*;
 
-// A section name is one or more root words; `0x2b73` is `dlek` (a class word),
-// so the second root carries the identity.
-const SOFTMAX_NAME: [u32; 2] = [0x6844, 0xa8a0];
-const LOGITS_NAME: u32 = 0xa8a0;
-const ANSWER_NAME: u32 = 0x4930;
-/// `hgut` = count. This is the atom, and it is what `MAXIMUM_NAME` and
-/// `DENOMINATOR_NAME` below both were: two names for one value, used in the
-/// same file to mean different things. The slot names stay as local aliases so
-/// each use still reads as what the test is doing.
-const COUNT: u32 = 0xaa90;
-const MAXIMUM_NAME: u32 = COUNT;
-const SHIFTED_NAME: u32 = 0x6844;
-/// `dlek` = vector.
+// Section names in this fixture, each written as the atom it actually is. The
+// aliases beside each atom say what the test is using it for, which is the only
+// place that intent belongs — an atom does not mean "logits" because a test
+// section is called logits.
+//
+// `psin` = weight, `hzit` = feature, `hgut` = count, `dlek` = vector,
+// `hnap` = answer.
+const WEIGHT_WORD: u32 = 0x6844;
+const FEATURE_WORD: u32 = 0xa8a0;
+const COUNT_WORD: u32 = 0xaa90;
 const VECTOR_WORD: u32 = 0x2b73;
+const ANSWER_WORD: u32 = 0x4930;
+
+/// The softmax section name is the two-word `weight feature`.
+const SOFTMAX_NAME: [u32; 2] = [WEIGHT_WORD, FEATURE_WORD];
+const LOGITS_NAME: u32 = FEATURE_WORD;
+const ANSWER_NAME: u32 = ANSWER_WORD;
+const MAXIMUM_NAME: u32 = COUNT_WORD;
+const SHIFTED_NAME: u32 = WEIGHT_WORD;
 const EXPONENTIALS_NAME: u32 = VECTOR_WORD;
-const DENOMINATOR_NAME: u32 = COUNT;
-const ANSWER_ROUTINE: u32 = 0x4930;
+const DENOMINATOR_NAME: u32 = COUNT_WORD;
+const ANSWER_ROUTINE: u32 = ANSWER_WORD;
 
 fn append_sentence(words: &mut std::vec::Vec<u32>, tokens: &[u32], boundaries: &[usize]) {
     for (index, chunk) in tokens.chunks(CODELET_WORDS - 1).enumerate() {
