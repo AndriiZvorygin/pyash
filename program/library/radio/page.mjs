@@ -65,6 +65,12 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
   .words .now-line { color: #e8e6e1; font-size: 1.05rem; line-height: 1.5; }
   .words .next-line { color: #6f7380; font-size: .95rem; line-height: 1.5; margin-top: .35rem; }
   .words .empty { color: #6f7380; font-size: .95rem; }
+  .find { margin: 0 0 .75rem; display: flex; gap: .6rem; align-items: center; }
+  .find input { flex: 1; padding: .5rem .7rem; border-radius: .45rem; border: 1px solid #2b2f3a;
+                background: #14171e; color: #e8e6e1; font-size: .95rem; font-family: inherit; }
+  .find input:focus { outline: none; border-color: #4a3d22; }
+  .find .count { color: #6f7380; font-size: .85rem; white-space: nowrap; }
+  .empty-list { color: #6f7380; font-size: .95rem; }
 </style>
 </head>
 <body>
@@ -86,6 +92,10 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
   </div>
   <h2>Catalogue</h2>
   <p class="tagline">Every song can be taken home.</p>
+  <div class="find">
+    <input id="find" type="search" placeholder="Find a song" autocomplete="off" aria-label="Find a song">
+    <span class="count" id="find-count"></span>
+  </div>
   <ol id="catalogue"></ol>
 </main>
 <script>
@@ -101,6 +111,9 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
   let words = { filename: "", source: "none", lines: [] };
   let clockOffset = 0;
   let shownLine = -1;
+  // The catalogue as the station last reported it, so the listener can find a
+  // song by a word of its name without the station being asked again.
+  let catalogue = [];
 
   function downloadLink(url, label) {
     if (!url) return null;
@@ -204,28 +217,53 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
     try {
       const response = await fetch(${JSON.stringify(playlistUrl)}, { cache: "no-store" });
       const payload = await response.json();
-      const list = document.getElementById("catalogue");
-      list.innerHTML = "";
       // The list is alphabetical, so a listener can find a song by its name.
       // The station itself does not play in this order: the programme plays
       // the house's songs first and then the lanes, and the bag decides the
       // rest.
-      const tracks = [...(payload.tracks || [])].sort((a, b) =>
+      catalogue = [...(payload.tracks || [])].sort((a, b) =>
         String(a.title ?? "").localeCompare(String(b.title ?? "")));
-      for (const track of tracks) {
-        const item = document.createElement("li");
-        const meta = document.createElement("span");
-        meta.className = "meta";
-        meta.textContent = " - " + track.engine + " - " + Math.round(track.durationSeconds || 0) + "s";
-        item.append(track.title, meta);
-        const link = downloadLink(track.downloadUrl, "Download");
-        if (link) item.append(link);
-        list.append(item);
-      }
+      renderCatalogue();
     } catch (error) {
       // the catalogue is a convenience; the stream is the station
     }
   }
+
+  function renderCatalogue() {
+    const list = document.getElementById("catalogue");
+    const count = document.getElementById("find-count");
+    const asked = String(document.getElementById("find").value ?? "").trim().toLowerCase();
+    const found = asked
+      ? catalogue.filter((track) => String(track.title ?? "").toLowerCase().includes(asked)
+        || String(track.topic ?? "").toLowerCase().includes(asked)
+        || String(track.engine ?? "").toLowerCase().includes(asked))
+      : catalogue;
+    list.replaceChildren();
+    if (asked) {
+      count.textContent = found.length + " of " + catalogue.length;
+    } else {
+      count.textContent = catalogue.length + " songs";
+    }
+    if (!found.length) {
+      const empty = document.createElement("li");
+      empty.className = "empty-list";
+      empty.textContent = "No song carries that name.";
+      list.append(empty);
+      return;
+    }
+    for (const track of found) {
+      const item = document.createElement("li");
+      const meta = document.createElement("span");
+      meta.className = "meta";
+      meta.textContent = " - " + track.engine + " - " + Math.round(track.durationSeconds || 0) + "s";
+      item.append(track.title, meta);
+      const link = downloadLink(track.downloadUrl, "Download");
+      if (link) item.append(link);
+      list.append(item);
+    }
+  }
+
+  document.getElementById("find").addEventListener("input", renderCatalogue);
 
   refresh();
   loadCatalogue();

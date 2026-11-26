@@ -629,3 +629,12 @@ test("the station page lists the catalogue in alphabetical order", () => {
   assert.match(page, /sort\(\(a, b\) =>/u);
   assert.match(page, /String\(a\.title \?\? ""\)\.localeCompare\(String\(b\.title \?\? ""\)\)/u);
 });
+
+test("a listener can find a song on the page by a word of its name", () => {
+  const page = renderStationPage({ stationName: "Zvorygin Radio", streamUrl: "/stream.mp3" });
+  assert.match(page, /id="find"/u, "the page carries a field to find a song");
+  assert.match(page, /id="find-count"/u, "the page says how many songs carry the name");
+  assert.match(page, /addEventListener\("input", renderCatalogue\)/u, "the list follows what is typed");
+  assert.match(page, /toLowerCase\(\)\.includes\(asked\)/u, "the name is matched without regard to case");
+  assert.match(page, /No song carries that name\./u, "the page says when nothing matches");
+});
