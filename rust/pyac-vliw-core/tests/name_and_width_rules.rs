@@ -46,12 +46,3 @@ fn width_words_are_quantity_words_not_name_markers() {
     assert!(is_grammar(encode("gi").unwrap()));
     assert_ne!(encode("gi").unwrap(), WIDTH_U16 as u16);
 }
-
-#[test]
-fn a_u8_width_cannot_hold_a_wider_value() {
-    // 255 fits in a uint8; 256 and 3940 do not.
-    assert!(u8::try_from(255u32).is_ok());
-    assert!(u8::try_from(256u32).is_err());
-    assert!(u8::try_from(3940u32).is_err());
-    let _ = (WIDTH_U8, WIDTH_U16, NOMINATIVE);
-}
