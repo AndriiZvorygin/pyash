@@ -66,21 +66,41 @@ use super::DictionaryIndex;
 /// module exists to avoid.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ArgumentSlot {
+    /// The grammatical case, WordNet `n:06321935-n`. Key `gvak`:
+    /// `pyash dict from pyac gvak`.
     pub grammatical_case: Vec<u16>,
     /// The noun classes this slot accepts, as HNUC sequences. A noun class is
     /// what dispatch discriminates on; it is not a coarse scalar type.
     pub noun_class: Vec<u16>,
 }
 
-/// One case-keyed input.
+/// One case-keyed input — a parameter.
+///
+/// The sense is WordNet `n:06367706-n`, *"a reference or value that is passed to
+/// a function, procedure, subroutine, command, or program"*. Ask the reference
+/// volume for it directly:
+///
+/// ```text
+/// pyash dict from pyac "tlas hrut"      # 1:1, one sense
+/// pyash dict n:06367706-n               # the same entry by sense id
+/// ```
+///
+/// Use the compound key, not the bare word: `pyash dict from en argument`
+/// returns eight senses and `parameter` returns four, so only the compound
+/// identifies this one.
 ///
 /// `case_type` is the contract; `label` and `description` are documentation and
 /// never take part in matching. `label` does affect sort order (see `volume.rs`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OperationArgument {
     pub case_type: ArgumentSlot,
-    /// Documentation. Not the `name_` noun class, and never part of the key.
+    /// Documentation: a brief description for identification, WordNet
+    /// `n:07217239-n`. Key `tyec dlut`: `pyash dict from pyac "tyec dlut"`.
+    ///
+    /// Not the `name_` noun class, and never part of the key.
     pub label: String,
+    /// Documentation: a statement that represents something in words, WordNet
+    /// `n:06737512-n`. Key `drut pfif`: `pyash dict from pyac "drut pfif"`.
     pub description: String,
 }
 

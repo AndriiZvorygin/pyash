@@ -137,6 +137,32 @@ fn the_argument_result_split_is_stated() {
     );
 }
 
+/// The four grounded .rs concepts must cite a real sense and a real volume key,
+/// and that key must be the one that resolves to it. A doc comment naming a
+/// sense the volume does not carry is worse than no comment: it reads as
+/// authoritative and is wrong.
+#[test]
+fn documented_senses_are_the_ones_in_the_reference_volume() {
+    let source = read("src/dictionary/operation.rs");
+    // (sense id, pya key, where it should be cited)
+    let expected = [
+        ("n:06367706-n", "tlas hrut", "OperationArgument"),
+        ("n:07217239-n", "tyec dlut", "label"),
+        ("n:06737512-n", "drut pfif", "description"),
+        ("n:06321935-n", "gvak", "grammatical_case"),
+    ];
+    for (sense, key, what) in expected {
+        assert!(
+            source.contains(sense),
+            "operation.rs should cite WordNet sense {sense} for `{what}`"
+        );
+        assert!(
+            source.contains(key),
+            "operation.rs should cite the reference key `{key}` for `{what}`, so the sense is reachable with `pyash dict`"
+        );
+    }
+}
+
 /// Documentation fields are `label`, never `name`. `name` is the name noun class
 /// (`gi`), and a field called `name` invites a reader to put the noun class into
 /// a documentation slot.
