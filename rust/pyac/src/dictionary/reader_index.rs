@@ -4,17 +4,13 @@ use super::reader_codec::{
     subject_end, take_record_subject, take_text, take_uint32, take_uint32_vector, take_vector,
 };
 use super::volume_records::INDEX_SUBJECT;
+use super::words::{
+    KA_ACCUSATIVE, LWOH_LOCATIVE, MA_DESTINATION, MWAH_COMITATIVE, SO_SOURCE, SWIH_ESSIVE,
+    YU_INSTRUMENTAL,
+};
 use super::{OperationArgumentType, OperationSignatureKey};
 use std::io::{Read, Seek};
 use unicode_normalization::UnicodeNormalization;
-
-const OB: u16 = 0x245e;
-const AS: u16 = 0x414f;
-const FROM: u16 = 0x313e;
-const TO: u16 = 0x243e;
-const BY: u16 = 0x287e;
-const WITH: u16 = 0x490f;
-const AT: u16 = 0x615f;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum DirectIndexLookup<'a> {
@@ -173,22 +169,22 @@ fn parse_v4_record(
     let key = match subject {
         RecordSubject::Name(name) => {
             let offset = take_uint32(words, &mut cursor)?;
-            expect_word(words, &mut cursor, AT)?;
+            expect_word(words, &mut cursor, LWOH_LOCATIVE)?;
             DirectIndexKey::Canonical(name).with_offsets(vec![offset], next)
         }
         RecordSubject::Text(surface) => {
             let first = take_text(words, &mut cursor)?;
-            expect_word(words, &mut cursor, AS)?;
+            expect_word(words, &mut cursor, SWIH_ESSIVE)?;
             let (key, offsets) = if words.get(cursor).copied() == Some(0x0e1d) {
                 let release = take_text(words, &mut cursor)?;
-                expect_word(words, &mut cursor, FROM)?;
+                expect_word(words, &mut cursor, SO_SOURCE)?;
                 let dataset = first;
                 let offsets = take_offsets(words, &mut cursor)?;
-                expect_word(words, &mut cursor, AT)?;
+                expect_word(words, &mut cursor, LWOH_LOCATIVE)?;
                 (DirectIndexKey::Source(surface, dataset, release), offsets)
             } else {
                 let offsets = take_offsets(words, &mut cursor)?;
-                expect_word(words, &mut cursor, AT)?;
+                expect_word(words, &mut cursor, LWOH_LOCATIVE)?;
                 (
                     DirectIndexKey::Surface(surface.encode_utf16().collect(), first),
                     offsets,
@@ -198,7 +194,7 @@ fn parse_v4_record(
         }
         RecordSubject::Uint16Vector(signature) => {
             let offsets = take_offsets(words, &mut cursor)?;
-            expect_word(words, &mut cursor, AT)?;
+            expect_word(words, &mut cursor, LWOH_LOCATIVE)?;
             DirectIndexKey::Operation(signature).with_offsets(offsets, next)
         }
     };
@@ -284,13 +280,13 @@ pub(super) fn lookup_legacy_surface<R: Read + Seek>(
     let mut matches = Vec::new();
     for_each_sentence(source, section, limit, |_, words| {
         let mut cursor = index_subject(words)?;
-        expect_text(words, &mut cursor, OB, "language-surface")?;
+        expect_text(words, &mut cursor, KA_ACCUSATIVE, "language-surface")?;
         let candidate_language = take_text(words, &mut cursor)?;
-        expect_word(words, &mut cursor, AS)?;
+        expect_word(words, &mut cursor, SWIH_ESSIVE)?;
         let candidate_surface = take_text(words, &mut cursor)?;
-        expect_word(words, &mut cursor, FROM)?;
+        expect_word(words, &mut cursor, SO_SOURCE)?;
         let key = take_vector(words, &mut cursor)?;
-        expect_word(words, &mut cursor, TO)?;
+        expect_word(words, &mut cursor, MA_DESTINATION)?;
         expect_end(words, &mut cursor)?;
         if candidate_language == language && candidate_surface == normalized {
             matches.push(key);
@@ -313,17 +309,17 @@ pub(super) fn lookup_legacy_source<R: Read + Seek>(
     let mut matches = Vec::new();
     for_each_sentence(source, section, limit, |_, words| {
         let mut cursor = index_subject(words)?;
-        expect_text(words, &mut cursor, OB, "external-source")?;
+        expect_text(words, &mut cursor, KA_ACCUSATIVE, "external-source")?;
         let candidate_dataset = take_text(words, &mut cursor)?;
-        expect_word(words, &mut cursor, AS)?;
+        expect_word(words, &mut cursor, SWIH_ESSIVE)?;
         let candidate_release = take_text(words, &mut cursor)?;
-        expect_word(words, &mut cursor, FROM)?;
+        expect_word(words, &mut cursor, SO_SOURCE)?;
         let candidate_identifier = take_text(words, &mut cursor)?;
-        expect_word(words, &mut cursor, TO)?;
+        expect_word(words, &mut cursor, MA_DESTINATION)?;
         let key = take_vector(words, &mut cursor)?;
-        expect_word(words, &mut cursor, BY)?;
+        expect_word(words, &mut cursor, YU_INSTRUMENTAL)?;
         let _relation = take_text(words, &mut cursor)?;
-        expect_word(words, &mut cursor, WITH)?;
+        expect_word(words, &mut cursor, MWAH_COMITATIVE)?;
         expect_end(words, &mut cursor)?;
         if candidate_dataset == dataset
             && candidate_release == release
@@ -347,11 +343,11 @@ pub(super) fn lookup_legacy_operation<R: Read + Seek>(
     let mut matches = Vec::new();
     for_each_sentence(source, section, limit, |_, words| {
         let mut cursor = index_subject(words)?;
-        expect_text(words, &mut cursor, OB, "operation-signature")?;
+        expect_text(words, &mut cursor, KA_ACCUSATIVE, "operation-signature")?;
         let dispatch = take_vector(words, &mut cursor)?;
-        expect_word(words, &mut cursor, FROM)?;
+        expect_word(words, &mut cursor, SO_SOURCE)?;
         let key = take_vector(words, &mut cursor)?;
-        expect_word(words, &mut cursor, TO)?;
+        expect_word(words, &mut cursor, MA_DESTINATION)?;
         expect_end(words, &mut cursor)?;
         if &decode_signature(&dispatch)? == lookup {
             matches.push(key);

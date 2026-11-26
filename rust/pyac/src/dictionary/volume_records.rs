@@ -1,8 +1,11 @@
 use super::operation::{OperationArgumentType, OperationSignature};
 use super::volume::{DictionaryMetadata, DictionaryVolumeError};
 use super::wire::{
-    AS, AT, BY, FROM, Field, OB, Subject, TO, Value, WITH, encode_index_sentence_v4,
-    encode_sentence, encode_text_sentence,
+    Field, Subject, Value, encode_index_sentence_v4, encode_sentence, encode_text_sentence,
+};
+use super::words::{
+    KA_ACCUSATIVE, LWOH_LOCATIVE, MA_DESTINATION, MWAH_COMITATIVE, SO_SOURCE, SWIH_ESSIVE,
+    YU_INSTRUMENTAL,
 };
 use super::{DictionaryEntry, DictionaryVolumeEntry};
 use crate::WORDS_PER_CODELET;
@@ -106,24 +109,24 @@ pub(super) fn profile_records_v4(
 ) -> Result<(Vec<[u16; WORDS_PER_CODELET]>, Vec<[u16; WORDS_PER_CODELET]>), DictionaryVolumeError> {
     let marker = sentence(
         PROFILE_SUBJECT.as_slice(),
-        &[text_field(OB, &metadata.kind)],
+        &[text_field(KA_ACCUSATIVE, &metadata.kind)],
     )?;
     let revision = [metadata.revision as u16, (metadata.revision >> 16) as u16];
     let languages = metadata.languages.join(",");
     let metadata_record = sentence(
         PROFILE_SUBJECT.as_slice(),
         &[
-            text_field(OB, &metadata.title),
-            vector_field(AS, &revision),
-            text_field(FROM, &languages),
-            text_field(TO, &metadata.normalization_policy),
+            text_field(KA_ACCUSATIVE, &metadata.title),
+            vector_field(SWIH_ESSIVE, &revision),
+            text_field(SO_SOURCE, &languages),
+            text_field(MA_DESTINATION, &metadata.normalization_policy),
             Field {
-                grammatical_case: BY,
+                grammatical_case: YU_INSTRUMENTAL,
                 value: Value::Uint16(TOC_ROLES_V4.len() as u16),
             },
-            text_field(WITH, PROFILE_VERSION),
+            text_field(MWAH_COMITATIVE, PROFILE_VERSION),
             Field {
-                grammatical_case: AT,
+                grammatical_case: LWOH_LOCATIVE,
                 value: Value::Uint32(
                     u32::try_from(entry_count)
                         .map_err(|_| DictionaryVolumeError::TooManyCodelets)?,
@@ -149,10 +152,10 @@ pub(super) fn toc_records_v4(
             CONTENTS_SUBJECT.as_slice(),
             &[
                 Field {
-                    grammatical_case: OB,
+                    grammatical_case: KA_ACCUSATIVE,
                     value: Value::Uint16(ordinal as u16),
                 },
-                vector_field(FROM, &words),
+                vector_field(SO_SOURCE, &words),
             ],
         )?);
     }
@@ -183,9 +186,9 @@ pub(super) fn encode_entry_v4(
         output.extend(encode_sentence(
             Subject::Name(key),
             &[
-                text_field(AS, &form.language),
-                text_field(FROM, &form.surface),
-                text_field(TO, &form.normalized),
+                text_field(SWIH_ESSIVE, &form.language),
+                text_field(SO_SOURCE, &form.surface),
+                text_field(MA_DESTINATION, &form.normalized),
             ],
         )?);
     }
@@ -193,10 +196,10 @@ pub(super) fn encode_entry_v4(
         output.extend(encode_sentence(
             Subject::Name(key),
             &[
-                text_field(AS, &link.dataset),
-                text_field(FROM, &link.release),
-                text_field(TO, &link.identifier),
-                text_field(BY, &link.relation),
+                text_field(SWIH_ESSIVE, &link.dataset),
+                text_field(SO_SOURCE, &link.release),
+                text_field(MA_DESTINATION, &link.identifier),
+                text_field(YU_INSTRUMENTAL, &link.relation),
             ],
         )?);
     }
@@ -204,37 +207,37 @@ pub(super) fn encode_entry_v4(
         output.extend(encode_sentence(
             Subject::Name(key),
             &[
-                text_field(AS, &gloss.language),
-                text_field(FROM, &gloss.dataset),
-                text_field(TO, &gloss.release),
-                text_field(BY, &gloss.identifier),
-                text_field(WITH, &gloss.text),
+                text_field(SWIH_ESSIVE, &gloss.language),
+                text_field(SO_SOURCE, &gloss.dataset),
+                text_field(MA_DESTINATION, &gloss.release),
+                text_field(YU_INSTRUMENTAL, &gloss.identifier),
+                text_field(MWAH_COMITATIVE, &gloss.text),
             ],
         )?);
     }
     for component in &entry.component_keys {
         output.extend(encode_sentence(
             Subject::Name(key),
-            &[vector_field(FROM, component)],
+            &[vector_field(SO_SOURCE, component)],
         )?);
     }
     for task in &entry.task_keys {
         output.extend(encode_sentence(
             Subject::Name(key),
-            &[vector_field(WITH, task)],
+            &[vector_field(MWAH_COMITATIVE, task)],
         )?);
     }
     for reference in &entry.references {
         output.extend(encode_sentence(
             Subject::Name(key),
-            &[vector_field(TO, reference)],
+            &[vector_field(MA_DESTINATION, reference)],
         )?);
     }
     for signature in &entry.operation_signatures {
         let dispatch = signature_words(signature)?;
         output.extend(encode_sentence(
             Subject::Name(key),
-            &[vector_field(BY, &dispatch)],
+            &[vector_field(YU_INSTRUMENTAL, &dispatch)],
         )?);
         for argument in &signature.arguments {
             let mut key_words = Vec::new();
@@ -242,9 +245,9 @@ pub(super) fn encode_entry_v4(
             output.extend(encode_sentence(
                 Subject::Name(key),
                 &[
-                    vector_field(AS, &key_words),
-                    text_field(FROM, &argument.name),
-                    text_field(TO, &argument.description),
+                    vector_field(SWIH_ESSIVE, &key_words),
+                    text_field(SO_SOURCE, &argument.name),
+                    text_field(MA_DESTINATION, &argument.description),
                 ],
             )?);
         }
@@ -252,9 +255,9 @@ pub(super) fn encode_entry_v4(
             output.extend(encode_sentence(
                 Subject::Name(key),
                 &[
-                    vector_field(AS, &result.value_type),
-                    text_field(BY, &result.name),
-                    text_field(WITH, &result.description),
+                    vector_field(SWIH_ESSIVE, &result.value_type),
+                    text_field(YU_INSTRUMENTAL, &result.name),
+                    text_field(MWAH_COMITATIVE, &result.description),
                 ],
             )?);
         }
@@ -301,7 +304,7 @@ pub(super) fn index_records_v4(
         canonical.extend(encode_index_sentence_v4(
             Subject::Name(&entry.key),
             &[Field {
-                grammatical_case: AT,
+                grammatical_case: LWOH_LOCATIVE,
                 value: Value::Uint32(offset),
             }],
         )?);
@@ -349,7 +352,7 @@ pub(super) fn index_records_v4(
             .collect::<Vec<_>>();
         surfaces.extend(encode_index_sentence_v4(
             Subject::Text(&surface),
-            &[text_field(AS, language), offsets_field(&offsets)],
+            &[text_field(SWIH_ESSIVE, language), offsets_field(&offsets)],
         )?);
         cursor = end;
     }
@@ -375,8 +378,8 @@ pub(super) fn index_records_v4(
         sources.extend(encode_index_sentence_v4(
             Subject::Text(identifier),
             &[
-                text_field(AS, dataset),
-                text_field(FROM, release),
+                text_field(SWIH_ESSIVE, dataset),
+                text_field(SO_SOURCE, release),
                 offsets_field(&offsets),
             ],
         )?);
@@ -407,12 +410,12 @@ pub(super) fn index_records_v4(
 fn offsets_field(offsets: &[u32]) -> Field<'_> {
     if offsets.len() == 1 {
         Field {
-            grammatical_case: AT,
+            grammatical_case: LWOH_LOCATIVE,
             value: Value::Uint32(offsets[0]),
         }
     } else {
         Field {
-            grammatical_case: AT,
+            grammatical_case: LWOH_LOCATIVE,
             value: Value::Uint32Vector(offsets),
         }
     }

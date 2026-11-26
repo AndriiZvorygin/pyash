@@ -7,6 +7,7 @@ mod reader_index;
 mod volume;
 mod volume_records;
 mod wire;
+mod words;
 
 pub use index::DictionaryIndex;
 pub use model::{DictionaryEntry, DictionaryIndexError, LexicalForm, SourceGloss, SourceLink};
