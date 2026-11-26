@@ -34,6 +34,24 @@ test("local maintainer tests configured development branches in an isolated work
   assert.match(runner, /MAX_REPAIRS=\$\{PYA_MASTER_SAFETY_MAX_REPAIRS:-2\}/u);
 });
 
+test("promotion runs repository and Rust CI checks before pushing the candidate", () => {
+  const runner = read("run_local_master_safety.sh");
+  const rustChecks = read("run_rust_ci_checks.sh");
+  const workflow = fs.readFileSync(path.join(repoRoot, ".github", "workflows", "ci.yml"), "utf8");
+  const testSuite = runner.indexOf('run_suite_command "full Node CI-tier tests"');
+  const rustGate = runner.indexOf('run_suite_command "Rust formatting, tests, and target builds"');
+  const push = runner.indexOf('git -C "$WORKTREE" push --atomic "$push_remote"');
+
+  assert.ok(testSuite >= 0 && testSuite < rustGate && rustGate < push);
+  assert.match(runner, /run_suite_command "GPU Housekeeper tests" npm run test:gpu-housekeeper/u);
+  assert.match(runner, /run_suite_command "documentation prose check" npm run doc:prose/u);
+  assert.match(runner, /run_suite_command "import graph check" npm run imports:check/u);
+  assert.match(runner, /run_suite_command "house API check" npm run house:api:check/u);
+  assert.match(rustChecks, /cargo fmt --manifest-path rust\/pyac-vliw-core\/Cargo\.toml -- --check/u);
+  assert.match(rustChecks, /cargo test --manifest-path rust\/pyac-vliw-core\/Cargo\.toml/u);
+  assert.match(workflow, /run: bash command\/run_rust_ci_checks\.sh/u);
+});
+
 test("Codex repair uses the requested Luna xhigh full-access profile and verification gate", () => {
   const runner = read("run_local_master_safety.sh");
   assert.match(runner, /MODEL=\$\{PYA_MASTER_SAFETY_MODEL:-gpt-6-luna\}/u);
