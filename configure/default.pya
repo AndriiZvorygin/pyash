@@ -179,6 +179,7 @@ exists su name zim archive search server ob text "http://[::1]:8091" be default 
 exists su name archive focus page size bytes ob num 8388608 be default ya
 exists su name archive focus result size bytes ob num 16000 be default ya
 exists su name zim website capture image ob text "ghcr.io/openzim/zimit" be default ya
+exists su name default language ob text "en" be default ya
 exists su name zim archive default language ob text "eng" be default ya
 exists su name zim archive default creator ob text "Pyash" be default ya
 exists su name zim archive default publisher ob text "Pyash" be default ya

@@ -178,11 +178,30 @@ test("`from en` and `from pyac` disagree where the two readings differ", async (
   assert.deepEqual(pyac.matches, [], "the Pyac reading is a clean miss");
 });
 
-test("`from en` resolves a word that the default path would read as Pyac", async () => {
-  // `argument` is the Pyac atom `hrut`, so the default path returns one entry.
-  // The English reading is a different, larger result set.
-  const english = await runPyacDictionary(["reference", "from", "en", "argument"], silent);
-  const plain = await runPyacDictionary(["reference", "argument"], silent);
-  assert.ok(english.matches.length > 1, `expected several English senses, saw ${english.matches.length}`);
-  assert.ok(plain.key, "the default path reads the Pyac atom");
+test("the default reading follows the configured language, not the spelling", async () => {
+  // `name` is an English word whose letters also spell the Pyac run `na me`.
+  // The default must give the English senses, because that is what a user
+  // typing an English word means — reading it as Pyac because the letters
+  // happen to spell atoms is the guess this replaces.
+  const plain = await runPyacDictionary(["reference", "name"], silent);
+  const english = await runPyacDictionary(["reference", "from", "en", "name"], silent);
+  const pyac = await runPyacDictionary(["reference", "from", "pyac", "name"], silent);
+  assert.ok(plain.matches.length > 1, `expected English senses by default, saw ${plain.matches.length}`);
+  assert.equal(plain.matches.length, english.matches.length, "the default agrees with `from en`");
+  assert.deepEqual(pyac.atoms, ["na", "me"], "`from pyac` still reads the glyphs");
+});
+
+test("a written Pyac key still resolves when the default language is English", async () => {
+  // `dvis` is not an English word. The default English reading misses, so the
+  // lookup must fall through to the Pyac key rather than reporting no entry.
+  const plain = await runPyacDictionary(["reference", "dvis"], silent);
+  assert.equal(plain.key, "divisions");
+});
+
+test("`decode` reads as English even though its letters spell Pyac atoms", async () => {
+  // `decode` segments into `de co de` — all real atoms — but it is an English
+  // word and must resolve as one. This is the case that exposed the guess.
+  assert.deepEqual(segmentPyacWords("decode"), ["de", "co", "de"], "the glyph reading is exercised");
+  const plain = await runPyacDictionary(["reference", "decode"], silent);
+  assert.ok(plain.matches.length > 0, "the English word resolves by default");
 });

@@ -9,9 +9,15 @@ import { sentenceToPyash } from "../program/beautiful.mjs";
 import { buildDictionarySource } from "../program/library/dictionary/source.mjs";
 import { decodePyashProgram } from "../program/library/vliw/index.mjs";
 import { lookupLegacyName, lookupLegacyPyaName, lookupLegacyWord, lookupLegacyWordSequence, lookupPyaWordSequence } from "../program/library/vliw/quotes.mjs";
+import { resolveConfigText } from "../program/configure/env.mjs";
+import { remember } from "../program/remember/index.mjs";
+import { interpret } from "../program/bridge/index.mjs";
+import { loadDefaultConfig } from "./run_pya_helpers.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const referenceVolumePath = path.join(root, "program/library/dictionary/reference.pyac");
+/** Config is read once per process; a failed load is not retried. */
+let configureLoaded = false;
 const WORDNET_RELEASE = "Open English WordNet 2025";
 const SUMO_RELEASE = "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed";
 const binaryCandidates = [
@@ -258,6 +264,17 @@ async function runReferenceDictionary(args, { stdout = process.stdout } = {}) {
   if (!args.length || (args.at(-2) === "to" && args.at(-1) === "zh" && args.length <= 2)) {
     throw usageError("dictionary lookup requires an English word, Chinese form, WordNet sense id, or Pyash key");
   }
+  // Load the configured defaults so `default language` is available. A missing
+  // config is not an error here: the lookup still works with the built-in
+  // fallback, it just cannot honour a configured language.
+  if (!configureLoaded) {
+    configureLoaded = true;
+    try {
+      await loadDefaultConfig({ cwd: root, interpretFn: interpret, entryPath: root });
+    } catch {
+      // Fall back to the built-in default language.
+    }
+  }
   const binary = await executablePath();
   try {
     await fs.access(referenceVolumePath);
@@ -275,11 +292,11 @@ async function runReferenceDictionary(args, { stdout = process.stdout } = {}) {
 
   const query = args.join(" ").trim();
   if (!query) throw usageError("dictionary lookup requires a query");
-  // An explicit `from <language>` selects the interpretation, so an English word
-  // that happens to also be a Pyac atom is not silently read as Pyac (and vice
-  // versa). Without this, `pyash dict name` returns the atom `hnim` while
-  // `pyash dict label` returns the English surface — the conflation depends on
-  // whether the word happens to spell a Pyac atom.
+  // An explicit `from <language>` selects the interpretation. Without one, the
+  // configured default language decides — not the spelling. Guessing from the
+  // spelling meant `decode` was read as the Pyac run `de co de` and missed the
+  // English word entirely, so a word's meaning depended on whether its letters
+  // happened to spell atoms.
   const SOURCE_LANGUAGES = new Set(["pyac", "en", "zh"]);
   const sourceMatch = /^from\s+([a-z-]+)\s+/iu.exec(query);
   const explicitSource = sourceMatch && SOURCE_LANGUAGES.has(sourceMatch[1].toLowerCase())
@@ -288,7 +305,18 @@ async function runReferenceDictionary(args, { stdout = process.stdout } = {}) {
   const subject = explicitSource ? query.slice(sourceMatch[0].length).trim() : query;
   if (!subject) throw usageError("dictionary lookup requires a query after `from <language>`");
 
-  const isPyashKey = (text) => lookupLegacyWordSequence(text) !== null;
+  // The default comes from configuration so an English-language install reads
+  // queries as English. `pyac` remains reachable explicitly for a written key.
+  const configuredLanguage = String(
+    process.env.PYA_DEFAULT_LANGUAGE
+    || resolveConfigText("default language", { rememberFn: remember })
+    || "en"
+  ).trim().toLowerCase();
+  const defaultSource = SOURCE_LANGUAGES.has(configuredLanguage) && configuredLanguage !== "pyac"
+    ? configuredLanguage
+    : "en";
+  const impliedSource = explicitSource ?? defaultSource;
+
   // `from pyac` reads the text as Pyac spelling, so `name` is `na me`, never the
   // English word whose gloss is "name". Using the English-first resolver here
   // would return `hnim` for `name` and make the explicit source meaningless.
@@ -329,11 +357,17 @@ async function runReferenceDictionary(args, { stdout = process.stdout } = {}) {
     return { sequence, lines };
   };
   let result;
-  if (explicitSource === "en" || explicitSource === "zh") {
-    result = runBinary(binary, ["surface-entries", referenceVolumePath, explicitSource, subject]);
-  } else if (explicitSource === "pyac") {
-    // Prefer the compound entry when the volume has it; otherwise report the
-    // atoms the spelling resolves to, so the reading is never hidden. A
+  // A sense id or SUMO concept is self-identifying and only meaningful when no
+  // source was stated, so check those before the language dispatch.
+  if (!explicitSource && /^[anrvs]:\d{8}-[anrvs]$/iu.test(query)) {
+    result = runBinary(binary, ["source-entries", referenceVolumePath, "wordnet", WORDNET_RELEASE, query]);
+  } else if (!explicitSource && /^sumo:/iu.test(query)) {
+    result = runBinary(binary, ["source-entries", referenceVolumePath, "sumo", SUMO_RELEASE, query.slice(5)]);
+  } else if (impliedSource === "en" || impliedSource === "zh") {
+    result = runBinary(binary, ["surface-entries", referenceVolumePath, impliedSource, subject]);
+  } else {
+    // `pyac`: prefer the compound entry when the volume has it; otherwise report
+    // the atoms the spelling resolves to, so the reading is never hidden. A
     // grammar-only atom has no decodable entry, so a failure to render it is
     // not a reason to withhold the reading.
     const compound = keyLookup();
@@ -353,19 +387,24 @@ async function runReferenceDictionary(args, { stdout = process.stdout } = {}) {
     }
     stdout.write(`${subject}: no dictionary entry found\n`);
     return { query: subject, matches: [] };
-  } else if (/^[anrvs]:\d{8}-[anrvs]$/iu.test(query)) {
-    result = runBinary(binary, ["source-entries", referenceVolumePath, "wordnet", WORDNET_RELEASE, query]);
-  } else if (/^sumo:/iu.test(query)) {
-    result = runBinary(binary, ["source-entries", referenceVolumePath, "sumo", SUMO_RELEASE, query.slice(5)]);
-  } else if (args.every((word) => lookupLegacyPyaName(word)) || isPyashKey(query)) {
-    return keyEntry();
-  } else {
-    const language = [...query].some((character) => /\p{Script=Han}/u.test(character)) ? "zh" : "en";
-    result = runBinary(binary, ["surface-entries", referenceVolumePath, language, query]);
   }
 
   const entries = sourceMatchEntries(result);
   if (!entries.length) {
+    // The default language decides the first reading, but a written Pyac key is
+    // still a valid query: `dvis` is not English, and someone typing it means the
+    // atom. Only fall through when the text actually spells Pyac words.
+    if (!explicitSource && impliedSource !== "pyac") {
+      const sequence = lookupLegacyWordSequence(subject) ?? lookupPyaWordSequence(subject);
+      if (sequence) {
+        const found = keyLookup();
+        if (found !== null) {
+          const entry = summarizeEntryCodelets(found);
+          stdout.write(`${renderReferenceEntry(entry, subject)}\n`);
+          return entry;
+        }
+      }
+    }
     stdout.write(`${subject}: no dictionary entry found\n`);
     return { query: subject, matches: [] };
   }
