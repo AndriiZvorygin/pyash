@@ -744,6 +744,12 @@ apart. The songs the rotation file names are the ones that came before the
 radio: they are not lanes, so the producer never makes them again, and they are
 still songs the station is allowed to play.
 
+A song the house has no words for stays out of the programme. A listener reads
+along with the song, and a song without a sheet has nothing to read, so those
+names are not in `radio/rotation.txt`: the audio stays in the catalogue folder
+and in the import manifest, and comes back if the house ever writes words for
+it. Every song the station plays can be read along with.
+
 An experiment is a render whose name is not in the contract:
 `ace-step-dignity-reference-shape.mp3` is a try at a seed, a shape and a
 ballad, not a song of the rotation. Such a file stays on disk under
