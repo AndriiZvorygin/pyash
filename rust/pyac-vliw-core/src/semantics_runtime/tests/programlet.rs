@@ -60,7 +60,7 @@ fn loop_register_updates_its_reserved_slot_and_checks_capacity() {
 #[test]
 fn name_span_handles_compact_and_typed_fields_and_rejects_marker_collisions() {
     let mut words = std::vec::Vec::new();
-    append_sentence(&mut words, &[NAME_TYPE, 0x1234], &[2]);
+    append_sentence(&mut words, &[NAME_TYPE, 0xaaa2], &[2]);
     let view = SentenceView::new(&words, 0, 2);
     let mut name = NameSpan::EMPTY;
     assert_eq!(
@@ -79,27 +79,24 @@ fn name_span_handles_compact_and_typed_fields_and_rejects_marker_collisions() {
     assert_eq!(name.start, 1);
     assert_eq!(name.length, 1);
 
+    // A width-tagged value: `do <literal>`, with no name tag anywhere.
     let mut typed_words = std::vec::Vec::new();
-    append_sentence(
-        &mut typed_words,
-        &[NAME_TYPE, NUMBER_TYPE, NAME_TYPE, 0x5678],
-        &[4],
-    );
-    let typed_view = SentenceView::new(&typed_words, 0, 4);
+    append_sentence(&mut typed_words, &[NUMBER_TYPE, 0xaaa2], &[2]);
+    let typed_view = SentenceView::new(&typed_words, 0, 2);
     assert_eq!(
         name_span(
             &typed_view,
             SentenceField {
                 role: NOMINATIVE,
                 start: 0,
-                length: 4,
+                length: 2,
             },
             true,
             &mut name,
         ),
         0
     );
-    assert_eq!(name.start, 3);
+    assert_eq!(name.start, 1);
     assert_eq!(name.length, 1);
 
     let mut collision_words = std::vec::Vec::new();
@@ -126,18 +123,39 @@ fn name_span_handles_compact_and_typed_fields_and_rejects_marker_collisions() {
 
 #[test]
 fn typed_name_span_decodes_scalar_vector_and_untyped_field_layouts() {
+    // A width-tagged value carries one tag, the width word.
     let mut scalar_words = std::vec::Vec::new();
-    append_sentence(
-        &mut scalar_words,
-        &[NAME_TYPE, NUMBER_TYPE, NAME_TYPE, 0x1234],
-        &[4],
-    );
-    let scalar_view = SentenceView::new(&scalar_words, 0, 4);
+    append_sentence(&mut scalar_words, &[NUMBER_TYPE, 0xaaa2], &[2]);
+    let scalar_view = SentenceView::new(&scalar_words, 0, 2);
     let mut name = NameSpan::EMPTY;
     let mut kind = 0;
     assert_eq!(
         typed_name_span(
             &scalar_view,
+            SentenceField {
+                role: NOMINATIVE,
+                start: 0,
+                length: 2
+            },
+            &mut name,
+            &mut kind,
+        ),
+        0
+    );
+    assert_eq!(kind, VALUE_NUMBER);
+    assert_eq!((name.start, name.length), (1, 1));
+
+    // A vector name: class words lead, then `gi`, then the root.
+    let mut vector_words = std::vec::Vec::new();
+    append_sentence(
+        &mut vector_words,
+        &[VECTOR_TYPE, FLOAT_TYPE, NAME_TYPE, 0xaaa2],
+        &[4],
+    );
+    let vector_view = SentenceView::new(&vector_words, 0, 4);
+    assert_eq!(
+        typed_name_span(
+            &vector_view,
             SentenceField {
                 role: NOMINATIVE,
                 start: 0,
@@ -148,31 +166,8 @@ fn typed_name_span_decodes_scalar_vector_and_untyped_field_layouts() {
         ),
         0
     );
-    assert_eq!(kind, VALUE_NUMBER);
-    assert_eq!((name.start, name.length), (3, 1));
-
-    let mut vector_words = std::vec::Vec::new();
-    append_sentence(
-        &mut vector_words,
-        &[NAME_TYPE, VECTOR_TYPE, FLOAT_TYPE, NAME_TYPE, 0x5678],
-        &[5],
-    );
-    let vector_view = SentenceView::new(&vector_words, 0, 5);
-    assert_eq!(
-        typed_name_span(
-            &vector_view,
-            SentenceField {
-                role: NOMINATIVE,
-                start: 0,
-                length: 5
-            },
-            &mut name,
-            &mut kind,
-        ),
-        0
-    );
     assert_eq!(kind, VALUE_VECTOR_FLOAT);
-    assert_eq!((name.start, name.length), (4, 1));
+    assert_eq!((name.start, name.length), (3, 1));
 
     let mut plain_words = std::vec::Vec::new();
     append_sentence(&mut plain_words, &[NAME_TYPE, 0x9abc], &[2]);
@@ -363,3 +358,4 @@ fn rejects_incomplete_or_malformed_programlet_sentence_headers() {
 
 #[path = "programlet_conditionals.rs"]
 mod conditionals;
+

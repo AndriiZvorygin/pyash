@@ -88,6 +88,20 @@ fn is_vocal(first: u8) -> bool {
     matches!(first, b'b' | b'g' | b'd')
 }
 
+/// Classify an identity by its class bits, without spelling it.
+///
+/// The sort bits alone are not enough: a short root and a long root both have
+/// sort zero, because a short root's leading `h` occupies the first-consonant
+/// field with the code for "none". So this spells the identity and classifies
+/// the result, which is exactly what [`decode`] and [`classify`] already
+/// guarantee — and both are pinned against the reference codec over the whole
+/// vocabulary.
+pub fn classify_identity(value: u16) -> Option<WordClass> {
+    let mut buffer = [0u8; 6];
+    let length = decode(value, &mut buffer).ok()?;
+    classify(&buffer[..length]).ok()
+}
+
 /// Pack a spelling into its 16-bit identity.
 pub fn encode(word: &str) -> Result<u16, WordError> {
     let bytes = word.as_bytes();

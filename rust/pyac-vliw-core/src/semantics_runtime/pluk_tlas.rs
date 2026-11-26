@@ -241,20 +241,31 @@ fn output_name(
     group_len: usize,
     field: TokenSpan,
 ) -> Result<TokenSpan, u32> {
-    if field.length < 4
-        || token_at(words, start, group_len, field.start) != Some(NAME_TYPE)
-        || token_at(words, start, group_len, field.start + 2) != Some(NAME_TYPE)
-    {
+    // `<class words…> [gi] <name>`: the class word leads and `gi` marks the name.
+    let mut index = field.start;
+    let mut typed = false;
+    while index < field.start + field.length {
+        match token_at(words, start, group_len, index) {
+            Some(word) if is_width_word(word) => {
+                typed = true;
+                index += 1;
+            }
+            _ => break,
+        }
+    }
+    if !typed {
+        return Err(ERROR_UNSUPPORTED);
+    }
+    if token_at(words, start, group_len, index) == Some(NAME_TYPE) {
+        index += 1;
+    }
+    if index >= field.start + field.length {
         return Err(ERROR_MALFORMED);
     }
-    match token_at(words, start, group_len, field.start + 1) {
-        Some(NUMBER_TYPE) => Ok(TokenSpan {
-            start: field.start + 3,
-            length: field.length - 3,
-        }),
-        Some(BOOLEAN_TYPE) => Err(ERROR_UNSUPPORTED),
-        _ => Err(ERROR_UNSUPPORTED),
-    }
+    Ok(TokenSpan {
+        start: index,
+        length: field.start + field.length - index,
+    })
 }
 
 fn names_equal(

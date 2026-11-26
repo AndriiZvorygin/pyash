@@ -266,11 +266,13 @@ fn build_judge_pack(predictions: &[u32], reference: &[u32]) -> Option<PyacPack> 
     let mut codelets = Vec::new();
     append_vector(&mut codelets, PREDICTION, predictions)?;
     append_vector(&mut codelets, ANSWER, reference)?;
+    // `gi <prediction> ka | do gi <count> ma | gi <answer> yu | pluk tlas tu`.
+    // The destination carries one class tag (`do`) and one `gi`, because it is a
+    // typed number held under a name.
     let sentence = [
         NAME_TYPE,
         PREDICTION,
         ACCUSATIVE,
-        NAME_TYPE,
         NUMBER_TYPE,
         NAME_TYPE,
         CORRECT_COUNT,
@@ -282,6 +284,6 @@ fn build_judge_pack(predictions: &[u32], reference: &[u32]) -> Option<PyacPack> 
         TLAS,
         DEONTIC,
     ];
-    append_group(&mut codelets, &sentence, &[2, 7, 10, 13])?;
+    append_group(&mut codelets, &sentence, &[2, 6, 9, 12])?;
     decode_pack(&encode_pack(&codelets).ok()?).ok()
 }

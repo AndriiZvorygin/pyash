@@ -198,7 +198,7 @@ pub(super) fn parse_sentence(
     parse_sentence_range(tokens, 0, tokens.len(), parsed)
 }
 
-struct FieldBuilder {
+pub(super) struct FieldBuilder {
     fields: [SentenceField; MAX_SENTENCE_FIELDS],
     field_count: usize,
     seen_roles: u32,
@@ -209,7 +209,7 @@ struct FieldBuilder {
 }
 
 impl FieldBuilder {
-    const fn new(start: usize) -> Self {
+    pub(super) const fn new(start: usize) -> Self {
         Self {
             fields: [SentenceField::EMPTY; MAX_SENTENCE_FIELDS],
             field_count: 0,
@@ -221,7 +221,13 @@ impl FieldBuilder {
         }
     }
 
-    fn accept_boundary(&mut self, token: u32, offset: usize, end: usize) -> u32 {
+    fn accept_boundary(
+        &mut self,
+        tokens: &SentenceView<'_, impl VliwWord>,
+        token: u32,
+        offset: usize,
+        end: usize,
+    ) -> u32 {
         let role_bit = match token {
             NOMINATIVE => 1 << 0,
             ACCUSATIVE => 1 << 1,
@@ -240,6 +246,7 @@ impl FieldBuilder {
             if self.value_start >= offset
                 || field_index >= MAX_SENTENCE_FIELDS
                 || self.seen_roles & role_bit != 0
+                || validate_field_tags(tokens, self.value_start, offset) != 0
             {
                 return ERROR_MALFORMED;
             }
@@ -279,7 +286,7 @@ impl FieldBuilder {
 
     /// Clause-free decode: the head bitmap is the field map, so only boundary
     /// slots are read and value words are never decoded.
-    fn parse_from_boundaries(
+    pub(super) fn parse_from_boundaries(
         &mut self,
         tokens: &SentenceView<'_, impl VliwWord>,
         start: usize,
@@ -293,7 +300,7 @@ impl FieldBuilder {
             while slot < CODELET_WORDS && offset < end {
                 if (header & (1 << slot) != 0) == complete {
                     let token = tokens.token_unchecked(offset);
-                    let error = self.accept_boundary(token, offset, end);
+                    let error = self.accept_boundary(tokens, token, offset, end);
                     if error != 0 || self.mood != 0 {
                         return error;
                     }
@@ -331,7 +338,7 @@ impl FieldBuilder {
                 continue;
             }
             if depth == 0 && tokens.boundary(index) {
-                let error = self.accept_boundary(token, index, end);
+                let error = self.accept_boundary(tokens, token, index, end);
                 if error != 0 || self.mood != 0 {
                     return error;
                 }
@@ -490,38 +497,40 @@ pub(super) fn name_span(
     let Some(end) = field.start.checked_add(field.length) else {
         return ERROR_MALFORMED;
     };
-    if field.length < 2 || end > tokens.len() || sentence_at!(*tokens, field.start) != NAME_TYPE {
+    if field.length < 2 || end > tokens.len() {
         return ERROR_MALFORMED;
     }
     let name_start = if typed_number {
-        if field.length < 4
-            || !matches!(
-                sentence_at!(*tokens, field.start + 1),
-                NUMBER_TYPE | BOOLEAN_TYPE
-            )
-            || sentence_at!(*tokens, field.start + 2) != NAME_TYPE
-        {
+        // A typed local is `<class words…> [gi] <name>`: the class word says what
+        // it holds and `gi` marks the name. The class word leads.
+        let mut index = field.start;
+        while index < end && is_class_word(sentence_at!(*tokens, index)) {
+            index += 1;
+        }
+        if index == field.start {
             return ERROR_MALFORMED;
         }
-        field.start + 3
+        if index < end && sentence_at!(*tokens, index) == NAME_TYPE {
+            index += 1;
+        }
+        index
     } else {
+        if sentence_at!(*tokens, field.start) != NAME_TYPE {
+            return ERROR_MALFORMED;
+        }
         if sentence_at!(*tokens, field.start + 1) == NAME_TYPE {
             return ERROR_MALFORMED;
         }
-        if field.length == 2 {
-            field.start + 1
-        } else {
-            let mut marker = field.start + 2;
-            while marker < end {
-                if sentence_at!(*tokens, marker) == NAME_TYPE {
-                    return ERROR_MALFORMED;
-                }
-                marker += 1;
+        let mut marker = field.start + 2;
+        while marker < end {
+            if sentence_at!(*tokens, marker) == NAME_TYPE {
+                return ERROR_MALFORMED;
             }
-            field.start + 1
+            marker += 1;
         }
+        field.start + 1
     };
-    if name_start >= end {
+    if name_start >= end || !is_root_name(tokens, name_start, end) {
         return ERROR_MALFORMED;
     }
     *name = NameSpan {
@@ -529,6 +538,89 @@ pub(super) fn name_span(
         length: end - name_start,
     };
     0
+}
+
+/// Whether every word in `start..end` is a root word.
+///
+/// A name's payload is one or more roots, never a grammar word: `gi` followed by
+/// a pronoun is not a name, because the pronoun is serving its grammatical
+/// purpose.
+fn is_root_name(tokens: &SentenceView<'_, impl VliwWord>, start: usize, end: usize) -> bool {
+    start < end
+        && (start..end).all(|index| {
+            matches!(
+                word_code::classify_identity(sentence_at!(*tokens, index) as u16),
+                Some(word_code::WordClass::LongRoot) | Some(word_code::WordClass::ShortRoot)
+            )
+        })
+}
+
+/// The `gi` rule, and nothing more.
+///
+/// `gi` marks a name, so it may appear at most once per field, only followed by
+/// root words, and optionally preceded by class words describing the kind of
+/// name:
+///
+/// ```text
+/// gi <root…>               a name
+/// dlek flut gi <hzit>      a vector-float name
+/// ```
+///
+/// `gi sa` is rejected, because `sa` is a pronoun doing its grammatical job
+/// rather than a name. A field with no `gi` is not policed here: it may be a
+/// pronoun, a genitive construction, a quoted value, or a nested clause, and
+/// those are validated by the code that understands them.
+pub(super) fn validate_field_tags(tokens: &SentenceView<'_, impl VliwWord>, start: usize, end: usize) -> u32 {
+    if start >= end {
+        return ERROR_MALFORMED;
+    }
+    // A field holding a nested clause is a sentence in its own right, and is
+    // validated when that clause is parsed.
+    if (start..end).any(|index| {
+        matches!(sentence_at!(*tokens, index), DEPENDENT_CLAUSE | CLAUSE_TAIL)
+    }) {
+        return 0;
+    }
+    // A quoted value is its own encoding, not a name.
+    if numeric::quote_header(sentence_at!(*tokens, start)).valid != 0 {
+        return 0;
+    }
+
+    let mut name_tag = None;
+    for index in start..end {
+        if sentence_at!(*tokens, index) == NAME_TYPE {
+            if name_tag.is_some() {
+                // A name has one payload, so one tag.
+                return ERROR_MALFORMED;
+            }
+            name_tag = Some(index);
+        }
+    }
+    let Some(name_index) = name_tag else {
+        return 0;
+    };
+
+    // Everything before the tag must be a class word: an untyped `gi` has none.
+    let mut index = start;
+    while index < name_index && is_class_word(sentence_at!(*tokens, index)) {
+        index += 1;
+    }
+    if index != name_index {
+        return ERROR_MALFORMED;
+    }
+    // The payload is one or more roots, never a grammar word.
+    if !is_root_name(tokens, name_index + 1, end) {
+        return ERROR_MALFORMED;
+    }
+    0
+}
+
+/// Whether `word` names the kind of value that follows it.
+///
+/// Width words, the boolean class, and the vector/float class words: each says
+/// "what follows is a value of this kind", which is why none of them is a name.
+fn is_class_word(word: u32) -> bool {
+    is_width_word(word) || matches!(word, VECTOR_TYPE | FLOAT_TYPE)
 }
 
 pub(super) fn typed_name_span(
@@ -540,46 +632,53 @@ pub(super) fn typed_name_span(
     let Some(end) = field.start.checked_add(field.length) else {
         return ERROR_MALFORMED;
     };
-    if field.length < 2 || end > tokens.len() || sentence_at!(*tokens, field.start) != NAME_TYPE {
+    if field.length < 2 || end > tokens.len() {
         return ERROR_MALFORMED;
     }
 
-    if field.length >= 3 && sentence_at!(*tokens, field.start + 2) == NAME_TYPE {
-        *kind = match sentence_at!(*tokens, field.start + 1) {
-            NUMBER_TYPE => VALUE_NUMBER,
-            BOOLEAN_TYPE => VALUE_BOOLEAN,
-            FLOAT_TYPE => VALUE_FLOAT,
-            _ => return ERROR_UNSUPPORTED,
-        };
-        if field.length < 4 {
-            return ERROR_MALFORMED;
+    // Leading class words say what kind of value follows, then `gi` optionally
+    // marks a name. A field with no class word is an untyped name.
+    let mut index = field.start;
+    let mut has_vector = false;
+    let mut has_float = false;
+    let mut has_boolean = false;
+    let mut has_number = false;
+    while index < end && is_class_word(sentence_at!(*tokens, index)) {
+        match sentence_at!(*tokens, index) {
+            VECTOR_TYPE => has_vector = true,
+            FLOAT_TYPE => has_float = true,
+            BOOLEAN_TYPE => has_boolean = true,
+            _ => has_number = true,
         }
-        *name = NameSpan {
-            start: field.start + 3,
-            length: field.length - 3,
-        };
-        return 0;
+        index += 1;
     }
-
-    if field.length >= 4 && sentence_at!(*tokens, field.start + 3) == NAME_TYPE {
-        if sentence_at!(*tokens, field.start + 1) != VECTOR_TYPE
-            || sentence_at!(*tokens, field.start + 2) != FLOAT_TYPE
-        {
-            return ERROR_UNSUPPORTED;
-        }
-        if field.length < 5 {
-            return ERROR_MALFORMED;
-        }
-        *kind = VALUE_VECTOR_FLOAT;
-        *name = NameSpan {
-            start: field.start + 4,
-            length: field.length - 4,
-        };
-        return 0;
+    if index == field.start {
+        // No class word: an ordinary name.
+        *kind = 0;
+        return name_span(tokens, field, false, name);
     }
-
-    *kind = 0;
-    name_span(tokens, field, false, name)
+    if index < end && sentence_at!(*tokens, index) == NAME_TYPE {
+        index += 1;
+    }
+    if index >= end || !is_root_name(tokens, index, end) {
+        return ERROR_MALFORMED;
+    }
+    *kind = if has_vector && has_float {
+        VALUE_VECTOR_FLOAT
+    } else if has_float {
+        VALUE_FLOAT
+    } else if has_boolean {
+        VALUE_BOOLEAN
+    } else if has_number {
+        VALUE_NUMBER
+    } else {
+        return ERROR_UNSUPPORTED;
+    };
+    *name = NameSpan {
+        start: index,
+        length: end - index,
+    };
+    0
 }
 
 pub(super) fn typed_output_name(

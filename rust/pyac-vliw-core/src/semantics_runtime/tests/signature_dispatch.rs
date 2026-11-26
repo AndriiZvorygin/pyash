@@ -36,7 +36,6 @@ fn resolves_exact_numeric_and_evaluation_signatures() {
             NAME_TYPE,
             0x68b1,
             ACCUSATIVE,
-            NAME_TYPE,
             NUMBER_TYPE,
             NAME_TYPE,
             0xaa90,
@@ -48,7 +47,7 @@ fn resolves_exact_numeric_and_evaluation_signatures() {
             TLAS,
             DEONTIC,
         ],
-        &[2, 7, 10, 13],
+        &[2, 6, 9, 12],
     );
     assert_eq!(
         select_signature_route(&evaluation, 0, 1),

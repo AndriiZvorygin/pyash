@@ -116,19 +116,33 @@ fn value_type(
     value_length: usize,
 ) -> Result<u32, u32> {
     let first = token_at(words, start, group_len, value_start).ok_or(ERROR_MALFORMED)?;
+    // `<class words…> [gi] <name>`: the class words say what the field holds and
+    // `gi` marks the name. `gi` alone is an untyped name.
+    let mut index = value_start;
+    let mut class_type = 0u32;
+    while index < value_start + value_length {
+        match token_at(words, start, group_len, index) {
+            Some(BOOLEAN_TYPE) => {
+                class_type = TYPE_NAME_BOOLEAN;
+                index += 1;
+            }
+            Some(word) if is_width_word(word) => {
+                class_type = TYPE_NAME_NUMBER;
+                index += 1;
+            }
+            _ => break,
+        }
+    }
+    if class_type != 0 {
+        if token_at(words, start, group_len, index) == Some(NAME_TYPE) {
+            index += 1;
+        }
+        if index >= value_start + value_length {
+            return Err(ERROR_MALFORMED);
+        }
+        return Ok(class_type);
+    }
     if first == NAME_TYPE {
-        if value_length >= 3
-            && token_at(words, start, group_len, value_start + 1) == Some(NUMBER_TYPE)
-            && token_at(words, start, group_len, value_start + 2) == Some(NAME_TYPE)
-        {
-            return Ok(TYPE_NAME_NUMBER);
-        }
-        if value_length >= 3
-            && token_at(words, start, group_len, value_start + 1) == Some(BOOLEAN_TYPE)
-            && token_at(words, start, group_len, value_start + 2) == Some(NAME_TYPE)
-        {
-            return Ok(TYPE_NAME_BOOLEAN);
-        }
         return Ok(TYPE_NAME);
     }
     if first == DEPENDENT_CLAUSE {

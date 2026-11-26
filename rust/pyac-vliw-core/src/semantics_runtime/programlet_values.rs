@@ -14,6 +14,29 @@ pub(super) fn number_value(
     Ok(value)
 }
 
+/// Read a width-tagged literal: `<width> <value>` where the width word bounds it.
+///
+/// The field is a value, not a name, so it carries a width word instead of the
+/// name tag. A value wider than its width word is malformed; clamping would let
+/// `3940 po` pass as a uint8.
+pub(super) fn width_tagged_value(
+    tokens: &SentenceView<'_, impl VliwWord>,
+    field: SentenceField,
+) -> Result<u32, u32> {
+    if field.length != 2 {
+        return Err(ERROR_MALFORMED);
+    }
+    let width_word = sentence_at!(*tokens, field.start);
+    if !is_width_word(width_word) {
+        return Err(ERROR_MALFORMED);
+    }
+    let value = sentence_at!(*tokens, field.start + 1);
+    if value > MAX_U16 || !width_fits(width_word, value) {
+        return Err(ERROR_MALFORMED);
+    }
+    Ok(value)
+}
+
 #[inline(never)]
 pub(super) fn argument_value(
     arguments: [ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
@@ -172,6 +195,19 @@ pub(super) fn resolve_programlet_value(
         };
         return 0;
     }
+    // A width-tagged literal: the width word bounds the value that follows.
+    if field.length == 2 && is_width_word(sentence_at!(*tokens, field.start)) {
+        let bits = match width_tagged_value(tokens, field) {
+            Ok(bits) => bits,
+            Err(error) => return error,
+        };
+        *value = ProgramletNumber {
+            bits,
+            high: 0,
+            kind: VALUE_UNSIGNED,
+        };
+        return 0;
+    }
     if field.length == 1 && matches!(sentence_at!(*tokens, field.start), TRUTH | LIE) {
         *value = ProgramletNumber {
             bits: u32::from(sentence_at!(*tokens, field.start) == TRUTH),
@@ -236,26 +272,32 @@ pub(super) fn resolve_programlet_value(
         };
         return 0;
     }
-    if sentence_at!(*tokens, field.start) != NAME_TYPE {
-        return ERROR_UNSUPPORTED;
-    }
-    let typed_number = field.length >= 4
-        && sentence_at!(*tokens, field.start + 1) == NUMBER_TYPE
-        && sentence_at!(*tokens, field.start + 2) == NAME_TYPE;
-    let typed_boolean = field.length >= 4
-        && sentence_at!(*tokens, field.start + 1) == BOOLEAN_TYPE
-        && sentence_at!(*tokens, field.start + 2) == NAME_TYPE;
-    if field.length > 2 && !typed_number && !typed_boolean {
-        return ERROR_UNSUPPORTED;
-    }
-    let name_start = if typed_number || typed_boolean {
-        field.start + 3
-    } else {
-        if sentence_at!(*tokens, field.start + 1) == NAME_TYPE {
-            return ERROR_MALFORMED;
+    // `<class words…> [gi] <name>`: the class words say what the local holds and
+    // `gi` marks the name. `gi` alone is an untyped name.
+    let mut index = field.start;
+    let mut expected_kind = 0;
+    while index < field.start + field.length {
+        match sentence_at!(*tokens, index) {
+            BOOLEAN_TYPE => {
+                expected_kind = VALUE_BOOLEAN;
+                index += 1;
+            }
+            NUMBER_TYPE | PAUCAL_WIDTH | PLURAL_WIDTH | MULTAL_WIDTH => {
+                expected_kind = VALUE_NUMBER;
+                index += 1;
+            }
+            _ => break,
         }
-        field.start + 1
-    };
+    }
+    if index == field.start && sentence_at!(*tokens, field.start) != NAME_TYPE {
+        return ERROR_UNSUPPORTED;
+    }
+    if sentence_at!(*tokens, index) == NAME_TYPE {
+        index += 1;
+    }
+    let typed_number = expected_kind == VALUE_NUMBER;
+    let typed_boolean = expected_kind == VALUE_BOOLEAN;
+    let name_start = index;
     let name = NameSpan {
         start: name_start,
         length: field.start + field.length - name_start,
