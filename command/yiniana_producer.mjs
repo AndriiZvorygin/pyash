@@ -15,11 +15,13 @@ import { fileURLToPath } from "node:url";
 import { interpret } from "../program/bridge/index.mjs";
 import { resolveConfigBool, resolveConfigMap, resolveConfigMapNum, resolveConfigMapText, resolveConfigNum, resolveConfigText } from "../program/configure/env.mjs";
 import { channelLanes, channelProgrammes, parseChannels, readChannels } from "../program/library/radio/channels.mjs";
+import { countSheetWords, songLength } from "../program/library/radio/length.mjs";
 import { parseLanes } from "../program/library/radio/rotation.mjs";
-import { keepFile, srtPathFor, wordPathsFor } from "../program/library/radio/ticker.mjs";
+import { keepFile, wordPathsFor } from "../program/library/radio/ticker.mjs";
 import { measureTempo } from "../program/library/radio/tempo.mjs";
 import { fileDay, songTags, stampSong } from "../program/library/radio/tags.mjs";
 import { alignWordsToFile } from "./lyrics_to_srt_from_timing.mjs";
+import { HEAR_EXAMPLE } from "./yiniana_transcribe_catalogue.mjs";
 import { recoverRate, transcriptText } from "./yiniana_lyric_recovery.mjs";
 import { readCardIfItMatches } from "./yiniana_lyrics_chain.mjs";
 import { loadDefaultConfig } from "./run_pya_helpers.mjs";
@@ -35,7 +37,7 @@ const DEFAULT_SONGS_PER_RUN = 1;
 export const DEFAULT_AUDITION_SECONDS = 0;
 export const DEFAULT_CARD_DEPTH = "radio";
 export const DEFAULT_MIN_RECOVERY = 10;
-const DEFAULT_DURATION_SECONDS = 175;
+const DEFAULT_DURATION_SECONDS = 300;
 const DEFAULT_COMFYUI_HOST = "http://localhost:8188";
 const DEFAULT_HOUSEKEEPER_URL = "http://localhost:18886";
 
@@ -137,8 +139,6 @@ export async function scoreRender({
   audioPath,
   sheetPath,
   auditionSeconds = DEFAULT_AUDITION_SECONDS,
-  hearBin = "",
-  hearModel = "",
   repoRoot = process.cwd(),
   workDir = ""
 }) {
@@ -149,18 +149,21 @@ export async function scoreRender({
   // the time of every line, which is what a ticker follows.
   const stem = path.basename(audioPath, path.extname(audioPath));
   const windowPath = path.join(dir, `${stem}.wav`);
-  const transcriptPath = path.join(dir, `${stem}.txt`);
   await run("ffmpeg", buildAuditionArgs({ audioPath, windowPath, auditionSeconds }), { label: "ffmpeg window" });
+  // The song is heard through the hear lane, never by a machine named here:
+  // the lane owns the engine, the chunks a long song is heard in, and what to
+  // do when a chunk is refused. A song is sung, not spoken, so the lane hears
+  // it with the engine the house keeps for singing.
   await run(process.execPath, [
-    path.join(repoRoot, "command", "whisper_main.mjs"),
-    "--input", windowPath,
-    "--bin", hearBin,
-    "--model", hearModel,
-    "--output", transcriptPath
+    path.join(repoRoot, "command", "run_pya_program.mjs"),
+    HEAR_EXAMPLE,
+    "ob", "filename", windowPath, "to", "name", "audio", "ya",
+    "ob", "filename", path.join(dir, `${stem}.srt`), "to", "name", "output"
   ], { label: "hear" });
+  const wordsPath = path.join(dir, `${stem}.srt.plain.txt`);
   const [expected, heard] = await Promise.all([
     fs.readFile(sheetPath, "utf8"),
-    fs.readFile(transcriptPath, "utf8")
+    fs.readFile(wordsPath, "utf8")
   ]);
   const result = recoverRate(expected, transcriptText(heard));
   return {
@@ -168,8 +171,8 @@ export async function scoreRender({
     hits: result.hits,
     total: result.total,
     transcript: transcriptText(heard),
-    transcriptPath,
-    srtPath: srtPathFor(transcriptPath)
+    transcriptPath: wordsPath,
+    srtPath: path.join(dir, `${stem}.srt`)
   };
 }
 
@@ -437,8 +440,6 @@ export async function produce({
   auditionSeconds = DEFAULT_AUDITION_SECONDS,
   minRecovery = DEFAULT_MIN_RECOVERY,
   cardDepth = DEFAULT_CARD_DEPTH,
-  hearBin = "",
-  hearModel = "",
   comfyHost = DEFAULT_COMFYUI_HOST,
   housekeeperUrl = DEFAULT_HOUSEKEEPER_URL,
   render = renderSeed,
@@ -481,7 +482,6 @@ export async function produce({
     for (const item of queue) {
       const record = { topic: item.topic, engine: item.engine, channel: item.channel, status: "skipped", seeds: [], published: "" };
       const workflow = workflows[item.engine];
-      const duration = Number(durations[item.engine] ?? DEFAULT_DURATION_SECONDS);
       let sheetPath = "";
       try {
         sheetPath = await ensureSheet({
@@ -500,6 +500,17 @@ export async function produce({
         continue;
       }
       const lyrics = await fs.readFile(sheetPath, "utf8");
+      // The song is as long as its words take to sing at the pace of its
+      // channel: the same sheet sung slow is a longer song than the same sheet
+      // sung fast. The configured length of the engine is the longest a song of
+      // that engine may be, so a slow channel can stretch and a fast one cannot
+      // run away.
+      const duration = songLength({
+        words: countSheetWords(lyrics),
+        bpm: item.bpm,
+        maximumSeconds: Number(durations[item.engine] ?? DEFAULT_DURATION_SECONDS)
+      });
+      record.durationSeconds = duration;
       // The song is named before it is sung: a player shows the name a
       // listener would remember, not the lane the song was made for.
       const songName = await ensureSongName({
@@ -531,8 +542,6 @@ export async function produce({
           audioPath: renderPath,
           sheetPath,
           auditionSeconds,
-          hearBin,
-          hearModel,
           repoRoot
         });
         // The pace of the render is measured, not hoped for: a song the
@@ -667,8 +676,6 @@ export async function startProducer({ cwd = process.cwd() } = {}) {
     cardDepth: resolveConfigText("radio card depth") ?? DEFAULT_CARD_DEPTH,
     loop: resolveConfigBool("radio producer loop") ?? false,
     pauseSeconds: resolveConfigNum("radio producer pause seconds") ?? 0,
-    hearBin: resolveConfigText("hear bin") ?? "",
-    hearModel: resolveConfigText("hear model") ?? "",
     comfyHost: resolveConfigText("music host") ?? DEFAULT_COMFYUI_HOST,
     housekeeperUrl: resolveConfigText("gpu housekeeper url") ?? DEFAULT_HOUSEKEEPER_URL,
     log: (line) => process.stdout.write(`yiniana producer: ${line}\n`)

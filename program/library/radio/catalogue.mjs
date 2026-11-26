@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { measureMp3Buffer } from "./mp3.mjs";
-import { downloadUrlFor } from "./download.mjs";
+import { downloadUrlFor, listenUrlFor } from "./download.mjs";
 import { readId3Title } from "./id3.mjs";
 import { inContract } from "./rotation.mjs";
 
@@ -141,6 +141,7 @@ export function publicCatalogue(tracks = []) {
     engine: track.engine,
     durationSeconds: track.durationSeconds,
     lyricSheet: track.lyricSheet ? path.basename(track.lyricSheet) : "",
+    listenUrl: listenUrlFor(track.filename),
     downloadUrl: downloadUrlFor(track.filename)
   }));
 }

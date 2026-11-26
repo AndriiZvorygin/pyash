@@ -207,6 +207,59 @@ test("the producer fills the channel it is asked for", async () => {
   assert.equal(summary.channels, 1, "the producer worked on one channel");
 });
 
+test("the producer gives a slow channel the time its words need", async () => {
+  // The same words, sung in the day channel and in the night one. The night
+  // song must be the longer of the two: a hymn at 75 bpm does not sing a day
+  // song's words at a day song's pace.
+  const lengths = {};
+  for (const wanted of ["day", "night"]) {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "yiniana-producer-length-"));
+    const radio = await makeStation(root, { lanes: ["peace"], published: [] });
+    // A sheet of a real length: short sheets land on the house's floor and
+    // say nothing about the pace the channel sings at.
+    const verse = "We carry the light inside the room and wait for morning";
+    const lines = [];
+    for (let index = 0; index < 30; index += 1) {
+      if (index % 10 === 0) lines.push("[Verse]");
+      lines.push(verse);
+    }
+    await fs.writeFile(path.join(radio, "lyrics", "song-peace.txt"), `${lines.join("\n")}\n`);
+    const asked = [];
+    await produce({
+      repoRoot: root,
+      lanesFile: "radio/topics.txt",
+      channels: channelsOf(),
+      channel: wanted,
+      engines: ["ace-step", "night"],
+      workflows: { "ace-step": "audio_ace_step_1_5_xl_turbo", night: "audio_ace_step_1_5_xl_turbo" },
+      durations: { "ace-step": 300, night: 300 },
+      catalogueDirectory: "radio/audio",
+      radioDirectory: radio,
+      seeds: 1,
+      songsPerRun: 1,
+      minRecovery: 10,
+      render: async ({ outputPath, duration }) => {
+        asked.push(duration);
+        await fs.writeFile(outputPath, syntheticMp3());
+        return outputPath;
+      },
+      score: async () => ({ percent: 40, hits: 40, total: 100, transcript: "words" }),
+      measure: async () => (wanted === "night" ? 75 : 128),
+      name: writeName,
+      publish: async ({ sourcePath, catalogueDirectory, filename }) =>
+        publishSong({ sourcePath, catalogueDirectory, filename })
+    });
+    lengths[wanted] = asked[0];
+  }
+  assert.ok(Number.isFinite(lengths.night), "the night render was given a length");
+  assert.ok(Number.isFinite(lengths.day), "the day render was given a length");
+  assert.ok(
+    lengths.night > lengths.day,
+    `the night song is longer than the day one, got night ${lengths.night}s and day ${lengths.day}s`
+  );
+  assert.ok(lengths.night <= 300, "the night song stays inside the house's ceiling");
+});
+
 test("a channel with a voice of its own takes the words of the lane with it", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "yiniana-producer-"));
   const radio = await makeStation(root, { lanes: ["peace"], published: [] });

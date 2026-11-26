@@ -243,9 +243,12 @@ test("the station builds its programmes from the channels", async () => {
   assert.ok(night, "the station has a night programme");
   assert.ok(day.contract.has("ace-step-love.mp3"), "a lane of the day programme is in its contract");
   assert.ok(day.contract.has("az-god-remembers.mp3"), "a song of the house is in the day programme");
-  assert.ok(!day.contract.has("night-peace.mp3"), "the night song is not in the day programme");
-  assert.ok(night.contract.has("night-peace.mp3"), "a lane of the night programme is in its contract");
+  // A night render whose words were too dense for a slow song plays in the day
+  // programme: the rotation names it, and the day contract holds the names.
+  assert.ok(day.contract.has("night-peace.mp3"), "a song the rotation names is in the day programme");
+  assert.ok(night.contract.has("night-god-remembers.mp3"), "a lane of the night programme is in its contract");
   assert.ok(!night.contract.has("az-god-remembers.mp3"), "the house songs do not play in the night programme");
+  assert.ok(!night.contract.has("night-peace.mp3"), "a lane the night programme gave up is not in it");
   assert.equal(night.contract.size, night.lanes.length, "the contract holds the lanes of the programme");
   forget();
 });
@@ -303,6 +306,7 @@ test("the catalogue keeps its private details to itself", async () => {
     "durationSeconds",
     "engine",
     "filename",
+    "listenUrl",
     "lyricSheet",
     "title",
     "topic"
@@ -480,6 +484,59 @@ test("the station serves the words of the song that is playing", async () => {
   assert.equal(words.lines.length, 1);
   assert.equal(words.lines[0].text, "The words the house heard.");
   assert.equal(words.lines[0].start, 10);
+  assert.equal(words.downloadUrl, "/song/ace-step-dignity.mp3", "the words name the song they belong to");
+
+  await new Promise((resolve) => server.close(resolve));
+  station.stop();
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+test("the station serves the words of any song the listener names", async () => {
+  const root = await makeTempDir();
+  const lyrics = path.join(root, "lyrics");
+  await fs.mkdir(lyrics, { recursive: true });
+  // Two songs, each with words of its own. One is playing; the listener asks
+  // for the other, because a listener who picks a song out of the catalogue
+  // reads the words of the song they picked, not of the song on the air.
+  for (const [lane, line] of [["dignity", "The words of dignity."], ["peace", "The words of peace."]]) {
+    await fs.writeFile(path.join(lyrics, `song-${lane}.txt`), `[Verse]\n${line}\n`);
+    await fs.writeFile(path.join(lyrics, `song-${lane}.aligned.srt`), [
+      "1",
+      "00:00:05,000 --> 00:00:15,000",
+      line,
+      ""
+    ].join("\n"));
+  }
+  const playing = await writeTrack(root, "ace-step-dignity.mp3", { frames: 900 });
+  playing.lyricSheet = path.join(lyrics, "song-dignity.txt");
+  const other = await writeTrack(root, "ace-step-peace.mp3", { frames: 900 });
+  other.lyricSheet = path.join(lyrics, "song-peace.txt");
+  // The programme holds both songs; the first one is what plays first. The
+  // catalogue the page lists is the programme, so a song the listener can pick
+  // is a song the station can name.
+  const station = createRadioStation({ tracks: [playing, other], gapMs: 0 });
+  station.start();
+  const { server } = createRadioServer({ station, stationName: "Zvorygin Radio", catalogueDirectory: root });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+
+  const onAir = await (await fetch(`${base}/lyrics.json`)).json();
+  assert.ok(
+    ["ace-step-dignity.mp3", "ace-step-peace.mp3"].includes(onAir.filename),
+    "the words are of a song the station is playing"
+  );
+  const onAirOther = onAir.filename === "ace-step-peace.mp3" ? "ace-step-dignity.mp3" : "ace-step-peace.mp3";
+
+  // The listener names a song: the words served are that song's, whatever is
+  // on the air.
+  const chosen = await (await fetch(`${base}/lyrics.json?filename=${onAirOther}`)).json();
+  assert.equal(chosen.filename, onAirOther, "the words are of the song the listener named");
+  assert.equal(chosen.lines[0].text, onAirOther === "ace-step-peace.mp3" ? "The words of peace." : "The words of dignity.");
+  assert.equal(chosen.source, "lyrics", "a named song keeps its own timing");
+
+  const unknown = await (await fetch(`${base}/lyrics.json?filename=no-such-song.mp3`)).json();
+  assert.equal(unknown.source, "none", "a song the station does not have has no words to show");
 
   await new Promise((resolve) => server.close(resolve));
   station.stop();
@@ -593,6 +650,16 @@ test("a listener can download the song that is playing", async () => {
   const body = Buffer.from(await download.arrayBuffer());
   assert.equal(body.length, (await fs.stat(track.path)).size);
   assert.deepEqual(body.subarray(0, 4), Buffer.from([0xff, 0xfb, 0x90, 0x00]));
+
+  // The same song can be heard in the page instead of taken home: same file,
+  // served as a stream a player opens, never as an attachment.
+  assert.equal(listed.tracks[0].listenUrl, "/listen/ace-step-dignity.mp3");
+  const heard = await fetch(`${base}${listed.tracks[0].listenUrl}`);
+  assert.equal(heard.status, 200);
+  assert.equal(heard.headers.get("content-type"), "audio/mpeg");
+  assert.equal(heard.headers.get("content-disposition"), null, "a listened song is not offered as a download");
+  const heardBody = Buffer.from(await heard.arrayBuffer());
+  assert.equal(heardBody.length, body.length, "the song heard is the song downloaded");
 
   await new Promise((resolve) => server.close(resolve));
   station.stop();

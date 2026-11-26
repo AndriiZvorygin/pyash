@@ -23,5 +23,9 @@ day | ace-step | 128 | - | *
 
 # The night programme: slow, calm, and sung like a hymn. The style is the one
 # the house already sang God Remembers All in, and the tempo is the slow one.
-# The lanes are the calm ones, and the two hymns the house already sang slow.
-night | night | 75 | plain Mennonite hymn, natural male lead, soft female response, slow acoustic hymn, call and response, clear dry vocals, 75 bpm | acceptance, contemplation, god-remembers, gratitude, harmony, holy-spirit, patience, peace, stillness, solitude
+#
+# Only a lane whose words are sparse enough to be sung slowly belongs here. A
+# song is as long as its words take to sing, so a dense sheet forced into a
+# slow channel is a song that rushes: those renders were moved to the day
+# programme, where their density is the pace the channel already keeps.
+night | night | 75 | plain Mennonite hymn, natural male lead, soft female response, slow acoustic hymn, call and response, clear dry vocals, 75 bpm | god-remembers, silence, prayer, grace

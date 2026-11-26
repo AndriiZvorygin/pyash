@@ -20,7 +20,7 @@ import { interpret } from "../program/bridge/index.mjs";
 import { resolveConfigMap, resolveConfigNum, resolveConfigText } from "../program/configure/env.mjs";
 import { publicCatalogue, scanCatalogue } from "../program/library/radio/catalogue.mjs";
 import { channelByName, channelProgrammes, readChannels } from "../program/library/radio/channels.mjs";
-import { DOWNLOAD_PREFIX, downloadNameFor, downloadNameFromPath, downloadUrlFor, resolveDownloadPath } from "../program/library/radio/download.mjs";
+import { DOWNLOAD_PREFIX, LISTEN_PREFIX, downloadNameFor, downloadNameFromPath, downloadUrlFor, listenUrlFor, resolveDownloadPath } from "../program/library/radio/download.mjs";
 import { alignedPathFor, readWords, transcriptPathFor } from "../program/library/radio/ticker.mjs";
 import { renderStationPage } from "../program/library/radio/page.mjs";
 import { orderTracks, readLanes, readRotation } from "../program/library/radio/rotation.mjs";
@@ -135,8 +135,9 @@ export function createRadioServer({ station = null, channels = [], stationName =
   const handle = async (req, res) => {
     let pathname = "/";
     let asked = "";
+    let url = null;
     try {
-      const url = new URL(req.url ?? "/", "http://localhost");
+      url = new URL(req.url ?? "/", "http://localhost");
       pathname = url.pathname;
       asked = url.searchParams.get("channel") ?? "";
     } catch {
@@ -287,11 +288,15 @@ export function createRadioServer({ station = null, channels = [], stationName =
       return;
     }
     if (pathname === "/lyrics.json") {
-      // The words of the song that is playing, with the time of every line.
+      // The words of a song, with the time of every line. The song is the one
+      // playing unless the listener names another: a listener who picks a song
+      // out of the catalogue hears that song, and reads its words.
+      const askedName = String(url.searchParams.get("filename") ?? "").trim();
       const state = channel?.station?.state();
-      const track = state?.track
-        ? channel.station.tracks.find((entry) => entry.filename === state.track.filename)
-        : null;
+      const playing = channel?.station?.tracks?.find((entry) => entry.filename === state?.track?.filename) ?? null;
+      const track = askedName
+        ? everyTrack().find((entry) => entry.filename === askedName) ?? null
+        : playing;
       const words = track
         ? await readWords({
           sheetPath: track.lyricSheet,
@@ -303,12 +308,47 @@ export function createRadioServer({ station = null, channels = [], stationName =
       jsonResponse(res, 200, {
         station: stationName,
         channel: channel?.name ?? "",
-        filename: state?.track?.filename ?? "",
-        title: state?.track?.title ?? "",
-        durationSeconds: state?.track?.durationSeconds ?? 0,
+        filename: track?.filename ?? "",
+        title: track?.title ?? "",
+        durationSeconds: track?.durationSeconds ?? 0,
+        downloadUrl: track ? downloadUrlFor(track.filename) : "",
         source: words.source,
         lines: words.lines
       });
+      return;
+    }
+    if (pathname.startsWith(LISTEN_PREFIX)) {
+      // The song itself, for a listener who wants to hear it in the page rather
+      // than take it home. It is the same file the download serves, with the
+      // same guards, served as a stream a player can open.
+      const name = downloadNameFromPath(pathname.replace(LISTEN_PREFIX, DOWNLOAD_PREFIX));
+      const known = name ? everyTrack().find((track) => track.filename === name) : null;
+      const file = known ? resolveDownloadPath({ catalogueDirectory, filename: name }) : "";
+      if (!known || !file) {
+        jsonResponse(res, 404, { ok: false, error: "no such song" });
+        return;
+      }
+      let size = 0;
+      try {
+        size = (await fs.stat(file)).size;
+      } catch {
+        jsonResponse(res, 404, { ok: false, error: "no such song" });
+        return;
+      }
+      res.writeHead(200, {
+        "content-type": "audio/mpeg",
+        "content-length": size,
+        "accept-ranges": "none",
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff"
+      });
+      if (req.method === "HEAD") {
+        res.end();
+        return;
+      }
+      const body = fsSync.createReadStream(file);
+      body.on("error", () => res.destroy());
+      body.pipe(res);
       return;
     }
     if (pathname.startsWith(DOWNLOAD_PREFIX)) {

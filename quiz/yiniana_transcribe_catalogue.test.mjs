@@ -47,11 +47,13 @@ async function run(line) {
  */
 function fakeHear({ srt = SRT } = {}) {
   return async (command, args, options = {}) => {
-    const at = args.indexOf("--output");
-    if (at >= 0) {
-      const output = args[at + 1];
-      await fs.writeFile(output.replace(/\.txt$/u, ".srt"), srt);
-      await fs.writeFile(output, "The words the house heard.\n");
+    // The hear lane is asked the way a pyash program asks: the song in, the
+    // words out. The output is the file the program was told to write.
+    const output = args.find((arg) => String(arg).endsWith(".srt"));
+    if (output) {
+      await fs.mkdir(path.dirname(output), { recursive: true });
+      await fs.writeFile(output, srt);
+      await fs.writeFile(`${output}.plain.txt`, "The words the house heard.\n");
     }
     return { stderr: "" };
   };
@@ -139,11 +141,10 @@ test("the catalogue is heard song by song, and a song that cannot be heard does 
     runCommand: async (command, args) => {
       calls += 1;
       if (calls === 1) throw new Error("the lane was busy");
-      const at = args.indexOf("--output");
-      if (at >= 0) {
-        const output = args[at + 1];
-        await fs.writeFile(output.replace(/\.txt$/u, ".srt"), SRT);
-        await fs.writeFile(output, "The words the house heard.\n");
+      const output = args.find((arg) => String(arg).endsWith(".srt"));
+      if (output) {
+        await fs.writeFile(output, SRT);
+        await fs.writeFile(`${output}.plain.txt`, "The words the house heard.\n");
       }
       return { stderr: "" };
     }

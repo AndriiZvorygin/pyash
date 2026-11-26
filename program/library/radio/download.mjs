@@ -10,6 +10,24 @@ import path from "node:path";
 
 export const DOWNLOAD_PREFIX = "/song/";
 
+// A song a listener may hear in the page.
+//
+// The download route hands a stranger a file. A listener who picks a song out
+// of the catalogue wants to hear it where they are, not to save it, so the song
+// is served the same way with a name a player opens instead of a name a browser
+// saves. The guards are the download's own: only a song of the catalogue, only
+// a plain file name, never a path.
+export const LISTEN_PREFIX = "/listen/";
+
+/**
+ * The url a song is heard from, in the page's own player.
+ */
+export function listenUrlFor(filename) {
+  const name = String(filename ?? "").trim();
+  if (!name) return "";
+  return `${LISTEN_PREFIX}${encodeURIComponent(name)}`;
+}
+
 /**
  * The url a song is downloaded from.
  */

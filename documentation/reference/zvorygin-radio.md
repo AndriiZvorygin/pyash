@@ -257,6 +257,28 @@ The old workflow gave the two halves different seeds.
 The length lives in two places — the text encoder's `duration` and the
 latent's `seconds` — and the runner writes the same number to both.
 
+#### How long a song is
+
+A song is as long as its words take to sing, so the length is counted rather
+than fixed. The producer divides the sheet's words by the pace its channel sings
+at, keeping the density the day programme already holds — about 1.8 words a
+second at 128 bpm — and stretches that time in proportion as the tempo drops.
+The same 300-word sheet is a 167 s day song and a 240 s night hymn.
+
+`radio producer durations` is the ceiling, not the length: an engine's entry is
+the longest a song of that engine may be, and no song exceeds it however much
+its sheet asks for. The floor is a song's own minimum of 90 s, so a thin sheet
+still gets a song rather than a fragment. Before this, every engine was rendered
+at a flat 175 s, and the night sheets — 309 words on average — were crammed in
+at 1.8 words a second, the pace of a day song: the music crawled and the words
+arrived far too fast, which is what made a 75 bpm hymn feel hurried.
+
+The ceiling is set by the engine, not chosen. Measured on ACE-Step 1.5 XL turbo
+with one sheet and one seed at three lengths: 175 s and 240 s both sing the words
+(287 of 297 recovered at 240 s), and **282 s comes back instrumental — no voice
+at all**. So the ceiling is 240 s. A song rendered past the break is not a slow
+song; it has no singer in it.
+
 ### Running an engine
 
 ```sh
@@ -370,12 +392,13 @@ station is a few hundred lines of Node and a small frame reader.
 | --- | --- |
 | `GET /stream.mp3` | the live programme: `audio/mpeg`, chunked, never ends |
 | `GET /<channel>.mp3` | the live programme of one channel: the same audio, another programme |
-| `GET /` | the station page: now playing, the channels, the catalogue, a tune-in button, a download for every song |
+| `GET /` | the station page: now playing, the channels, the catalogue, a listen button for every song, a tune-in button, a download for every song |
 | `GET /channels.json` | the channels: the name, the pace, the voice and the plain url of each |
-| `GET /playlist.json` | the catalogue with titles, engines, lengths and download urls |
+| `GET /playlist.json` | the catalogue with titles, engines, lengths, listen urls and download urls |
 | `GET /status.json` | the now playing state, its download url and the listener count |
-| `GET /lyrics.json` | the words of the song that is playing, with the time of every line |
+| `GET /lyrics.json` | the words of a song, with the time of every line: the song playing, or the song named by `filename` |
 | `GET /events` | the words of the song, streamed in step with the audio the station sends |
+| `GET /listen/<name>` | the song itself, as a stream the page's player opens, so it can be heard without being kept |
 | `GET /song/<name>` | the song itself, as an attachment a listener may keep |
 | `GET /health` | the liveness check |
 
@@ -388,6 +411,33 @@ GET /lyrics.json?channel=night
 GET /status.json?channel=night
 GET /playlist.json?channel=night
 ```
+
+### Hearing one song, or the station
+
+The page has two ways to listen, and the listener chooses without leaving it.
+
+**The station** is the radio: the page opens tuned in, and the words follow
+whatever the programme is playing.
+
+**A song** is a choice: every entry of the catalogue carries a *Listen* button,
+which plays that song in the page's own player and times its words from the
+start of that song. The button on the playing row turns back into *Listen* to
+stop it. A song that ends on its own returns the player to the station, so a
+listener is never left with a silent player.
+
+The chosen song's words come from `GET /lyrics.json?filename=<name>`. The route
+serves the words of any song of the programme, not only the song on the air,
+because a listener who picks a song out of the list reads the words of the song
+they picked.
+
+*Tune in* at the top of the now-playing card leaves the chosen song and returns
+to the radio. The card's state line says which of the two is on, so the
+listener always knows what they are hearing.
+
+The song a listener hears is served by `GET /listen/<name>`: the same file
+`GET /song/<name>` hands over, with the same guards, but without
+`Content-Disposition: attachment` — a player opens it in place, and nothing is
+saved unless the listener asks for the download.
 
 ### Taking a song home
 
@@ -981,7 +1031,7 @@ prah
 | `radio channels` | `radio/channels.txt` | the programmes of the station |
 | `radio producer channel` | `""` | the channel the producer fills; empty is every channel |
 | `radio producer engines` | map | the engine and the workflow that serves it |
-| `radio producer durations` | map | the engine and the length of its song |
+| `radio producer durations` | map | the longest a song of that engine may be |
 | `radio producer seeds` | `2` | seeds rendered per song |
 | `radio producer song count` | `1` | songs made per run |
 | `radio producer audition seconds` | `0` | the window that decides a song; `0` hears the whole render |

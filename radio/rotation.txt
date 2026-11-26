@@ -27,3 +27,21 @@ az-go-forth.mp3
 az-preparation.mp3
 az-samantha.mp3
 yue2-dignity.mp3
+
+# The night renders that were sung too fast for the night programme.
+#
+# A song is as long as its words take to sing. These were rendered into a flat
+# 175 s before the length followed the words, so a dense sheet arrived at the
+# pace of a day song while the music crawled at a hymn's. They are slow music
+# with day-song words, so they play in the day programme, where that density is
+# the pace the channel already keeps. Their lane's day song is a different
+# song, so both may play.
+night-acceptance.mp3
+night-contemplation.mp3
+night-gratitude.mp3
+night-harmony.mp3
+night-holy-spirit.mp3
+night-patience.mp3
+night-peace.mp3
+night-solitude.mp3
+night-stillness.mp3

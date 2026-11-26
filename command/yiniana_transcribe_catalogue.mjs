@@ -26,6 +26,10 @@ import { loadDefaultConfig } from "./run_pya_helpers.mjs";
 
 const DEFAULT_CATALOGUE = "radio/audio";
 
+// The hear lane, asked for the way a pyash program asks: the song in, the words
+// with their times out. The lane chooses the engine.
+export const HEAR_EXAMPLE = "examples/pyash/yiniana-radio-hear.pya";
+
 /**
  * Run a command and wait for it to finish.
  */
@@ -68,8 +72,6 @@ export async function transcribeSong({
   lyricsDirectory,
   workDirectory,
   repoRoot = process.cwd(),
-  hearBin = "",
-  hearModel = "",
   ffmpeg = "ffmpeg",
   runCommand = run,
   log = () => {}
@@ -83,7 +85,8 @@ export async function transcribeSong({
     return { name: track.filename, status: "present" };
   } catch {
     // the words are not placed yet
-  }  await fs.mkdir(workDirectory, { recursive: true });
+  }
+  await fs.mkdir(workDirectory, { recursive: true });
   const stem = path.basename(track.filename, ".mp3");
   let transcript = heard;
   try {
@@ -91,16 +94,18 @@ export async function transcribeSong({
     log(`${track.filename} was heard before`);
   } catch {
     const windowPath = path.join(workDirectory, `${stem}.wav`);
-    const transcriptPath = path.join(workDirectory, `${stem}.txt`);
     await runCommand(ffmpeg, buildListenArgs({ audioPath: track.path, windowPath }), { cwd: repoRoot, label: `listen ${stem}` });
+    // The song is heard through the hear lane, not by a machine named here:
+    // the lane owns the voice it uses, the chunks a long song is heard in, and
+    // what to do when the model refuses a chunk. A song is sung, not spoken, so
+    // the lane hears it with the engine the house keeps for singing.
     await runCommand(process.execPath, [
-      path.join(repoRoot, "command", "whisper_main.mjs"),
-      "--input", windowPath,
-      "--bin", hearBin,
-      "--model", hearModel,
-      "--output", transcriptPath
+      path.join(repoRoot, "command", "run_pya_program.mjs"),
+      HEAR_EXAMPLE,
+      "ob", "filename", windowPath, "to", "name", "audio", "ya",
+      "ob", "filename", path.join(workDirectory, `${stem}.srt`), "to", "name", "output"
     ], { cwd: repoRoot, label: `hear ${stem}` });
-    transcript = transcriptPath.replace(/\.txt$/u, ".srt");
+    transcript = path.join(workDirectory, `${stem}.srt`);
   }
   const placed = await alignWordsToFile({
     sheetPath,
@@ -135,8 +140,6 @@ export async function transcribeCatalogue({
   lyricsDirectory = "",
   workDirectory = "",
   repoRoot = process.cwd(),
-  hearBin = "",
-  hearModel = "",
   runCommand = run,
   log = () => {}
 } = {}) {
@@ -149,8 +152,6 @@ export async function transcribeCatalogue({
         lyricsDirectory,
         workDirectory: workDirectory || path.join(repoRoot, "artifacts", "radio-producer"),
         repoRoot,
-        hearBin,
-        hearModel,
         runCommand,
         log
       });
@@ -182,8 +183,6 @@ export async function startCatalogueTranscripts({ cwd = process.cwd() } = {}) {
     catalogueDirectory,
     lyricsDirectory,
     repoRoot: cwd,
-    hearBin: resolveConfigText("hear bin") ?? "",
-    hearModel: resolveConfigText("hear model") ?? "",
     log: (line) => process.stdout.write(`yiniana transcripts: ${line}\n`)
   });
   process.stdout.write(`${JSON.stringify({

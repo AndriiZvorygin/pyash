@@ -93,6 +93,14 @@ export function renderStationPage({ stationName = "Radio", channels = [], channe
   a.download:hover { background: #1d212a; }
   .now a.download { margin-top: .9rem; }
   .now .playing { color: #d8a657; font-size: .8rem; text-transform: uppercase; letter-spacing: .12em; }
+  .mode { display: flex; gap: .5rem; align-items: center; margin: .9rem 0 0; }
+  .mode .state { color: #8b8f9c; font-size: .85rem; }
+  .mode .state strong { color: #d8a657; font-weight: 600; }
+  button.listen { margin: 0; padding: .35rem .8rem; border-radius: .4rem; border: 1px solid #4a3d22;
+                  background: transparent; color: #d8a657; font-size: .85rem; font-weight: 500; cursor: pointer; }
+  button.listen:hover { background: #1d212a; }
+  button.listen[aria-pressed="true"] { background: #d8a657; border-color: #d8a657; color: #17140e; }
+  li .playing-now { margin-left: .6rem; color: #d8a657; font-size: .8rem; }
   .ticker { margin-top: 1.25rem; border: 1px solid #23262f; border-radius: .5rem; background: #14171e; overflow: hidden; }
   .ticker .label { color: #8b8f9c; font-size: .72rem; text-transform: uppercase; letter-spacing: .12em; padding: .5rem .9rem 0; }
   .ticker .run { display: inline-block; white-space: nowrap; padding: .35rem 0 .5rem; color: #d8a657; font-size: .95rem;
@@ -123,7 +131,10 @@ ${picker}
     <div class="meta" id="now-meta"></div>
     <div id="now-download"></div>
     <p class="listen">This channel, in any player: <code id="listen-url">${streamUrl}</code></p>
-    <button id="tune" type="button">Tune in</button>
+    <div class="mode">
+      <button id="tune" type="button">Tune in</button>
+      <span class="state" id="mode-state">Listening to the station</span>
+    </div>
     <audio id="player" controls preload="none" src="${streamUrl}"></audio>
     <div class="words" id="words"><div class="empty">The words of the song will follow it here.</div></div>
   </section>
@@ -147,7 +158,8 @@ ${picker}
   const nowDownload = document.getElementById("now-download");
   const wordsBox = document.getElementById("words");
   const tickerRun = document.getElementById("ticker-run");
-  document.getElementById("tune").addEventListener("click", () => player.play());
+  const modeState = document.getElementById("mode-state");
+  const tuneButton = document.getElementById("tune");
 
   // The channel the listener asked for. The page is a page of one channel,
   // and the channel is named in the address.
@@ -156,6 +168,12 @@ ${picker}
   const channel = channels.find((entry) => entry.name === asked) || channels[0] || { name: "", streamUrl: "/stream.mp3" };
   const listenUrl = document.getElementById("listen-url");
   if (listenUrl && channel.streamUrl) listenUrl.textContent = location.origin + channel.streamUrl;
+
+  // There are two ways to listen. The station is the radio: a listener tunes in
+  // and hears whatever the programme is playing. A song is a choice: a listener
+  // picks one out of the catalogue, hears it on its own, and reads its words as
+  // it plays. Tuning in again leaves the chosen song and returns to the radio.
+  const stationMusic = { mode: "station", filename: "", listedAt: 0 };
 
   // The songs the station has streamed, and the place they take in the audio
   // it has sent. The words of a song come with the song.
@@ -186,6 +204,87 @@ ${picker}
     link.setAttribute("download", "");
     return link;
   }
+
+  // The page says which of the two ways the listener is hearing the station.
+  function showMode() {
+    const chosen = stationMusic.mode === "song";
+    tuneButton.setAttribute("aria-pressed", chosen ? "false" : "true");
+    if (!modeState) return;
+    modeState.replaceChildren();
+    if (chosen) {
+      modeState.append("Playing ");
+      const name = document.createElement("strong");
+      name.textContent = stationMusic.chosen?.title || stationMusic.filename;
+      modeState.append(name, " from the catalogue");
+      return;
+    }
+    modeState.textContent = "Listening to the station";
+  }
+
+  // A song out of the catalogue: the player leaves the station and plays that
+  // song, and the words follow the song the listener chose.
+  async function playChosenSong(track) {
+    stationMusic.mode = "song";
+    stationMusic.filename = track.filename;
+    stationMusic.chosen = track;
+    shownSong = "";
+    shownLine = -1;
+    shownSecond = -1;
+    player.src = track.listenUrl || "";
+    player.load();
+    try {
+      await player.play();
+    } catch (error) {
+      // a browser that will not start the audio until the listener asks again
+    }
+    // The words of the chosen song are asked for by name: the station serves
+    // the words of any song of the catalogue, not only the one on the air.
+    try {
+      const response = await fetch("/lyrics.json?channel="
+        + encodeURIComponent(channel.name)
+        + "&filename=" + encodeURIComponent(track.filename), { cache: "no-store" });
+      const payload = await response.json();
+      if (stationMusic.filename !== track.filename) return;
+      stationMusic.chosen = {
+        ...track,
+        durationSeconds: Number(payload.durationSeconds || track.durationSeconds || 0),
+        source: payload.source,
+        lines: Array.isArray(payload.lines) ? payload.lines : []
+      };
+      shownLine = -1;
+      showMode();
+      renderCatalogue();
+    } catch (error) {
+      // the song still plays; the words come from the station's own report
+    }
+    showMode();
+    renderCatalogue();
+  }
+
+  // Tuning in again: the player leaves the chosen song and returns to the
+  // radio, where the words follow whatever the programme is playing.
+  async function tuneIn() {
+    stationMusic.mode = "station";
+    stationMusic.filename = "";
+    stationMusic.chosen = null;
+    shownSong = "";
+    shownLine = -1;
+    shownSecond = -1;
+    player.src = channel.streamUrl || "/stream.mp3";
+    player.load();
+    try {
+      await player.play();
+    } catch (error) {
+      // a browser that will not start the audio until the listener asks again
+    }
+    nowTitle.textContent = "Loading the station";
+    nowDownload.replaceChildren();
+    nowMeta.textContent = "";
+    showMode();
+    renderCatalogue();
+  }
+
+  tuneButton.addEventListener("click", () => { tuneIn(); });
 
   // The audio the station has sent, grown by the time that has passed since
   // the browser was told about it.
@@ -236,32 +335,7 @@ ${picker}
     shownSecond = -1;
   }
 
-  function renderWords() {
-    const content = heardAudio();
-    const song = songAt(content);
-    if (!song) {
-      wordsBox.replaceChildren();
-      const empty = document.createElement("div");
-      empty.className = "empty";
-      empty.textContent = "The station is getting ready.";
-      wordsBox.append(empty);
-      tickerRun.textContent = "";
-      return;
-    }
-    if (song.filename !== shownSong) {
-      shownSong = song.filename;
-      shownLine = -1;
-      showSong(song);
-    }
-    const seconds = content - Number(song.contentStart || 0);
-    const played = Math.max(0, Math.floor(seconds));
-    if (played !== shownSecond) {
-      shownSecond = played;
-      nowMeta.textContent = song.engine + " - " + song.topic
-        + " - " + played + "s of " + Math.round(Number(song.durationSeconds || 0)) + "s"
-        + " - " + listeners + " listening";
-    }
-    const lines = song.lines || [];
+  function showWords(lines, seconds) {
     const index = lineIndexAt(lines, seconds);
     if (index === shownLine) return;
     shownLine = index;
@@ -292,6 +366,62 @@ ${picker}
     tickerRun.style.animation = "none";
     void tickerRun.offsetWidth;
     tickerRun.style.animation = "";
+  }
+
+  // A song the listener chose plays on its own, straight from the catalogue.
+  // Its words are timed from the start of that song, not from the station's
+  // clock, so the listener reads what they are hearing.
+  function renderChosenSong() {
+    const song = stationMusic.chosen;
+    if (!song) return;
+    const seconds = player.currentTime || 0;
+    const played = Math.max(0, Math.floor(seconds));
+    if (shownSong !== song.filename) {
+      shownSong = song.filename;
+      shownLine = -1;
+      nowTitle.textContent = song.title || song.filename;
+      const link = downloadLink(song.downloadUrl, "Download this song");
+      nowDownload.replaceChildren(...(link ? [link] : []));
+    }
+    if (played !== shownSecond) {
+      shownSecond = played;
+      nowMeta.textContent = song.engine + " - " + song.topic
+        + " - " + played + "s of " + Math.round(Number(song.durationSeconds || 0)) + "s"
+        + " - playing from the catalogue";
+    }
+    showWords(song.lines || [], seconds);
+  }
+
+  function renderWords() {
+    if (stationMusic.mode === "song") {
+      renderChosenSong();
+      return;
+    }
+    const content = heardAudio();
+    const song = songAt(content);
+    if (!song) {
+      wordsBox.replaceChildren();
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "The station is getting ready.";
+      wordsBox.append(empty);
+      tickerRun.textContent = "";
+      return;
+    }
+    if (song.filename !== shownSong) {
+      shownSong = song.filename;
+      shownLine = -1;
+      showSong(song);
+    }
+    const seconds = content - Number(song.contentStart || 0);
+    const played = Math.max(0, Math.floor(seconds));
+    if (played !== shownSecond) {
+      shownSecond = played;
+      nowMeta.textContent = song.engine + " - " + song.topic
+        + " - " + played + "s of " + Math.round(Number(song.durationSeconds || 0)) + "s"
+        + " - " + listeners + " listening";
+    }
+    showWords(song.lines || [], seconds);
   }
 
   // The station streams the words of the song in step with the audio it
@@ -335,6 +465,13 @@ ${picker}
 
   player.addEventListener("playing", () => {
     hasPlayed = true;
+  });
+
+  // A song of the catalogue ends where it ends. The player then has nothing
+  // left to play, so it returns to the station: the radio picks up where the
+  // programme is, and the listener is never left with a silent player.
+  player.addEventListener("ended", () => {
+    if (stationMusic.mode === "song") tuneIn();
   });
 
   async function loadCatalogue() {
@@ -381,6 +518,28 @@ ${picker}
       meta.className = "meta";
       meta.textContent = " - " + track.engine + " - " + Math.round(track.durationSeconds || 0) + "s";
       item.append(track.title, meta);
+      const chosen = stationMusic.mode === "song" && stationMusic.filename === track.filename;
+      if (chosen) {
+        const now = document.createElement("span");
+        now.className = "playing-now";
+        now.textContent = "playing";
+        item.append(now);
+      }
+      // A song can be heard where it is listed, and the words follow it. The
+      // station is not left behind: tuning in brings it back.
+      const listen = document.createElement("button");
+      listen.type = "button";
+      listen.className = "listen";
+      listen.textContent = chosen ? "Playing" : "Listen";
+      listen.setAttribute("aria-pressed", chosen ? "true" : "false");
+      listen.addEventListener("click", () => {
+        if (chosen) {
+          tuneIn();
+          return;
+        }
+        playChosenSong(track);
+      });
+      item.append(listen);
       const link = downloadLink(track.downloadUrl, "Download");
       if (link) item.append(link);
       list.append(item);
@@ -391,6 +550,7 @@ ${picker}
 
   openStream();
   loadCatalogue();
+  showMode();
   // The words follow the song between the moments the station speaks.
   function follow() {
     renderWords();
