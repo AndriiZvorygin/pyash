@@ -9,6 +9,7 @@ import { loadEnglish30k, english30kLookupVariants, normalizeEnglish30kWord } fro
 import { loadEnglishWordNetBridges } from "../translation/english_wordnet_bridges.mjs";
 import { loadEnglishWordNetFrequencyResources } from "../translation/english_wordnet_frequency.mjs";
 import { parseCompoundLexicon } from "../translation/compound_lexicon.mjs";
+import { harvestWiktionary } from "../../../command/wiktionary_harvest.mjs";
 import {
   parseCowWordNetCrosswalkPya,
   lookupCowChineseFormsByWordNetSenses
@@ -25,6 +26,13 @@ const OUTPUT = new URL("./reference.pya", import.meta.url);
 const RELEASE = "Open English WordNet 2025";
 const SUMO_RELEASE = "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed";
 const CURATED_GLOSS_RELEASE = "pyash authored";
+// A concept WordNet does not index can still have a standard definition if
+// Wiktionary carries one. The archive is mounted on the Kiwix host, so the
+// identifier is the article name and the URL is derived from it: nothing is
+// downloaded into the repository.
+const WIKTIONARY_DATASET = "wiktionary";
+const WIKTIONARY_RELEASE = "en_all_nopic_2026-08";
+const WIKTIONARY_SITE = "https://zim.zvorygin.ca";
 const ACCEPTED_CURATED_STATUSES = new Set(["accepted-curated", "accepted-delimited", "accepted-deterministic"]);
 const ACCEPTED_WORDNET_STATUSES = new Set(["accepted-llm", "repaired-llm", "accepted-deterministic"]);
 const LANGUAGE_FILES = Object.freeze({
@@ -535,6 +543,7 @@ export function buildAcceptedReferenceSource({
   sumoRows = [],
   sumoConceptLinkRows = [],
   curatedGlosses = [],
+  wiktionaryLinks = [],
   render = true
 } = {}) {
   const entriesByKey = new Map();
@@ -731,6 +740,19 @@ export function buildAcceptedReferenceSource({
     addSourceLink(entry, "pyash-curated", CURATED_GLOSS_RELEASE, identifier, "authored-gloss");
     addSourceGloss(entry, "en", "pyash-curated", CURATED_GLOSS_RELEASE, identifier, record.gloss);
   }
+  // A Wiktionary link is a citation, not a downloaded corpus: the identifier is
+  // the article name and the URL is derived from the release and that name. The
+  // gloss is Wiktionary's own domain-tagged definition, recorded under the
+  // wiktionary dataset so a reader can tell which dictionary answered.
+  for (const record of wiktionaryLinks) {
+    if (!Array.isArray(record?.pyashSequence) || record.pyashSequence.length === 0) continue;
+    if (typeof record.article !== "string" || !record.article.trim()) continue;
+    const entry = getEntry(record.pyashSequence);
+    addSourceLink(entry, WIKTIONARY_DATASET, WIKTIONARY_RELEASE, record.article, "exact-term");
+    if (record.definition) {
+      addSourceGloss(entry, "en", WIKTIONARY_DATASET, WIKTIONARY_RELEASE, record.article, record.definition);
+    }
+  }
 
   const languages = [...new Set([
     "en", ...Object.keys(LANGUAGE_FILES), "zh-Latn-pinyin", "yue-Latn-jyutping"
@@ -797,7 +819,8 @@ export async function loadReferenceSourceInputs() {
     frequencyResources,
     legacyDictionaries,
     vocabularyReviewSource,
-    curatedGlossSource
+    curatedGlossSource,
+    wiktionarySource
   ] = await Promise.all([
     loadEnglishWordNetBridges(),
     readFile(translation("compound_coverage_curated.pya"), "utf8"),
@@ -821,7 +844,8 @@ export async function loadReferenceSourceInputs() {
       rows: await readJson(legacy(filename))
     }))),
     readFile(translation("vocabulary_entry_reviews.pya"), "utf8"),
-    readFile(translation("curated_glosses.pya"), "utf8")
+    readFile(translation("curated_glosses.pya"), "utf8"),
+    readFile(translation("wiktionary_links.pya"), "utf8")
   ]);
   const curatedEntries = parseCompoundLexicon(curatedSource, {
     name: "translation_compounds_derived_curated",
@@ -877,6 +901,23 @@ export async function loadReferenceSourceInputs() {
       if (!pya.length || typeof gloss !== "string" || !gloss.trim()) return [];
       return [{ pyashSequence: pya, gloss: gloss.trim() }];
     });
+  // The map key is the Pyash spelling; the value is the Wiktionary article name.
+  // The definition is read from the mounted archive, so a build without the
+  // Kiwix host still links the term and simply carries no gloss.
+  const wiktionaryLinks = parseMapRows(wiktionarySource, "translation_wiktionary_links")
+    .filter((sentence) => sentence.su.text !== "format"
+      && !sentence.su.text.startsWith("scope"))
+    .flatMap((sentence) => {
+      const pya = sentence.su.text.split(/\s+/u).filter(Boolean);
+      const article = sentence.ob?.text;
+      if (!pya.length || typeof article !== "string" || !article.trim()) return [];
+      return [{ pyashSequence: pya, article: article.trim() }];
+    });
+  const harvested = harvestWiktionary(wiktionaryLinks.map((record) => record.article));
+  const definitionByArticle = new Map(harvested.map((row) => [row.entry, row.definition]));
+  for (const record of wiktionaryLinks) {
+    record.definition = definitionByArticle.get(record.article) ?? null;
+  }
   return {
     bridgeCatalog,
     vocabularyReviews,
@@ -892,7 +933,8 @@ export async function loadReferenceSourceInputs() {
     legacyDictionaries,
     sumoRows,
     sumoConceptLinkRows,
-    curatedGlosses: curatedGlossRows
+    curatedGlosses: curatedGlossRows,
+    wiktionaryLinks
   };
 }
 

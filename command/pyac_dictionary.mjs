@@ -21,6 +21,8 @@ const referenceVolumePath = path.join(root, "program/library/dictionary/referenc
 let configureLoaded = false;
 const WORDNET_RELEASE = "Open English WordNet 2025";
 const SUMO_RELEASE = "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed";
+/** The mounted Kiwix site; a Wiktionary citation is a path on it, not a download. */
+const WIKTIONARY_SITE = "https://zim.zvorygin.ca";
 const binaryCandidates = [
   path.join(root, "rust/pyac/target/release/pyac-dictionary"),
   path.join(root, "rust/pyac/target/debug/pyac-dictionary")
@@ -268,6 +270,29 @@ function englishFormsFor(binary, spelling) {
   }
 }
 
+/** A dataset's display name: `pyash-curated` reads as "Pyac". */
+function describeDataset(dataset) {
+  if (dataset === "pyash-curated") return "Pyac";
+  if (dataset === "wiktionary") return "Wiktionary";
+  if (dataset === "wordnet") return "WordNet";
+  return dataset;
+}
+
+/**
+ * The resolvable citation for a gloss, or null when the identifier is not a
+ * URL-shaped reference.
+ *
+ * Wikidata and Wiktionary identifiers resolve through a site and a release, so
+ * the URL exists without the repository storing the corpus. A WordNet sense id
+ * has no per-term web page we can promise, so it is cited by id alone.
+ */
+function citationUrl(gloss) {
+  if (gloss.dataset === "wiktionary") {
+    return `${WIKTIONARY_SITE}/content/wiktionary_${gloss.release}/${gloss.identifier}`;
+  }
+  return null;
+}
+
 function renderReferenceEntry(match, query, binary) {
   const english = match.entry.lexicalForms
     .filter((form) => form.language === "en")
@@ -275,6 +300,14 @@ function renderReferenceEntry(match, query, binary) {
   const lines = [`${query}: ${match.key}${english.length ? ` [${[...new Set(english)].join(", ")}]` : ""}`];
   for (const gloss of match.interimDefinitions) {
     lines.push(`  WordNet ${gloss.identifier}: ${gloss.text}`);
+  }
+  // Every non-SUMO reference, whatever dictionary answered. A Pyac word may carry
+  // a WordNet sense, a Wiktionary term, an authored gloss, and a SUMO concept at
+  // once; none of them is the identity, so all are printed with their source.
+  for (const gloss of match.entry.sourceGlosses.filter((source) => source.dataset !== "sumo")) {
+    lines.push(`  ${describeDataset(gloss.dataset)} ${gloss.identifier}: ${gloss.text}`);
+    const url = citationUrl(gloss);
+    if (url) lines.push(`    ${url}`);
   }
   for (const link of match.entry.sourceLinks.filter((source) => source.dataset === "sumo")) {
     lines.push(`  SUMO ${link.identifier} (${link.relation})`);

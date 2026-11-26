@@ -1,0 +1,7 @@
+su name translation_wiktionary_links be map def
+su text "format" ob text "wiktionary-link-v1" ya
+su text "scope" ob text "Wiktionary entries for Pyac concepts WordNet does not index. The archive is mounted on the Kiwix host, so a link costs the repository no bytes: the identifier is the article name and the release names the snapshot, from which the citation URL is derived. Definitions are the domain-tagged senses Wiktionary carries, which is the closest available standard for linguistic and computing terms that WordNet has no synset for." ya
+su text "scope release" ob text "en_all_nopic_2026-08" ya
+su text "scope site" ob text "https://zim.zvorygin.ca" ya
+su text "srim" ob text "signature" ya
+prah

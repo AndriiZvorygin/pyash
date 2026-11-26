@@ -598219,6 +598219,8 @@ su name tlat kwon ob text "srim" at text "entry" be text ya
 su name tlat kwon ob text "srim" as text "en" from text "signature" to text "signature" at text "lexical-form" be text ya
 su name tlat kwon ob text "srim" as text "zh" from text "标" to text "标" at text "lexical-form" be text ya
 su name tlat kwon ob text "srim" as text "zh-Latn-pinyin" from text "biāo" to text "biāo" at text "lexical-form" be text ya
+su name tlat kwon ob text "srim" as text "wiktionary" from text "en_all_nopic_2026-08" to text "signature" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "srim" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "signature" with text "A pattern used for matching the identity of a virus, the parameter types of a method, etc." at text "source-gloss" be text ya
 su name tlat kwon ob text "srim hdif" at text "entry" be text ya
 su name tlat kwon ob text "srim hdif" as text "en" from text "signature recognition" to text "signature recognition" at text "lexical-form" be text ya
 su name tlat kwon ob text "srim hdif" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "ComputerProgram" by text "subsumed-by" at text "source-link" be text ya

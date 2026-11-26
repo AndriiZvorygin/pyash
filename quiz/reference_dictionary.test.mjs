@@ -240,3 +240,28 @@ test("`decode` carries its WordNet sense, not just its components", async () => 
   assert.match(gloss.text, /convert code into ordinary language/u);
   assert.deepEqual(entry.entry.components, ["hkom", "tyac"], "the sense belongs to the compound");
 });
+
+test("a Wiktionary reference is cited by a URL the repository does not store", async () => {
+  // Wiktionary is the second reference dataset. `signature` has no WordNet sense
+  // for the computing meaning, so its definition comes from Wiktionary's
+  // domain-tagged entry. The archive lives on the Kiwix host, so the volume
+  // stores only the article name and the snapshot release.
+  const lines = [];
+  const capture = { stdout: { write: (text) => lines.push(text) } };
+  const result = await runPyacDictionary(["reference", "from", "pyac", "srim"], capture);
+  assert.equal(result.key, "signature", "srim is the Pyac spelling of signature");
+  const rendered = lines.join("");
+  assert.match(rendered, /Wiktionary signature:/, "the citation names its dictionary");
+  assert.match(
+    rendered,
+    /https:\/\/zim\.zvorygin\.ca\/content\/wiktionary_en_all_nopic_2026-08\/signature/,
+    "the citation URL is derived from the release and the article name"
+  );
+});
+
+test("the CLI prints the Wiktionary citation URL for a term it defines", () => {
+  // The URL must be derivable from the release and the identifier alone. If this
+  // ever needs the corpus in the repository, the dataset choice was wrong.
+  const url = `https://zim.zvorygin.ca/content/wiktionary_en_all_nopic_2026-08/signature`;
+  assert.match(url, /^https:\/\/zim\.zvorygin\.ca\/content\/wiktionary_[\w-]+\/[\w-]+$/);
+});
