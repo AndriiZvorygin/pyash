@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { sentenceToPyash } from "../program/beautiful.mjs";
 import { buildDictionarySource } from "../program/library/dictionary/source.mjs";
 import { decodePyashProgram } from "../program/library/vliw/index.mjs";
-import { lookupLegacyName, lookupLegacyPyaName, lookupLegacyWord, lookupLegacyWordSequence } from "../program/library/vliw/quotes.mjs";
+import { lookupLegacyName, lookupLegacyPyaName, lookupLegacyWord, lookupLegacyWordSequence, lookupPyaWordSequence } from "../program/library/vliw/quotes.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const referenceVolumePath = path.join(root, "program/library/dictionary/reference.pyac");
@@ -50,13 +50,13 @@ function runBinary(binary, args, input) {
   }
 }
 
-function binaryKey(name) {
+function binaryKey(name, resolve = lookupLegacyWordSequence) {
   const words = String(name).trim().split(/\s+/u).filter(Boolean);
   if (!words.length) throw usageError("read requires a Pyash key");
   return words.flatMap((word) => {
     // A written compound is one token for the user but several atoms for the
     // volume (`kl6mpsas` keys as `kl6m,psas`), so expand before keying.
-    const sequence = lookupLegacyWordSequence(word);
+    const sequence = resolve(word);
     if (sequence) return sequence.map((entry) => Number.parseInt(entry.hnuc, 16).toString(16));
     const entry = lookupLegacyPyaName(word);
     if (!entry?.hnuc) throw new Error(`Pyash dictionary key has no HNUC mapping: ${word}`);
@@ -289,11 +289,15 @@ async function runReferenceDictionary(args, { stdout = process.stdout } = {}) {
   if (!subject) throw usageError("dictionary lookup requires a query after `from <language>`");
 
   const isPyashKey = (text) => lookupLegacyWordSequence(text) !== null;
+  // `from pyac` reads the text as Pyac spelling, so `name` is `na me`, never the
+  // English word whose gloss is "name". Using the English-first resolver here
+  // would return `hnim` for `name` and make the explicit source meaningless.
+  const pyacResolver = explicitSource === "pyac" ? lookupPyaWordSequence : lookupLegacyWordSequence;
   // A key that segments and resolves still may have no volume entry, which is
   // a miss rather than a failure, so fall through to the surface search.
   const keyLookup = () => {
     try {
-      return runBinary(binary, ["entry", referenceVolumePath, binaryKey(subject)]);
+      return runBinary(binary, ["entry", referenceVolumePath, binaryKey(subject, pyacResolver)]);
     } catch (error) {
       // A token with no HNUC mapping is not a Pyac word, so it is a miss rather
       // than a failure — the caller wanted a key and this text is not one.
@@ -311,11 +315,44 @@ async function runReferenceDictionary(args, { stdout = process.stdout } = {}) {
     stdout.write(`${renderReferenceEntry(entry, subject)}\n`);
     return entry;
   };
+  // `from pyac name` reads as the two atoms `na me`. The volume may not carry
+  // that particular compound, and a grammar-only atom cannot always be decoded
+  // back through the volume, but the reading itself is the answer: report each
+  // atom's Pyac spelling, HNUC, and gloss.
+  const pyacReading = () => {
+    const sequence = lookupPyaWordSequence(subject);
+    if (!sequence) return null;
+    const lines = [`${subject}: ${sequence.map((atom) => atom.pya).join(" ")}`];
+    for (const atom of sequence) {
+      lines.push(`  ${atom.pya} = ${atom.en} (0x${Number.parseInt(atom.hnuc, 16).toString(16)})`);
+    }
+    return { sequence, lines };
+  };
   let result;
   if (explicitSource === "en" || explicitSource === "zh") {
     result = runBinary(binary, ["surface-entries", referenceVolumePath, explicitSource, subject]);
   } else if (explicitSource === "pyac") {
-    return keyEntry();
+    // Prefer the compound entry when the volume has it; otherwise report the
+    // atoms the spelling resolves to, so the reading is never hidden. A
+    // grammar-only atom has no decodable entry, so a failure to render it is
+    // not a reason to withhold the reading.
+    const compound = keyLookup();
+    if (compound !== null) {
+      try {
+        const entry = summarizeEntryCodelets(compound);
+        stdout.write(`${renderReferenceEntry(entry, subject)}\n`);
+        return entry;
+      } catch (error) {
+        if (!/no recoverable vocabulary name/u.test(error.message)) throw error;
+      }
+    }
+    const reading = pyacReading();
+    if (reading) {
+      stdout.write(`${reading.lines.join("\n")}\n`);
+      return { query: subject, atoms: reading.sequence.map((atom) => atom.pya) };
+    }
+    stdout.write(`${subject}: no dictionary entry found\n`);
+    return { query: subject, matches: [] };
   } else if (/^[anrvs]:\d{8}-[anrvs]$/iu.test(query)) {
     result = runBinary(binary, ["source-entries", referenceVolumePath, "wordnet", WORDNET_RELEASE, query]);
   } else if (/^sumo:/iu.test(query)) {

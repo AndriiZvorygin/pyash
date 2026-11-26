@@ -144,16 +144,29 @@ test("a compound with no volume entry reports a miss instead of failing", async 
   assert.deepEqual(result.matches, []);
 });
 
-test("`from en` reads an English word even when it also spells a Pyac atom", async () => {
-  // `name` is both an English word and the Pyac atom `hnim`. Without an explicit
-  // source the CLI silently picks one, so the same English token returns
-  // different answers depending on spelling luck. `from en` pins the English
-  // interpretation: twelve English senses, not the single atom entry.
-  const english = await runPyacDictionary(["reference", "from", "en", "name"], silent);
+test("`from pyac` reads the text as Pyac glyphs, not as an English word", async () => {
+  // `name` written as Pyac is `na me`, not the atom `hnim` whose English gloss
+  // is "name". Reading it through the English-first resolver would return the
+  // atom and make `from pyac` indistinguishable from `from en`.
   const pyac = await runPyacDictionary(["reference", "from", "pyac", "name"], silent);
+  assert.deepEqual(pyac.atoms, ["na", "me"], "name spells na + me");
+  const english = await runPyacDictionary(["reference", "from", "en", "name"], silent);
   assert.ok(english.matches.length > 1, `expected several English senses, saw ${english.matches.length}`);
-  assert.equal(pyac.matches, undefined, "the Pyac source returns a single keyed entry");
-  assert.equal(pyac.key, "name");
+});
+
+test("`from pyac` prefers a catalogued compound over its atoms", async () => {
+  // `kl6mpsas` is `kl6m psas`, and the volume carries that compound, so the
+  // entry is more useful than the bare atom reading.
+  const pyac = await runPyacDictionary(["reference", "from", "pyac", "kl6mpsas"], silent);
+  assert.equal(pyac.key, "scalar produce");
+  assert.ok(pyac.entry.lexicalForms.length > 0);
+});
+
+test("`from pyac` reports the reading for a grammar-only atom", async () => {
+  // `sa` is a pronoun with no decodable volume entry. The reading must still be
+  // reported rather than raising the decoder's error.
+  const pyac = await runPyacDictionary(["reference", "from", "pyac", "sa"], silent);
+  assert.deepEqual(pyac.atoms, ["sa"]);
 });
 
 test("`from en` and `from pyac` disagree where the two readings differ", async () => {
