@@ -1,4 +1,4 @@
-use super::operation::{OperationArgumentType, OperationSignature};
+use super::operation::{ArgumentSlot, OperationSignature};
 use super::volume::{DictionaryMetadata, DictionaryVolumeError};
 use super::wire::{
     Field, Subject, Value, encode_index_sentence_v4, encode_sentence, encode_text_sentence,
@@ -82,7 +82,7 @@ fn signature_words(signature: &OperationSignature) -> Result<Vec<u16>, Dictionar
         .map_err(|_| DictionaryVolumeError::InvalidEntry("too many operation arguments"))?;
     words.push(count);
     for argument in &signature.arguments {
-        append_argument_type(&mut words, &argument.key)?;
+        append_argument_type(&mut words, &argument.case_type)?;
     }
     Ok(words)
 }
@@ -97,10 +97,10 @@ fn append_sequence(output: &mut Vec<u16>, words: &[u16]) -> Result<(), Dictionar
 
 fn append_argument_type(
     output: &mut Vec<u16>,
-    key: &OperationArgumentType,
+    key: &ArgumentSlot,
 ) -> Result<(), DictionaryVolumeError> {
     append_sequence(output, &key.grammatical_case)?;
-    append_sequence(output, &key.value_type)
+    append_sequence(output, &key.noun_class)
 }
 
 pub(super) fn profile_records_v4(
@@ -241,12 +241,12 @@ pub(super) fn encode_entry_v4(
         )?);
         for argument in &signature.arguments {
             let mut key_words = Vec::new();
-            append_argument_type(&mut key_words, &argument.key)?;
+            append_argument_type(&mut key_words, &argument.case_type)?;
             output.extend(encode_sentence(
                 Subject::Name(key),
                 &[
                     vector_field(SWIH_ESSIVE, &key_words),
-                    text_field(SO_SOURCE, &argument.name),
+                    text_field(SO_SOURCE, &argument.label),
                     text_field(MA_DESTINATION, &argument.description),
                 ],
             )?);
@@ -255,8 +255,8 @@ pub(super) fn encode_entry_v4(
             output.extend(encode_sentence(
                 Subject::Name(key),
                 &[
-                    vector_field(SWIH_ESSIVE, &result.value_type),
-                    text_field(YU_INSTRUMENTAL, &result.name),
+                    vector_field(SWIH_ESSIVE, &result.noun_class),
+                    text_field(YU_INSTRUMENTAL, &result.label),
                     text_field(MWAH_COMITATIVE, &result.description),
                 ],
             )?);

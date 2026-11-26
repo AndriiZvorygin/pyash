@@ -180,11 +180,11 @@ fn canonicalize_entry(entry: &mut DictionaryVolumeEntry) {
     for signature in &mut entry.operation_signatures {
         signature
             .arguments
-            .sort_by(|left, right| left.key.cmp(&right.key));
+            .sort_by(|left, right| left.case_type.cmp(&right.case_type));
         signature.results.sort_by(|left, right| {
-            (&left.value_type, &left.name, &left.description).cmp(&(
-                &right.value_type,
-                &right.name,
+            (&left.noun_class, &left.label, &left.description).cmp(&(
+                &right.noun_class,
+                &right.label,
                 &right.description,
             ))
         });
@@ -196,23 +196,23 @@ fn canonicalize_entry(entry: &mut DictionaryVolumeEntry) {
             .then_with(|| {
                 left.arguments
                     .iter()
-                    .map(|arg| (&arg.key, &arg.name, &arg.description))
+                    .map(|arg| (&arg.case_type, &arg.label, &arg.description))
                     .cmp(
                         right
                             .arguments
                             .iter()
-                            .map(|arg| (&arg.key, &arg.name, &arg.description)),
+                            .map(|arg| (&arg.case_type, &arg.label, &arg.description)),
                     )
             })
             .then_with(|| {
                 left.results
                     .iter()
-                    .map(|result| (&result.value_type, &result.name, &result.description))
+                    .map(|result| (&result.noun_class, &result.label, &result.description))
                     .cmp(
                         right
                             .results
                             .iter()
-                            .map(|result| (&result.value_type, &result.name, &result.description)),
+                            .map(|result| (&result.noun_class, &result.label, &result.description)),
                     )
             })
     });

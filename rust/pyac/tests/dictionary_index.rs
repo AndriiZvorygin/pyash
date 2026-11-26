@@ -1,6 +1,6 @@
 use pyac::dictionary::{
     DictionaryEntry, DictionaryIndex, DictionaryIndexError, LexicalForm, OperationArgument,
-    OperationArgumentType, OperationResult, OperationSignature, OperationSignatureKey, SourceLink,
+    ArgumentSlot, OperationResult, OperationSignature, OperationSignatureKey, SourceLink,
 };
 
 fn entry(key: &[u16], start: u32) -> DictionaryEntry {
@@ -197,25 +197,25 @@ fn operation_signature_lookup_uses_structure_not_argument_labels_or_order() {
         mood: vec![8],
         arguments: vec![
             OperationArgument {
-                key: OperationArgumentType {
+                case_type: ArgumentSlot {
                     grammatical_case: vec![2],
-                    value_type: vec![20],
+                    noun_class: vec![20],
                 },
-                name: "right operand".into(),
+                label: "right operand".into(),
                 description: "the second value".into(),
             },
             OperationArgument {
-                key: OperationArgumentType {
+                case_type: ArgumentSlot {
                     grammatical_case: vec![1],
-                    value_type: vec![20],
+                    noun_class: vec![20],
                 },
-                name: "left operand".into(),
+                label: "left operand".into(),
                 description: "the first value".into(),
             },
         ],
         results: vec![OperationResult {
-            value_type: vec![20],
-            name: "sum".into(),
+            noun_class: vec![20],
+            label: "sum".into(),
             description: "the computed result".into(),
         }],
     });
@@ -225,19 +225,19 @@ fn operation_signature_lookup_uses_structure_not_argument_labels_or_order() {
         mood: vec![8],
         arguments: vec![
             OperationArgument {
-                key: OperationArgumentType {
+                case_type: ArgumentSlot {
                     grammatical_case: vec![1],
-                    value_type: vec![20],
+                    noun_class: vec![20],
                 },
-                name: "first".into(),
+                label: "first".into(),
                 description: "first input".into(),
             },
             OperationArgument {
-                key: OperationArgumentType {
+                case_type: ArgumentSlot {
                     grammatical_case: vec![2],
-                    value_type: vec![20],
+                    noun_class: vec![20],
                 },
-                name: "second".into(),
+                label: "second".into(),
                 description: "second input".into(),
             },
         ],
@@ -248,13 +248,13 @@ fn operation_signature_lookup_uses_structure_not_argument_labels_or_order() {
         vec![7],
         vec![8],
         vec![
-            OperationArgumentType {
+            ArgumentSlot {
                 grammatical_case: vec![2],
-                value_type: vec![20],
+                noun_class: vec![20],
             },
-            OperationArgumentType {
+            ArgumentSlot {
                 grammatical_case: vec![1],
-                value_type: vec![20],
+                noun_class: vec![20],
             },
         ],
     );
@@ -268,9 +268,9 @@ fn operation_signature_lookup_uses_structure_not_argument_labels_or_order() {
     let wrong_type = OperationSignatureKey::new(
         vec![7],
         vec![8],
-        vec![OperationArgumentType {
+        vec![ArgumentSlot {
             grammatical_case: vec![1],
-            value_type: vec![21],
+            noun_class: vec![21],
         }],
     );
     assert_eq!(index.by_operation_signature(&wrong_type).count(), 0);
@@ -284,19 +284,19 @@ fn operation_signature_rejects_repeated_cases() {
         mood: vec![8],
         arguments: vec![
             OperationArgument {
-                key: OperationArgumentType {
+                case_type: ArgumentSlot {
                     grammatical_case: vec![1],
-                    value_type: vec![20],
+                    noun_class: vec![20],
                 },
-                name: "first".into(),
+                label: "first".into(),
                 description: "first input".into(),
             },
             OperationArgument {
-                key: OperationArgumentType {
+                case_type: ArgumentSlot {
                     grammatical_case: vec![1],
-                    value_type: vec![21],
+                    noun_class: vec![21],
                 },
-                name: "second".into(),
+                label: "second".into(),
                 description: "second input".into(),
             },
         ],

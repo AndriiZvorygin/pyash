@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use pyac::dictionary::{
     DictionaryFileReader, DictionaryMetadata, DictionaryVolume, DictionaryVolumeEntry, LexicalForm,
-    OperationArgument, OperationArgumentType, OperationResult, OperationSignature, SourceGloss,
+    OperationArgument, ArgumentSlot, OperationResult, OperationSignature, SourceGloss,
     SourceLink, encode_dictionary,
 };
 use serde::Deserialize;
@@ -78,18 +78,26 @@ struct OperationSignatureInput {
     results: Vec<OperationResultInput>,
 }
 
+// Wire structs. The JSON keys are a published contract with the source
+// producer (`program/library/dictionary/source.mjs`), so the serde names stay
+// as they were even though the Rust field names now say what the values are.
+// `value_type` is a noun class and `name` is a documentation label.
 #[derive(Deserialize)]
 struct OperationArgumentInput {
     grammatical_case: Vec<u16>,
-    value_type: Vec<u16>,
-    name: String,
+    #[serde(rename = "value_type")]
+    noun_class: Vec<u16>,
+    #[serde(rename = "name")]
+    label: String,
     description: String,
 }
 
 #[derive(Deserialize)]
 struct OperationResultInput {
-    value_type: Vec<u16>,
-    name: String,
+    #[serde(rename = "value_type")]
+    noun_class: Vec<u16>,
+    #[serde(rename = "name")]
+    label: String,
     description: String,
 }
 
@@ -178,11 +186,11 @@ fn convert_input(input: BuildInput) -> Result<DictionaryVolume, String> {
                             .arguments
                             .into_iter()
                             .map(|argument| OperationArgument {
-                                key: OperationArgumentType {
+                                case_type: ArgumentSlot {
                                     grammatical_case: argument.grammatical_case,
-                                    value_type: argument.value_type,
+                                    noun_class: argument.noun_class,
                                 },
-                                name: argument.name,
+                                label: argument.label,
                                 description: argument.description,
                             })
                             .collect(),
@@ -190,8 +198,8 @@ fn convert_input(input: BuildInput) -> Result<DictionaryVolume, String> {
                             .results
                             .into_iter()
                             .map(|result| OperationResult {
-                                value_type: result.value_type,
-                                name: result.name,
+                                noun_class: result.noun_class,
+                                label: result.label,
                                 description: result.description,
                             })
                             .collect(),

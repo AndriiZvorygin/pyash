@@ -2,7 +2,7 @@ use std::hint::black_box;
 use std::time::Instant;
 
 use pyac::dictionary::{
-    DictionaryEntry, DictionaryIndex, LexicalForm, OperationArgument, OperationArgumentType,
+    DictionaryEntry, DictionaryIndex, LexicalForm, OperationArgument, ArgumentSlot,
     OperationSignature, OperationSignatureKey, SourceLink,
 };
 
@@ -32,11 +32,11 @@ fn main() {
                 verb: key_for(index).to_vec(),
                 mood: vec![600],
                 arguments: vec![OperationArgument {
-                    key: OperationArgumentType {
+                    case_type: ArgumentSlot {
                         grammatical_case: vec![601],
-                        value_type: vec![602],
+                        noun_class: vec![602],
                     },
-                    name: "input value".into(),
+                    label: "input value".into(),
                     description: "the value consumed by this operation".into(),
                 }],
                 results: Vec::new(),
@@ -57,9 +57,9 @@ fn main() {
                 OperationSignatureKey::new(
                     key_for(target).to_vec(),
                     vec![600],
-                    vec![OperationArgumentType {
+                    vec![ArgumentSlot {
                         grammatical_case: vec![601],
-                        value_type: vec![602],
+                        noun_class: vec![602],
                     }],
                 ),
             )

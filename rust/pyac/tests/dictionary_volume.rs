@@ -4,7 +4,7 @@ use std::io::Cursor;
 use pyac::dictionary::{
     DictionaryField, DictionaryFileReader, DictionaryMetadata, DictionaryValue,
     DictionaryVolume, DictionaryVolumeEntry, LexicalForm, OperationArgument,
-    OperationArgumentType, OperationSignature, OperationSignatureKey, SourceGloss, SourceLink,
+    ArgumentSlot, OperationSignature, OperationSignatureKey, SourceGloss, SourceLink,
     encode_dictionary, encode_text_sentence,
 };
 
@@ -68,11 +68,11 @@ fn sample_volume() -> DictionaryVolume {
                 verb: vec![0x1111],
                 mood: vec![0x217e],
                 arguments: vec![OperationArgument {
-                    key: OperationArgumentType {
+                    case_type: ArgumentSlot {
                         grammatical_case: vec![0x245e],
-                        value_type: vec![0x0e1d],
+                        noun_class: vec![0x0e1d],
                     },
-                    name: "subject".into(),
+                    label: "subject".into(),
                     description: "the value being evaluated".into(),
                 }],
                 results: vec![],
@@ -140,9 +140,9 @@ fn writer_emits_reproducible_pack_and_seek_reader_reads_entry_on_demand() {
     let signature = OperationSignatureKey::new(
         vec![0x1111],
         vec![0x217e],
-        vec![OperationArgumentType {
+        vec![ArgumentSlot {
             grammatical_case: vec![0x245e],
-            value_type: vec![0x0e1d],
+            noun_class: vec![0x0e1d],
         }],
     );
     assert_eq!(

@@ -8,7 +8,7 @@ use super::words::{
     KA_ACCUSATIVE, LWOH_LOCATIVE, MA_DESTINATION, MWAH_COMITATIVE, SO_SOURCE, SWIH_ESSIVE,
     YU_INSTRUMENTAL,
 };
-use super::{OperationArgumentType, OperationSignatureKey};
+use super::{ArgumentSlot, OperationSignatureKey};
 use std::io::{Read, Seek};
 use unicode_normalization::UnicodeNormalization;
 
@@ -259,7 +259,7 @@ fn operation_key_words(key: &OperationSignatureKey) -> Vec<u16> {
     words.push(key.arguments().len() as u16);
     for argument in key.arguments() {
         append_sequence(&mut words, &argument.grammatical_case);
-        append_sequence(&mut words, &argument.value_type);
+        append_sequence(&mut words, &argument.noun_class);
     }
     words
 }
@@ -410,13 +410,13 @@ fn decode_signature(words: &[u16]) -> Result<OperationSignatureKey, DictionaryRe
     let mut arguments = Vec::with_capacity(count);
     for _ in 0..count {
         let grammatical_case = take_sequence(words, &mut cursor)?;
-        let value_type = take_sequence(words, &mut cursor)?;
-        if grammatical_case.is_empty() || value_type.is_empty() {
+        let noun_class = take_sequence(words, &mut cursor)?;
+        if grammatical_case.is_empty() || noun_class.is_empty() {
             return Err(invalid("operation argument type is empty"));
         }
-        arguments.push(OperationArgumentType {
+        arguments.push(ArgumentSlot {
             grammatical_case,
-            value_type,
+            noun_class,
         });
     }
     if cursor != words.len() || verb.is_empty() || mood.is_empty() {

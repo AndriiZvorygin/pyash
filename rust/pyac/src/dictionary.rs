@@ -12,7 +12,7 @@ mod words;
 pub use index::DictionaryIndex;
 pub use model::{DictionaryEntry, DictionaryIndexError, LexicalForm, SourceGloss, SourceLink};
 pub use operation::{
-    OperationArgument, OperationArgumentType, OperationResult, OperationSignature,
+    OperationArgument, ArgumentSlot, OperationResult, OperationSignature,
     OperationSignatureKey,
 };
 pub use reader::{DictionaryFileReader, DictionaryReadError, DictionarySection};
