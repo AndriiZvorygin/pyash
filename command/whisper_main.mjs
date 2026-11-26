@@ -85,7 +85,9 @@ Environment:
 async function runWhisper({ inputPath, modelPath, language, prompt, binPath, outputPath }) {
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   const base = outputPath.replace(/\.txt$/u, "");
-  const args = ["-m", String(modelPath), "-f", String(inputPath), "-nt", "-np", "-otxt", "-of", String(base)];
+  // The text is what the house reads; the subtitle carries the time of every
+  // line, which is what a ticker needs to follow the song.
+  const args = ["-m", String(modelPath), "-f", String(inputPath), "-nt", "-np", "-otxt", "-osrt", "-of", String(base)];
   if (language) {
     args.push("-l", String(language));
   }

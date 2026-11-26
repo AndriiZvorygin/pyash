@@ -14,6 +14,7 @@ import {
   chooseSheetExample,
   chooseWinner,
   parseLanes,
+  keepTranscript,
   pickSeed,
   produce,
   publishSong,
@@ -140,6 +141,24 @@ test("the producer makes the song the catalogue is missing and publishes it", as
   assert.match(tags.date, /^\d{4}-\d{2}-\d{2}$/u, "the song carries the day it was made");
   const leftovers = (await fs.readdir(path.join(radio, "audio"))).filter((name) => name.endsWith(".part"));
   assert.deepEqual(leftovers, [], "a half written song was left behind");
+});
+
+test("the words the house heard are kept with the song", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "yiniana-producer-"));
+  const lyrics = path.join(root, "lyrics");
+  await fs.mkdir(lyrics, { recursive: true });
+  const sheetPath = path.join(lyrics, "song-dignity.txt");
+  await fs.writeFile(sheetPath, "[Verse]\nThe words of the sheet\n");
+  const heard = path.join(root, "dignity.srt");
+  await fs.writeFile(heard, "1\n00:00:04,000 --> 00:00:09,000\nThe words the house heard.\n");
+
+  const kept = await keepTranscript({ srtPath: heard, sheetPath });
+
+  assert.equal(kept, path.join(lyrics, "song-dignity.srt"));
+  assert.match(await fs.readFile(kept, "utf8"), /The words the house heard/u);
+  const leftovers = (await fs.readdir(lyrics)).filter((name) => name.endsWith(".part"));
+  assert.deepEqual(leftovers, [], "no part file was left behind");
+  await fs.rm(root, { recursive: true, force: true });
 });
 
 test("the producer does not publish a song whose words never arrive", async () => {

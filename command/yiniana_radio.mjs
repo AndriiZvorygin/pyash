@@ -14,6 +14,7 @@ import { interpret } from "../program/bridge/index.mjs";
 import { resolveConfigMap, resolveConfigNum, resolveConfigText } from "../program/configure/env.mjs";
 import { publicCatalogue, scanCatalogue } from "../program/library/radio/catalogue.mjs";
 import { DOWNLOAD_PREFIX, downloadNameFor, downloadNameFromPath, resolveDownloadPath } from "../program/library/radio/download.mjs";
+import { readWords, transcriptPathFor } from "../program/library/radio/ticker.mjs";
 import { renderStationPage } from "../program/library/radio/page.mjs";
 import { contractWithOrder, orderTracks, readLanes, readRotation } from "../program/library/radio/rotation.mjs";
 import { createRadioStation } from "../program/library/radio/station.mjs";
@@ -116,6 +117,29 @@ export function createRadioServer({ station, stationName = DEFAULT_STATION_NAME,
     }
     if (pathname === "/playlist.json") {
       jsonResponse(res, 200, { station: stationName, tracks: publicCatalogue(station.tracks) });
+      return;
+    }
+    if (pathname === "/lyrics.json") {
+      // The words of the song that is playing, with the time of every line.
+      const state = station.state();
+      const track = state.track
+        ? station.tracks.find((entry) => entry.filename === state.track.filename)
+        : null;
+      const words = track
+        ? await readWords({
+          sheetPath: track.lyricSheet,
+          transcriptPath: transcriptPathFor(track.lyricSheet),
+          durationSeconds: track.durationSeconds
+        })
+        : { source: "none", lines: [] };
+      jsonResponse(res, 200, {
+        station: stationName,
+        filename: state.track?.filename ?? "",
+        title: state.track?.title ?? "",
+        durationSeconds: state.track?.durationSeconds ?? 0,
+        source: words.source,
+        lines: words.lines
+      });
       return;
     }
     if (pathname.startsWith(DOWNLOAD_PREFIX)) {

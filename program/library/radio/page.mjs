@@ -21,7 +21,7 @@ function formatDuration(seconds) {
  * Render the station page. The stream url is passed in so the page can be
  * served from any host the station is bound to.
  */
-export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.mp3", statusUrl = "/status.json", playlistUrl = "/playlist.json" } = {}) {
+export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.mp3", statusUrl = "/status.json", playlistUrl = "/playlist.json", lyricsUrl = "/lyrics.json" } = {}) {
   const title = escapeText(stationName);
   return `<!doctype html>
 <html lang="en">
@@ -56,6 +56,15 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
   a.download:hover { background: #1d212a; color: #e6b76e; }
   .now a.download { margin-top: .9rem; }
   .now .playing { color: #d8a657; font-size: .8rem; text-transform: uppercase; letter-spacing: .12em; }
+  .ticker { margin-top: 1.25rem; border: 1px solid #23262f; border-radius: .5rem; background: #14171e; overflow: hidden; }
+  .ticker .label { color: #8b8f9c; font-size: .72rem; text-transform: uppercase; letter-spacing: .12em; padding: .5rem .9rem 0; }
+  .ticker .run { display: inline-block; white-space: nowrap; padding: .35rem 0 .5rem; color: #d8a657; font-size: .95rem;
+                 animation: ticker-run 26s linear infinite; }
+  @keyframes ticker-run { from { transform: translateX(100%); } to { transform: translateX(-100%); } }
+  .words { margin-top: .9rem; }
+  .words .now-line { color: #e8e6e1; font-size: 1.05rem; line-height: 1.5; }
+  .words .next-line { color: #6f7380; font-size: .95rem; line-height: 1.5; margin-top: .35rem; }
+  .words .empty { color: #6f7380; font-size: .95rem; }
 </style>
 </head>
 <body>
@@ -69,7 +78,12 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
     <div id="now-download"></div>
     <button id="tune" type="button">Tune in</button>
     <audio id="player" controls preload="none" src="${escapeText(streamUrl)}"></audio>
+    <div class="words" id="words"><div class="empty">The words of the song will follow it here.</div></div>
   </section>
+  <div class="ticker" id="ticker">
+    <div class="label">Sung now</div>
+    <div class="run" id="ticker-run"></div>
+  </div>
   <h2>Catalogue</h2>
   <p class="tagline">Every song can be taken home.</p>
   <ol id="catalogue"></ol>
@@ -79,7 +93,14 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
   const nowTitle = document.getElementById("now-title");
   const nowMeta = document.getElementById("now-meta");
   const nowDownload = document.getElementById("now-download");
+  const wordsBox = document.getElementById("words");
+  const tickerRun = document.getElementById("ticker-run");
   document.getElementById("tune").addEventListener("click", () => player.play());
+
+  // The words of the song that is playing, and the clock of the song itself.
+  let words = { filename: "", source: "none", lines: [] };
+  let clockOffset = 0;
+  let shownLine = -1;
 
   function downloadLink(url, label) {
     if (!url) return null;
@@ -89,6 +110,70 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
     link.textContent = label || "Download";
     link.setAttribute("download", "");
     return link;
+  }
+
+  function songSeconds() {
+    return Date.now() / 1000 + clockOffset;
+  }
+
+  function lineIndexAt(lines, seconds) {
+    if (!lines.length) return -1;
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      if (seconds < Number(line.start || 0)) return index === 0 ? 0 : index - 1;
+      if (seconds <= Number(line.end || 0)) return index;
+    }
+    return lines.length - 1;
+  }
+
+  function renderWords() {
+    const lines = words.lines || [];
+    const index = lineIndexAt(lines, songSeconds());
+    if (index === shownLine) return;
+    shownLine = index;
+    const current = index >= 0 ? lines[index] : null;
+    const next = index >= 0 && index + 1 < lines.length ? lines[index + 1] : null;
+    wordsBox.replaceChildren();
+    if (!current) {
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = words.source === "none"
+        ? "The words of the song will follow it here."
+        : "The song is between its words.";
+      wordsBox.append(empty);
+      tickerRun.textContent = "";
+      return;
+    }
+    const line = document.createElement("div");
+    line.className = "now-line";
+    line.textContent = current.text;
+    wordsBox.append(line);
+    if (next) {
+      const after = document.createElement("div");
+      after.className = "next-line";
+      after.textContent = next.text;
+      wordsBox.append(after);
+    }
+    // The running ticker takes the line again, so it starts its run with the
+    // words that are being sung now.
+    tickerRun.textContent = current.text + "  ·  ";
+    tickerRun.style.animation = "none";
+    void tickerRun.offsetWidth;
+    tickerRun.style.animation = "";
+  }
+
+  async function loadWords() {
+    try {
+      const response = await fetch(${JSON.stringify(lyricsUrl)}, { cache: "no-store" });
+      const payload = await response.json();
+      if (payload.filename !== words.filename) {
+        words = payload;
+        shownLine = -1;
+        renderWords();
+      }
+    } catch (error) {
+      // the words are a convenience; the stream is the station
+    }
   }
 
   async function refresh() {
@@ -108,6 +193,8 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
         + " - " + status.listeners + " listening";
       const link = downloadLink(status.track.downloadUrl, "Download this song");
       nowDownload.replaceChildren(...(link ? [link] : []));
+      clockOffset = Number(status.elapsedSeconds || 0) - Date.now() / 1000;
+      await loadWords();
     } catch (error) {
       nowTitle.textContent = "The station is out of reach";
     }
@@ -143,6 +230,12 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
   refresh();
   loadCatalogue();
   setInterval(refresh, 3000);
+  // The words follow the song between the polls of the clock.
+  function follow() {
+    renderWords();
+    requestAnimationFrame(follow);
+  }
+  requestAnimationFrame(follow);
 </script>
 </body>
 </html>

@@ -420,6 +420,40 @@ test("the station page carries the station name and the stream", () => {  const 
   assert.match(page, /Zvorygin Radio/u);
   assert.match(page, /\/stream\.mp3/u);
   assert.match(page, /<audio/u);
+  assert.match(page, /\/lyrics\.json/u, "the page asks for the words of the song");
+});
+
+test("the station serves the words of the song that is playing", async () => {
+  const root = await makeTempDir();
+  const lyrics = path.join(root, "lyrics");
+  await fs.mkdir(lyrics, { recursive: true });
+  await fs.writeFile(path.join(lyrics, "song-dignity.txt"), "[Verse]\nThe words of the sheet\n");
+  await fs.writeFile(path.join(lyrics, "song-dignity.srt"), [
+    "1",
+    "00:00:10,000 --> 00:00:20,000",
+    "The words the house heard.",
+    ""
+  ].join("\n"));
+  const track = await writeTrack(root, "ace-step-dignity.mp3", { frames: 40 });
+  track.lyricSheet = path.join(lyrics, "song-dignity.txt");
+  const station = createRadioStation({ tracks: [track], gapMs: 0 });
+  station.start();
+  const { server } = createRadioServer({ station, stationName: "Zvorygin Radio", catalogueDirectory: root });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+
+  const words = await (await fetch(`${base}/lyrics.json`)).json();
+
+  assert.equal(words.filename, "ace-step-dignity.mp3");
+  assert.equal(words.source, "transcript", "the words are the ones the house heard");
+  assert.equal(words.lines.length, 1);
+  assert.equal(words.lines[0].text, "The words the house heard.");
+  assert.equal(words.lines[0].start, 10);
+
+  await new Promise((resolve) => server.close(resolve));
+  station.stop();
+  await fs.rm(root, { recursive: true, force: true });
 });
 
 test("the station answers over http", async () => {

@@ -26,6 +26,8 @@ folded back into pyash, because pyash already owns every step of it.
 - Producer program: `examples/pyash/yiniana-radio-producer.pya` — the producer, wired as pyash sentences.
 - Tag command: `command/yiniana_tag_catalogue.mjs` — the tags a player reads on every song of the catalogue.
 - Tag program: `examples/pyash/yiniana-radio-tags.pya` — the tags, wired as pyash sentences.
+- Transcript command: `command/yiniana_transcribe_catalogue.mjs` — the words the house heard, kept with the songs.
+- Transcript program: `examples/pyash/yiniana-radio-transcribe.pya` — the transcripts, wired as pyash sentences.
 - Lanes: `radio/topics.txt` — the curated topic rotation.
 - Music engines: `music/comfyui/audio_ace_step_1_5_xl_turbo.*`, `music/comfyui/audio_yue2_own_melody.*`.
 - Recovery check: `command/yiniana_lyric_recovery.mjs`.
@@ -343,6 +345,7 @@ station is a few hundred lines of Node and a small frame reader.
 - `program/library/radio/mp3.mjs` — the frame reader: frame headers, duration, frame clock.
 - `program/library/radio/id3.mjs` — the tag at the head of a file: the title a song carries, the tags a player reads, written and read.
 - `program/library/radio/tags.mjs` — the tags of a song: who made it, what it belongs to, the day the audio was made, and the stamping of the songs of the catalogue.
+- `program/library/radio/ticker.mjs` — the words of a song and the time they are sung: the transcript, the sheet it falls back to, and the line that is sung now.
 - `program/library/radio/catalogue.mjs` — the catalogue scan: which files are playable, which engine and topic each one carries, which lyric sheet belongs to it.
 - `program/library/radio/rotation.mjs` — the rotation: the lanes, the engines, the names the station is contracted to play.
 - `program/library/radio/station.mjs` — the programme: the loop, the fan-out to listeners, the now playing state.
@@ -360,6 +363,7 @@ station is a few hundred lines of Node and a small frame reader.
 | `GET /` | the station page: now playing, the catalogue, a tune-in button, a download for every song |
 | `GET /playlist.json` | the catalogue with titles, engines, lengths and download urls |
 | `GET /status.json` | the now playing state, its download url and the listener count |
+| `GET /lyrics.json` | the words of the song that is playing, with the time of every line |
 | `GET /song/<name>` | the song itself, as an attachment a listener may keep |
 | `GET /health` | the liveness check |
 
@@ -451,6 +455,65 @@ The tag is written in front of the same audio the station plays, and the
 song is written beside the catalogue and renamed onto it, so a half written
 song is never on the air.
 
+### The words of the song
+
+A listener wants to read along with the song. The station already knows the
+words: the house hears every song it makes, and what it heard is kept with the
+song.
+
+The producer keeps the transcript of the render it publishes, beside the sheet
+of the song — `radio/lyrics/song-<topic>.srt`, a subtitle with the time of
+every line. The sheet stays the words the song was written from; the
+transcript is the words that came back out of the mouth of the song.
+
+The station serves them on `GET /lyrics.json`:
+
+```json
+{
+  "station": "Zvorygin Radio",
+  "filename": "ace-step-pleasure.mp3",
+  "title": "Pleasure",
+  "durationSeconds": 175.056,
+  "source": "transcript",
+  "lines": [
+    { "start": 0, "end": 14.9, "text": "We sit quietly in stillness to align with the Father above." },
+    { "start": 14.9, "end": 23.1, "text": "Love returns a thousandfold when open hearts serve each other well." }
+  ]
+}
+```
+
+The page follows the song with them: a running ticker under the header, and
+the line that is being sung with the one that follows it under the now
+playing block. The clock is the station's own — the status carries the seconds
+the song has been playing, and the page keeps its own time against it, so the
+words move with the music and not in steps of the poll.
+
+A song the house has not heard yet falls back to its sheet: the words are
+right, and the timing is an estimate — the lines spread over the length of the
+song, with the first of them after the opening the song begins with. The
+route says which of the two it is showing in its `source`.
+
+### The words of the songs that came before
+
+The songs the house made before the radio were never heard by the machine, so
+they have no transcript yet. The transcript command listens to them:
+
+```sh
+cd /home/htaf/pyac/pyash-dev
+PYA_RADIO_CATALOGUE=/home/htaf/pyac/pyash/radio/audio \
+  node command/yiniana_transcribe_catalogue.mjs
+```
+
+or, as pyash sentences:
+
+```sh
+node command/run_pya_program.mjs examples/pyash/yiniana-radio-transcribe.pya
+```
+
+It walks the catalogue, listens to the songs that have no transcript, and
+keeps what it heard beside the sheet of the song. A song that was already
+heard is left alone, and a song that cannot be heard does not stop the rest.
+
 ### Real time, not file speed
 
 The station reads the frames itself and paces them. Every MPEG layer three
@@ -476,6 +539,7 @@ The settings live in the pyash configuration surface, in `configure/default.pya`
 | `radio station command` | `node command/yiniana_radio.mjs` | the command the pyash ceremony runs |
 | `radio song imports` | `radio/imports.txt` | the manifest of the songs the house made before the radio |
 | `radio tags command` | `node command/yiniana_tag_catalogue.mjs` | the command the pyash ceremony runs to write the tags of the songs |
+| `radio transcribe command` | `node command/yiniana_transcribe_catalogue.mjs` | the command the pyash ceremony runs to keep the words of the songs |
 
 The environment overrides the same names: `PYA_RADIO_HOST`, `PYA_RADIO_PORT`,
 `PYA_RADIO_CATALOGUE`, `PYA_RADIO_STATION_NAME`.
@@ -650,8 +714,10 @@ The station plays what has been rendered. The producer is what makes more.
 4. **Publish.** The winner is copied into the catalogue and renamed into
    place, so a half written song is never on the air. The song is stamped
    with the tags of a song — its name, the house that made it, and the day
-   the render finished — before it is heard. The station's own catalogue scan
-   takes it from there, within the quarter of a minute.
+   the render finished — before it is heard. The transcript of the render,
+   the words the house heard, is kept beside the sheet of the song, so a
+   listener can read along with it. The station's own catalogue scan takes
+   the song from there, within the quarter of a minute.
 
 A song whose best seed carries less than `radio producer min recovery` percent
 of the words is not published. The lane stays open, and the next run tries
@@ -1002,6 +1068,8 @@ them there, so a file carries its own name with it.
 - `quiz/yiniana_song_import.test.mjs` — the manifest, the song that is already there, the song that is named, the sheet naming, the mp3 the station cannot play, the part file that never lands, and the pyash ceremony.
 - `quiz/radio_id3.test.mjs` — the title a file carries, the title written onto a file, the frames that are kept, the tag the writer leaves alone, and the tags a player reads.
 - `quiz/radio_tags.test.mjs` — the tags of a song, the voice of an engine, the day a song carries, the day written once, and the catalogue stamped song by song.
+- `quiz/radio_ticker.test.mjs` — the words of a transcript, the sentences of a line, the sheet a song falls back to, and the line that is sung at that moment.
+- `quiz/yiniana_transcribe_catalogue.test.mjs` — the song that is heard, the song that was heard already, the catalogue heard song by song, and the pyash ceremony.
 - `quiz/yiniana_tag_catalogue.test.mjs` — the tags of every song of the catalogue, the day of an imported song, and the pyash ceremony.
 - `quiz/learn_card_headings.test.mjs` — the two card depths, the headings an argument may name, the headings a card carries, and the card that matches a depth.
 - `quiz/learn_module.test.mjs` — the learn ceremonies, and the radio card's own ceremonies and prompts.

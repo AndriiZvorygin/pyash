@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { interpret } from "../program/bridge/index.mjs";
 import { resolveConfigBool, resolveConfigMap, resolveConfigMapNum, resolveConfigMapText, resolveConfigNum, resolveConfigText } from "../program/configure/env.mjs";
 import { parseLanes } from "../program/library/radio/rotation.mjs";
+import { transcriptPathFor, srtPathFor } from "../program/library/radio/ticker.mjs";
 import { fileDay, songTags, stampSong } from "../program/library/radio/tags.mjs";
 import { recoverRate, transcriptText } from "./yiniana_lyric_recovery.mjs";
 import { readCardIfItMatches } from "./yiniana_lyrics_chain.mjs";
@@ -128,8 +129,12 @@ export async function scoreRender({
 }) {
   const dir = workDir || path.join(repoRoot, "artifacts", "radio-producer");
   await fs.mkdir(dir, { recursive: true });
-  const windowPath = path.join(dir, "opening.wav");
-  const transcriptPath = path.join(dir, "opening.txt");
+  // Every render is heard on its own: the transcript of a song is kept with
+  // the song, not overwritten by the next one. The subtitle beside it carries
+  // the time of every line, which is what a ticker follows.
+  const stem = path.basename(audioPath, path.extname(audioPath));
+  const windowPath = path.join(dir, `${stem}.wav`);
+  const transcriptPath = path.join(dir, `${stem}.txt`);
   await run("ffmpeg", buildAuditionArgs({ audioPath, windowPath, auditionSeconds }), { label: "ffmpeg window" });
   await run(process.execPath, [
     path.join(repoRoot, "command", "whisper_main.mjs"),
@@ -147,7 +152,9 @@ export async function scoreRender({
     percent: Number((result.fraction * 100).toFixed(1)),
     hits: result.hits,
     total: result.total,
-    transcript: transcriptText(heard)
+    transcript: transcriptText(heard),
+    transcriptPath,
+    srtPath: srtPathFor(transcriptPath)
   };
 }
 
@@ -160,6 +167,26 @@ export async function publishSong({ sourcePath, catalogueDirectory, filename }) 
   const staging = `${target}.part`;
   await fs.copyFile(sourcePath, staging);
   await fs.rename(staging, target);
+  return target;
+}
+
+/**
+ * Keep the transcript of a song beside its sheet: the words the house heard,
+ * with the time of every line. The file is written beside the sheet and
+ * renamed onto it, so a half written transcript is never on the air.
+ */
+export async function keepTranscript({ srtPath = "", sheetPath = "", log = () => {} }) {
+  if (!srtPath || !sheetPath) return "";
+  const target = transcriptPathFor(sheetPath);
+  try {
+    await fs.access(srtPath);
+  } catch {
+    return "";
+  }
+  const staging = `${target}.part`;
+  await fs.copyFile(srtPath, staging);
+  await fs.rename(staging, target);
+  log(`kept the transcript of ${path.basename(sheetPath, ".txt")}`);
   return target;
 }
 
@@ -315,7 +342,13 @@ export async function produce({
           hearModel,
           repoRoot
         });
-        record.seeds.push({ seed, percent: measured.percent, hits: measured.hits, total: measured.total });
+        record.seeds.push({
+          seed,
+          percent: measured.percent,
+          hits: measured.hits,
+          total: measured.total,
+          srtPath: measured.srtPath
+        });
         log(`seed ${seed} carried ${measured.percent}% of the words`);
       }
       const winner = chooseWinner(record.seeds);
@@ -331,6 +364,13 @@ export async function produce({
         sourcePath,
         catalogueDirectory: catalogue,
         filename: item.filename
+      });
+      // The words the house heard are kept with the song, so a listener can
+      // read along with it.
+      await keepTranscript({
+        srtPath: winner.srtPath,
+        sheetPath,
+        log
       });
       // The song is stamped before it is heard: a player shows who made it,
       // what it is called, and the day the render finished.
