@@ -29,12 +29,16 @@ pub const CODELET_PAYLOAD: usize = 15;
 /// A full codelet, summary word included.
 pub const CODELET_WIDTH: usize = CODELET_PAYLOAD + 1;
 
-/// Glyphs that start or continue a consonant, exactly as `consonant_group` in
-/// `program/parser.c` lists them. The C's `consonant_group_magnitude` says 23 but
-/// 24 glyphs are listed, so the list is taken as written.
-const CONSONANT_GLYPHS: &[u8] = b"ptkfscxbdgvzjnmqrlyw18h.";
-/// Vowels, in the C's order.
-const VOWEL_GLYPHS: &[u8] = b"iaueo6";
+/// Glyphs that start or continue a consonant.
+///
+/// The C's `consonant_group` also lists `1`, but the word codec maps `1` to vowel
+/// code 6, so classifying it as a consonant here would make words like `l1`
+/// unparseable while the codec happily encodes them. The codec's assignment wins:
+/// `1` is a vowel.
+const CONSONANT_GLYPHS: &[u8] = b"ptkfscxbdgvzjnmqrlyw8h.";
+/// Vowels, in the codec's order. `1` and `3` are vowel codes the C's
+/// `vowel_group` omits but the word codec assigns.
+const VOWEL_GLYPHS: &[u8] = b"iaueo631";
 /// Tone marks. `M` is the unmarked tone for the codec but a real glyph here.
 const TONE_GLYPHS: &[u8] = b"M72";
 
@@ -328,9 +332,11 @@ pub fn encode_sentence(
         // A `do` settles the pending digit run into one numeric quote and is fully
         // consumed by that; every other word class is appended normally.
         if honuc == NUMBER_WORD {
+            // The C reads the run backwards, so the *last* number word is the
+            // least-significant digit: `hyik tyut do` is 1*16 + 2 = 0x12, not 0x21.
             let mut value = 0u32;
             for position in 0..pending_used {
-                let digit = number_digit(pending[position]).unwrap_or(0);
+                let digit = number_digit(pending[pending_used - 1 - position]).unwrap_or(0);
                 value = value.wrapping_add(digit << (4 * position as u32));
             }
             pending_used = 0;

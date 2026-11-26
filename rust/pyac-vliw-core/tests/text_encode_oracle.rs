@@ -84,3 +84,38 @@ fn hyikdopwih_prifgika_djancu_plustu_matches_the_c_tablet_except_a_stale_word() 
     );
 }
 
+
+#[test]
+fn a_two_digit_number_reads_least_significant_last() {
+    // `hyik tyut do`: hyik=1, tyut=2. The C reads the run backwards from `do`, so
+    // `tyut` is the least-significant digit: 1*16 + 2 = 18 = 0x12.
+    let mut codelets = [[0u32; CODELET_WIDTH]; 4];
+    let count = encode_sentence("hyiktyutdo", &mut codelets).unwrap();
+    let flat: std::vec::Vec<u32> = codelets[..count].iter().flat_map(|c| c.iter().copied()).collect();
+    assert_eq!(&flat[..3], &[0x1, 0x881d, 0x12]);
+}
+
+#[test]
+fn a_single_digit_number_is_unchanged() {
+    let mut codelets = [[0u32; CODELET_WIDTH]; 4];
+    let count = encode_sentence("hyikdo", &mut codelets).unwrap();
+    let flat: std::vec::Vec<u32> = codelets[..count].iter().flat_map(|c| c.iter().copied()).collect();
+    assert_eq!(&flat[..3], &[0x1, 0x881d, 0x1]);
+}
+
+#[test]
+fn a_word_containing_the_vowel_glyph_one_parses() {
+    // `l1` is valid short-grammar PyAC (vowel code 6). The C's `consonant_group`
+    // lists `1` as a consonant, which would make this unparseable even though the
+    // codec encodes it, so the port follows the codec.
+    let mut codelets = [[0u32; CODELET_WIDTH]; 4];
+    let count = encode_sentence("l1ka", &mut codelets).expect("l1 is a word");
+    assert_eq!(count, 1);
+    let flat: std::vec::Vec<u32> = codelets[..count]
+        .iter()
+        .flat_map(|c| c.iter().copied())
+        .collect();
+    // `l1` then `ka`: the accusative closes the field.
+    assert_eq!(flat[1], 0x397e, "l1");
+    assert_eq!(flat[2], 0x245e, "ka");
+}
