@@ -467,6 +467,12 @@ should read. So the house's own alignment does the work: the words of the
 sheet, placed at the times of the transcript. It is the same alignment the
 karaoke subtitles of the music videos use — lyric text with ASR time.
 
+The lane hears the song in phrases of twenty seconds at most
+(`PYA_HEAR_MAX_SEGMENT_SECONDS`), not the thirty seconds whisper writes by
+default: the shorter the phrase, the closer the words of the song can be
+placed against the song. A song heard that way gives a line every five to ten
+seconds, which is what a ticker moves at.
+
 The aligned words are kept beside the sheet, in
 `radio/lyrics/song-<topic>.aligned.srt`, and the station serves them on
 `GET /lyrics.json`:
