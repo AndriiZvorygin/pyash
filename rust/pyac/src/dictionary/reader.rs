@@ -268,37 +268,33 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
         Ok(keys)
     }
 
-    /// Single-word canonical keys paired with their English lexical form.
+    /// Every canonical key with all of its English lexical forms.
     ///
-    /// These are the atoms: a key with exactly one HNUC word. Compounds carry a
-    /// multi-word key and are excluded, because the encoder treats a compound as
-    /// a sequence rather than as a vocabulary atom.
-    pub fn atoms(&mut self) -> Result<Vec<(u16, String)>, DictionaryReadError> {
+    /// The reference volume is the authority; this is the projection a consumer
+    /// needs to build its own lookup table from it. Atoms come back as a
+    /// one-word key, compounds as a multi-word key.
+    pub fn entries_with_english(&mut self) -> Result<Vec<(Vec<u16>, Vec<String>)>, DictionaryReadError> {
         let keys = self.canonical_keys()?;
-        let mut atoms = Vec::new();
+        let mut out = Vec::with_capacity(keys.len());
         for key in keys {
-            let [word] = key.as_slice() else { continue };
-            // The first `en` lexical form is the atom's name. A key with no
-            // English form is not an atom this table can describe.
-            if let Some(name) = self.first_english_form(&key)? {
-                atoms.push((*word, name));
-            }
+            let forms = self.english_forms(&key)?;
+            out.push((key, forms));
         }
-        atoms.sort_unstable_by_key(|(word, _)| *word);
-        atoms.dedup_by_key(|(word, _)| *word);
-        Ok(atoms)
+        Ok(out)
     }
 
-    /// The first `en` lexical form recorded for `key`, if any.
+    /// Every `en` lexical form recorded for `key`, in volume order.
     ///
     /// A lexical-form sentence is
     /// `name <key> su, text "<language>" as, text "<surface>" from, ...`.
     /// Values precede their case words, so the language text comes before `AS`.
-    fn first_english_form(&mut self, key: &[u16]) -> Result<Option<String>, DictionaryReadError> {
+    fn english_forms(&mut self, key: &[u16]) -> Result<Vec<String>, DictionaryReadError> {
         use super::reader_codec::{take_record_subject, take_text};
         let Some(range) = self.location(key)? else {
-            return Ok(None);
+            return Ok(Vec::new());
         };
+        let mut forms = Vec::new();
+        let mut seen = std::collections::HashSet::new();
         let mut ordinal = range.start;
         while ordinal < range.end {
             // Entry bodies keep the ordinary quote encoding; only the index
@@ -311,12 +307,29 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
                 Ok(RecordSubject::Name(ref name)) if name.as_slice() == key
             );
             if is_ours {
-                let mut probe = cursor;
-                if let Ok(language) = take_text(words, &mut probe) {
-                    if language == "en" && words.get(probe) == Some(&AS) {
-                        probe += 1;
-                        if let Ok(surface) = take_text(words, &mut probe) {
-                            return Ok(Some(surface));
+                // Accept only a record that is exactly `as L from S to N`, i.e.
+                // one whose case words are AS, FROM, TO in that order. A
+                // source-gloss is `as L from D to R by I with T`; matching the
+                // full case sequence is what distinguishes a surface from a
+                // dataset name, and it is insensitive to multi-codelet text.
+                // Scan only past the subject: a key word can itself equal a case
+                // word (`ma` is 0x243e, the destination marker).
+                let cases: Vec<u16> = words
+                    .iter()
+                    .skip(cursor)
+                    .copied()
+                    .filter(|word| [AS, FROM, TO, BY, WITH].contains(word))
+                    .collect();
+                if cases == [AS, FROM, TO] {
+                    let mut probe = cursor;
+                    if let Ok(language) = take_text(words, &mut probe) {
+                        if language == "en" && words.get(probe) == Some(&AS) {
+                            probe += 1;
+                            if let Ok(surface) = take_text(words, &mut probe) {
+                                if seen.insert(surface.clone()) {
+                                    forms.push(surface);
+                                }
+                            }
                         }
                     }
                 }
@@ -325,7 +338,7 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
                 .checked_add(sentence.consumed)
                 .ok_or(DictionaryReadError::InvalidRecord("entry ordinal overflow"))?;
         }
-        Ok(None)
+        Ok(forms)
     }
 
     pub fn location(&mut self, key: &[u16]) -> Result<Option<Range<u32>>, DictionaryReadError> {

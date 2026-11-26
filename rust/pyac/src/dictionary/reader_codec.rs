@@ -21,7 +21,7 @@ const AT: u16 = 0x615f;
 const UINT16: u16 = 0x881d;
 const UINT32: u16 = 0x901d;
 const TEXT: u16 = 0x0e1d;
-const TEXT_VERB: u16 = 0x8a28;
+pub(super) const TEXT_VERB: u16 = 0x8a28;
 const REALIS: u16 = 0x217e;
 
 #[derive(Default)]
