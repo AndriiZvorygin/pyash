@@ -222,6 +222,10 @@ export function createRadioStation({ tracks = [], gapMs = 500, now = () => Date.
    * survives the change; when it does not, the station moves to the head of
    * the new catalogue. The bag of songs is emptied, so the new catalogue is
    * heard in a fresh order.
+   *
+   * A station that had nothing to play begins to play when the catalogue
+   * brings it its first song: the night channel is silent until the house
+   * renders the songs it carries.
    */
   function setTracks(next) {
     const list = Array.isArray(next) ? next.filter(Boolean) : [];
@@ -245,8 +249,8 @@ export function createRadioStation({ tracks = [], gapMs = 500, now = () => Date.
     pending = nextTrackIndex();
     if (playing) {
       generation += 1;
-      playCurrent();
     }
+    if (started && !stopped) playCurrent();
   }
 
   function state() {

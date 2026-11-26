@@ -23,7 +23,17 @@ import {
   songNamePath,
   SHEET_EXAMPLES
 } from "../command/yiniana_producer.mjs";
+import { channelProgrammes, parseChannels } from "../program/library/radio/channels.mjs";
 import { readId3Tags } from "../program/library/radio/id3.mjs";
+
+const CHANNELS_TEXT = [
+  "day | ace-step | 128 | - | *",
+  "night | night | 75 | plain Mennonite hymn | peace, stillness"
+].join("\n");
+
+function channelsOf(text = CHANNELS_TEXT, topics = ["dignity", "peace"]) {
+  return channelProgrammes({ channels: parseChannels(text), topics });
+}
 
 function syntheticMp3({ frames = 6 } = {}) {
   const frame = Buffer.alloc(Math.floor((144 * 128000) / 44100));
@@ -66,17 +76,24 @@ test("the producer reads the lanes of the rotation", () => {
   assert.deepEqual(lanes, ["dignity", "peace"]);
 });
 
-test("the producer queues every lane and engine the catalogue is missing", () => {
+test("the producer queues every lane of every channel the catalogue is missing", () => {
   const work = buildWorkList({
-    lanes: ["dignity", "peace"],
-    engines: ["ace-step", "yue2"],
+    channels: channelsOf(),
+    topics: ["dignity", "peace"],
     published: ["ace-step-dignity.mp3"]
   });
   assert.deepEqual(work.map((item) => item.filename), [
-    "yue2-dignity.mp3",
     "ace-step-peace.mp3",
-    "yue2-peace.mp3"
+    "night-peace.mp3",
+    "night-stillness.mp3"
   ]);
+  const day = work.find((item) => item.filename === "ace-step-peace.mp3");
+  assert.equal(day.bpm, 128, "the day programme is made at the pace of its channel");
+  assert.equal(day.own, false, "the day programme shares the sheet of its lane");
+  const night = work.find((item) => item.filename === "night-peace.mp3");
+  assert.equal(night.bpm, 75, "the night programme is made at the pace of its channel");
+  assert.equal(night.style, "plain Mennonite hymn", "the night programme is made in the style of its channel");
+  assert.equal(night.own, true, "the night programme sings in a voice of its own");
 });
 
 test("the producer keeps the seed that carries the most of the words", () => {
@@ -106,16 +123,17 @@ test("the producer draws a seed the workflow will take", () => {
 
 test("the producer makes the song the catalogue is missing and publishes it", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "yiniana-producer-"));
-  const radio = await makeStation(root, { lanes: ["dignity"], published: ["ace-step-dignity.mp3"] });
+  const radio = await makeStation(root, { lanes: ["dignity", "peace"], published: ["ace-step-dignity.mp3"] });
   const rendered = [];
   const published = [];
 
   const summary = await produce({
     repoRoot: root,
     lanesFile: "radio/topics.txt",
-    engines: ["ace-step", "yue2"],
-    workflows: { "ace-step": "audio_ace_step_1_5_xl_turbo", yue2: "audio_yue2_own_melody" },
-    durations: { "ace-step": 175, yue2: 180 },
+    channels: channelsOf(),
+    engines: ["ace-step", "night"],
+    workflows: { "ace-step": "audio_ace_step_1_5_xl_turbo", night: "audio_ace_step_1_5_xl_turbo" },
+    durations: { "ace-step": 175, night: 175 },
     catalogueDirectory: "radio/audio",
     radioDirectory: radio,
     seeds: 2,
@@ -127,6 +145,7 @@ test("the producer makes the song the catalogue is missing and publishes it", as
       return outputPath;
     },
     score: async () => ({ percent: 40, hits: 40, total: 100, transcript: "words" }),
+    measure: async () => 128,
     name: writeName,
     publish: async ({ sourcePath, catalogueDirectory, filename }) => {
       published.push(filename);
@@ -139,9 +158,10 @@ test("the producer makes the song the catalogue is missing and publishes it", as
     assert.ok(seed >= 0, "the seed a render is given is never negative");
   }
   assert.equal(published.length, 1, "one song was published");
-  assert.deepEqual(published, ["yue2-dignity.mp3"], "the lane is filled before the next one starts");
+  assert.deepEqual(published, ["ace-step-peace.mp3"], "the lane is filled before the next one starts");
   assert.equal(summary.songs[0].status, "published");
-  const written = await fs.readFile(path.join(radio, "audio", "yue2-dignity.mp3"));
+  assert.equal(summary.songs[0].tempoBpm, 128, "the pace of the song is measured, not hoped for");
+  const written = await fs.readFile(path.join(radio, "audio", "ace-step-peace.mp3"));
   assert.ok(written.includes(syntheticMp3()), "the audio that was rendered is what plays");
   const tags = readId3Tags(written);
   assert.equal(tags.title, "We Carry the Light", "the song carries the name the house gave it");
@@ -152,16 +172,100 @@ test("the producer makes the song the catalogue is missing and publishes it", as
   assert.deepEqual(leftovers, [], "a half written song was left behind");
 });
 
+test("the producer fills the channel it is asked for", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "yiniana-producer-"));
+  const radio = await makeStation(root, { lanes: ["dignity", "peace"], published: ["ace-step-dignity.mp3"] });
+  const published = [];
+
+  const summary = await produce({
+    repoRoot: root,
+    lanesFile: "radio/topics.txt",
+    channels: channelsOf(),
+    channel: "night",
+    engines: ["ace-step", "night"],
+    workflows: { "ace-step": "audio_ace_step_1_5_xl_turbo", night: "audio_ace_step_1_5_xl_turbo" },
+    durations: { "ace-step": 175, night: 175 },
+    catalogueDirectory: "radio/audio",
+    radioDirectory: radio,
+    seeds: 1,
+    songsPerRun: 1,
+    minRecovery: 10,
+    render: async ({ outputPath }) => {
+      await fs.writeFile(outputPath, syntheticMp3());
+      return outputPath;
+    },
+    score: async () => ({ percent: 40, hits: 40, total: 100, transcript: "words" }),
+    measure: async () => 75,
+    name: writeName,
+    publish: async ({ sourcePath, catalogueDirectory, filename }) => {
+      published.push(filename);
+      return publishSong({ sourcePath, catalogueDirectory, filename });
+    }
+  });
+
+  assert.deepEqual(published, ["night-peace.mp3"], "only the night programme was filled");
+  assert.equal(summary.channels, 1, "the producer worked on one channel");
+});
+
+test("a channel with a voice of its own takes the words of the lane with it", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "yiniana-producer-"));
+  const radio = await makeStation(root, { lanes: ["peace"], published: [] });
+  const lyrics = path.join(radio, "lyrics");
+  await fs.writeFile(path.join(lyrics, "song-peace.txt"), "[Verse]\nThe quiet of the lane\n");
+  const heard = path.join(root, "peace.srt");
+  await fs.writeFile(heard, "1\n00:00:04,000 --> 00:00:09,000\nThe quiet of the lane\n");
+  const published = [];
+
+  await produce({
+    repoRoot: root,
+    lanesFile: "radio/topics.txt",
+    channels: channelsOf(),
+    channel: "night",
+    engines: ["ace-step", "night"],
+    workflows: { "ace-step": "audio_ace_step_1_5_xl_turbo", night: "audio_ace_step_1_5_xl_turbo" },
+    durations: { "ace-step": 175, night: 175 },
+    catalogueDirectory: "radio/audio",
+    radioDirectory: radio,
+    seeds: 1,
+    songsPerRun: 1,
+    minRecovery: 10,
+    render: async ({ outputPath }) => {
+      await fs.writeFile(outputPath, syntheticMp3());
+      return outputPath;
+    },
+    score: async () => ({
+      percent: 40,
+      hits: 40,
+      total: 100,
+      transcript: "words",
+      srtPath: heard
+    }),
+    measure: async () => 75,
+    name: writeName,
+    publish: async ({ sourcePath, catalogueDirectory, filename }) => {
+      published.push(filename);
+      return publishSong({ sourcePath, catalogueDirectory, filename });
+    }
+  });
+
+  assert.deepEqual(published, ["night-peace.mp3"]);
+  const own = await fs.readFile(path.join(lyrics, "song-night-peace.txt"), "utf8");
+  assert.match(own, /The quiet of the lane/u, "the song carries the words of its lane");
+  const transcript = path.join(lyrics, "song-night-peace.srt");
+  assert.ok(await fs.readFile(transcript, "utf8"), "the song is timed by its own hearing");
+});
+
 test("the words the house heard are kept with the song", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "yiniana-producer-"));
   const lyrics = path.join(root, "lyrics");
   await fs.mkdir(lyrics, { recursive: true });
-  const sheetPath = path.join(lyrics, "song-dignity.txt");
-  await fs.writeFile(sheetPath, "[Verse]\nThe words of the sheet\n");
   const heard = path.join(root, "dignity.srt");
   await fs.writeFile(heard, "1\n00:00:04,000 --> 00:00:09,000\nThe words the house heard.\n");
 
-  const kept = await keepTranscript({ srtPath: heard, sheetPath });
+  const kept = await keepTranscript({
+    srtPath: heard,
+    transcriptPath: path.join(lyrics, "song-dignity.srt")
+  });
 
   assert.equal(kept, path.join(lyrics, "song-dignity.srt"));
   assert.match(await fs.readFile(kept, "utf8"), /The words the house heard/u);
@@ -172,14 +276,16 @@ test("the words the house heard are kept with the song", async () => {
 
 test("the producer does not publish a song whose words never arrive", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "yiniana-producer-"));
-  const radio = await makeStation(root, { lanes: ["dignity"], published: ["ace-step-dignity.mp3"] });
+  const radio = await makeStation(root, { lanes: ["dignity", "peace"], published: ["ace-step-dignity.mp3"] });
   const published = [];
 
   const summary = await produce({
     repoRoot: root,
     lanesFile: "radio/topics.txt",
-    engines: ["ace-step", "yue2"],
-    workflows: { "ace-step": "audio_ace_step_1_5_xl_turbo", yue2: "audio_yue2_own_melody" },
+    channels: channelsOf(),
+    engines: ["ace-step", "night"],
+    workflows: { "ace-step": "audio_ace_step_1_5_xl_turbo", night: "audio_ace_step_1_5_xl_turbo" },
+    durations: { "ace-step": 175, night: 175 },
     catalogueDirectory: "radio/audio",
     radioDirectory: radio,
     seeds: 2,
@@ -190,6 +296,7 @@ test("the producer does not publish a song whose words never arrive", async () =
       return outputPath;
     },
     score: async () => ({ percent: 0, hits: 0, total: 100, transcript: "(upbeat music)" }),
+    measure: async () => 128,
     name: writeName,
     publish: async ({ sourcePath, catalogueDirectory, filename }) => {
       published.push(filename);
@@ -206,15 +313,17 @@ test("the producer leaves the catalogue alone when every song is there", async (
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "yiniana-producer-"));
   const radio = await makeStation(root, {
     lanes: ["dignity"],
-    published: ["ace-step-dignity.mp3", "yue2-dignity.mp3"]
+    published: ["ace-step-dignity.mp3", "night-peace.mp3", "night-stillness.mp3"]
   });
   let rendered = 0;
 
   const summary = await produce({
     repoRoot: root,
     lanesFile: "radio/topics.txt",
-    engines: ["ace-step", "yue2"],
-    workflows: { "ace-step": "audio_ace_step_1_5_xl_turbo", yue2: "audio_yue2_own_melody" },
+    channels: channelsOf(),
+    engines: ["ace-step", "night"],
+    workflows: { "ace-step": "audio_ace_step_1_5_xl_turbo", night: "audio_ace_step_1_5_xl_turbo" },
+    durations: { "ace-step": 175, night: 175 },
     catalogueDirectory: "radio/audio",
     radioDirectory: radio,
     render: async ({ outputPath }) => {
@@ -222,7 +331,8 @@ test("the producer leaves the catalogue alone when every song is there", async (
       await fs.writeFile(outputPath, "render");
       return outputPath;
     },
-    score: async () => ({ percent: 50, hits: 50, total: 100, transcript: "words" })
+    score: async () => ({ percent: 50, hits: 50, total: 100, transcript: "words" }),
+    measure: async () => 128
   });
 
   assert.equal(rendered, 0, "the producer rendered anyway");

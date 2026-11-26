@@ -1,6 +1,10 @@
 // The station page. It is the front door of the radio: it shows what is
 // playing, it lists the catalogue, and it plays the same stream any other
 // player would.
+//
+// The station carries a channel per programme. The page shows them, and the
+// url of each: a listener who wants the night programme in another player
+// takes the plain mp3 url and opens it there.
 
 function escapeText(value) {
   return String(value ?? "")
@@ -18,11 +22,35 @@ function formatDuration(seconds) {
 }
 
 /**
- * Render the station page. The stream url is passed in so the page can be
- * served from any host the station is bound to.
+ * The json of the channels, in a block of its own: the closing tag cannot
+ * appear in it, so the page cannot be broken by a name.
  */
-export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.mp3", statusUrl = "/status.json", playlistUrl = "/playlist.json", lyricsUrl = "/lyrics.json" } = {}) {
+function channelData(channels) {
+  return JSON.stringify(channels).replace(/</gu, "\\u003c");
+}
+
+/**
+ * Render the station page. The channels are passed in so the page can show
+ * the picker and the plain url of the stream, whichever channel was asked
+ * for.
+ */
+export function renderStationPage({ stationName = "Radio", channels = [], channel = null } = {}) {
   const title = escapeText(stationName);
+  const list = Array.isArray(channels) ? channels : [];
+  const chosen = channel ?? list[0] ?? null;
+  const streamUrl = escapeText(chosen?.streamUrl ?? "/stream.mp3");
+  const picker = list.map((entry) => {
+    const name = escapeText(entry.name);
+    const bpm = Number(entry.bpm ?? 0);
+    const pace = bpm > 0 ? `${Math.round(bpm)} bpm` : "the house's own pace";
+    const songs = Number(entry.songs ?? 0);
+    const current = entry.name === chosen?.name;
+    return `      <a class="channel${current ? " current" : ""}" href="/?channel=${name}"${current ? ' aria-current="true"' : ""}>
+        <span class="channel-name">${name}</span>
+        <span class="channel-pace">${escapeText(pace)}</span>
+        <span class="channel-songs">${songs} song${songs === 1 ? "" : "s"}</span>
+      </a>`;
+  }).join("\n");
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -35,11 +63,20 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
          font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
   main { max-width: 46rem; margin: 0 auto; }
   h1 { margin: 0 0 .25rem; font-size: 1.9rem; letter-spacing: .01em; }
-  .tagline { margin: 0 0 2rem; color: #8b8f9c; }
+  .tagline { margin: 0 0 1.5rem; color: #8b8f9c; }
+  .channels { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0 0 1.75rem; }
+  .channel { display: flex; flex-direction: column; gap: .1rem; padding: .55rem .9rem; border-radius: .55rem;
+             border: 1px solid #23262f; background: #14171e; color: #e8e6e1; text-decoration: none; min-width: 8rem; }
+  .channel:hover { border-color: #4a3d22; }
+  .channel.current { border-color: #d8a657; }
+  .channel-name { font-weight: 600; }
+  .channel-pace, .channel-songs { color: #8b8f9c; font-size: .78rem; }
   .now { border: 1px solid #23262f; border-radius: .75rem; padding: 1.25rem; background: #14171e; }
   .now .label { color: #8b8f9c; font-size: .78rem; text-transform: uppercase; letter-spacing: .12em; }
   .now .title { font-size: 1.35rem; margin: .35rem 0 .15rem; }
   .now .meta { color: #8b8f9c; font-size: .9rem; }
+  .now .listen { margin-top: .9rem; color: #6f7380; font-size: .85rem; }
+  .now .listen code { color: #d8a657; font-size: .9rem; word-break: break-all; }
   button { margin-top: 1.25rem; padding: .7rem 1.4rem; border-radius: .5rem; border: 0;
            background: #d8a657; color: #17140e; font-size: 1rem; font-weight: 600; cursor: pointer; }
   button:hover { background: #e6b76e; }
@@ -53,7 +90,7 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
   li .download:hover { color: #e6b76e; }
   a.download { display: inline-block; margin-left: .6rem; padding: .35rem .8rem; border-radius: .4rem;
                border: 1px solid #4a3d22; color: #d8a657; font-size: .85rem; text-decoration: none; }
-  a.download:hover { background: #1d212a; color: #e6b76e; }
+  a.download:hover { background: #1d212a; }
   .now a.download { margin-top: .9rem; }
   .now .playing { color: #d8a657; font-size: .8rem; text-transform: uppercase; letter-spacing: .12em; }
   .ticker { margin-top: 1.25rem; border: 1px solid #23262f; border-radius: .5rem; background: #14171e; overflow: hidden; }
@@ -77,13 +114,17 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
 <main>
   <h1>${title}</h1>
   <p class="tagline">Plain HTTP stream. Tune in with any player.</p>
+  <nav class="channels" id="channels">
+${picker}
+  </nav>
   <section class="now">
     <div class="label">Now playing</div>
     <div class="title" id="now-title">Loading the station</div>
     <div class="meta" id="now-meta"></div>
     <div id="now-download"></div>
+    <p class="listen">This channel, in any player: <code id="listen-url">${streamUrl}</code></p>
     <button id="tune" type="button">Tune in</button>
-    <audio id="player" controls preload="none" src="${escapeText(streamUrl)}"></audio>
+    <audio id="player" controls preload="none" src="${streamUrl}"></audio>
     <div class="words" id="words"><div class="empty">The words of the song will follow it here.</div></div>
   </section>
   <div class="ticker" id="ticker">
@@ -98,6 +139,7 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
   </div>
   <ol id="catalogue"></ol>
 </main>
+<script id="channel-data" type="application/json">${channelData(list)}</script>
 <script>
   const player = document.getElementById("player");
   const nowTitle = document.getElementById("now-title");
@@ -106,6 +148,14 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
   const wordsBox = document.getElementById("words");
   const tickerRun = document.getElementById("ticker-run");
   document.getElementById("tune").addEventListener("click", () => player.play());
+
+  // The channel the listener asked for. The page is a page of one channel,
+  // and the channel is named in the address.
+  const channels = JSON.parse(document.getElementById("channel-data").textContent || "[]");
+  const asked = new URLSearchParams(location.search).get("channel") || "";
+  const channel = channels.find((entry) => entry.name === asked) || channels[0] || { name: "", streamUrl: "/stream.mp3" };
+  const listenUrl = document.getElementById("listen-url");
+  if (listenUrl && channel.streamUrl) listenUrl.textContent = location.origin + channel.streamUrl;
 
   // The songs the station has streamed, and the place they take in the audio
   // it has sent. The words of a song come with the song.
@@ -247,7 +297,7 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
   // The station streams the words of the song in step with the audio it
   // sends. A listener hears the song the words belong to.
   function openStream() {
-    const source = new EventSource("/events");
+    const source = new EventSource("/events?channel=" + encodeURIComponent(channel.name));
     source.addEventListener("song", (event) => {
       let song = null;
       try {
@@ -289,7 +339,7 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
 
   async function loadCatalogue() {
     try {
-      const response = await fetch("/playlist.json", { cache: "no-store" });
+      const response = await fetch("/playlist.json?channel=" + encodeURIComponent(channel.name), { cache: "no-store" });
       const payload = await response.json();
       // The list is alphabetical, so a listener can find a song by its name.
       // The station itself does not play in this order: the programme plays

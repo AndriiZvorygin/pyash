@@ -51,17 +51,19 @@ Topics are single words. `slugifyTopic` throws on anything else, because the
 helper and the `.pya` program build these names independently and must agree.
 
 `radio/lyrics/` and `radio/audio/` are generated and gitignored. The tracked
-part is three files:
+part is four files:
 
 ```
 radio/topics.txt     the lanes of the rotation: one topic per line
 radio/rotation.txt   the order the station plays: the songs that came first
+radio/channels.txt   the programmes of the station: a name, a voice, a pace
 radio/imports.txt    the songs the house made before the radio
 ```
 
 The engine of a song is the prefix of its name. `ace-step` and `yue2` are the
 music engines, and `az` is Andrii Zvorygin, the house's own voice, for the
-songs the house made before the radio.
+songs the house made before the radio. `night` is the voice of the night
+channel.
 
 The lanes are the corpus's own vocabulary, chosen by how widely a word is
 spread across the channelings: 1788 files, 34 MB, and every lane is
@@ -352,8 +354,10 @@ station is a few hundred lines of Node and a small frame reader.
 - `program/library/radio/ticker.mjs` — the words of a song and the time they are sung: the transcript, the alignment, the placement, the sheet it falls back to, and the line that is sung now.
 - `program/library/radio/placement.mjs` — the placement of the words of a sheet on the words that were heard: every line put where its own words were sung.
 - `program/library/radio/catalogue.mjs` — the catalogue scan: which files are playable, which engine and topic each one carries, which lyric sheet belongs to it.
+- `program/library/radio/channels.mjs` — the channels: the programmes of the station, the contract of each and the order it plays in.
 - `program/library/radio/rotation.mjs` — the rotation: the lanes, the engines, the names the station is contracted to play.
 - `program/library/radio/station.mjs` — the programme: the loop, the fan-out to listeners, the now playing state.
+- `program/library/radio/tempo.mjs` — the pace of a song, measured from the song itself.
 - `program/library/radio/page.mjs` — the station page.
 - `command/yiniana_radio.mjs` — the server.
 - `module/radio_station.pya` — the pyash ceremony `radio station serve`.
@@ -365,13 +369,25 @@ station is a few hundred lines of Node and a small frame reader.
 | Route | What it gives |
 | --- | --- |
 | `GET /stream.mp3` | the live programme: `audio/mpeg`, chunked, never ends |
-| `GET /` | the station page: now playing, the catalogue, a tune-in button, a download for every song |
+| `GET /<channel>.mp3` | the live programme of one channel: the same audio, another programme |
+| `GET /` | the station page: now playing, the channels, the catalogue, a tune-in button, a download for every song |
+| `GET /channels.json` | the channels: the name, the pace, the voice and the plain url of each |
 | `GET /playlist.json` | the catalogue with titles, engines, lengths and download urls |
 | `GET /status.json` | the now playing state, its download url and the listener count |
 | `GET /lyrics.json` | the words of the song that is playing, with the time of every line |
 | `GET /events` | the words of the song, streamed in step with the audio the station sends |
 | `GET /song/<name>` | the song itself, as an attachment a listener may keep |
 | `GET /health` | the liveness check |
+
+The routes that carry a programme take a `channel` parameter, and a listener who
+asks for nothing gets the first channel of `radio/channels.txt`:
+
+```
+GET /events?channel=night
+GET /lyrics.json?channel=night
+GET /status.json?channel=night
+GET /playlist.json?channel=night
+```
 
 ### Taking a song home
 
@@ -778,6 +794,87 @@ rotation and in what order the station lists them — the songs that came before
 the radio first, then the lanes of the rotation — but the order they are
 played in is the station's own choice.
 
+### The channels of the station
+
+A radio that plays one programme at one pace is a radio that never rests. The
+house wants a night programme as well as a day one, and a night programme is a
+different pace and a different voice, not a different name.
+
+A channel is one line of `radio/channels.txt`:
+
+```
+<name> | <engine> | <bpm> | <style> | <lane>, <lane>, ...
+```
+
+| Field | What it is |
+| --- | --- |
+| name | what a listener asks for: the stream of the channel is `/<name>.mp3` |
+| engine | the voice that sings the channel: the song of a lane is named for it |
+| bpm | the pace the songs of the channel are rendered at |
+| style | the voice the songs are rendered in; `-` is the style the workflow carries of its own |
+| lanes | the lanes the channel carries; `*` is every lane of `radio/topics.txt` |
+
+The two programmes the house has now:
+
+```
+day | ace-step | 128 | - | *
+night | night | 75 | plain Mennonite hymn, natural male lead, soft female response, slow acoustic hymn, call and response, clear dry vocals | acceptance, contemplation, god-remembers, gratitude, harmony, holy-spirit, patience, peace, stillness, solitude
+```
+
+The first channel of the file is the default one. Its stream is `/stream.mp3`,
+and the songs that came before the radio open its programme. Every other
+channel is a programme of its own, with its own station, its own clock and its
+own words, and its stream is a plain mp3 at a plain url:
+
+```
+https://radio.zvorygin.ca/stream.mp3     the day programme
+https://radio.zvorygin.ca/night.mp3      the night programme
+```
+
+A plain url is the point. The station's claim is that any player can tune in,
+and that claim has to hold for every programme the house makes, so a channel
+is never a playlist, a format or a query string: it is an mp3 at the name of
+the channel.
+
+### The words of a channel
+
+The day programme sings in the house's one voice, so its songs carry the sheet
+of their lane: the sheet of *peace* is the words of peace, whoever sings them.
+The night programme sings in a voice of its own, so its songs carry a sheet of
+their own:
+
+```
+radio/lyrics/song-peace.txt            the words of the day programme
+radio/lyrics/song-night-peace.txt      the words of the night programme
+```
+
+That is what keeps the two apart. A song sung slow is timed by its own
+hearing, and never by the hearing of the lane it was made for: the night song
+of peace keeps its own transcript beside its own sheet, and the ticker follows
+that.
+
+The producer takes the words of the lane into the voice of the channel when the
+channel has a voice of its own, so the two songs of a lane sing the same words
+and are timed apart.
+
+### The pace of a channel
+
+The pace of a song is measured, not hoped for. `program/library/radio/tempo.mjs`
+decodes the audio, counts the strength of every onset, and finds the beat the
+onsets agree on. The producer measures every render it makes and says what it
+found, so a channel that asked for a slow song can be checked against the song
+that came back:
+
+```
+yiniana producer: seed 4232030241 carried 68% of the words at 76 bpm
+```
+
+The house's own songs were never given a pace: the workflow's default is 128
+bpm, and every render of the house measures 129. The house's songs run from
+99.8 bpm to 178.7 bpm, and not one of them is in the 70–80 range the night
+programme was asked for. That is why the night programme is rendered and not
+chosen.
+
 ## 7. The Producer
 
 The station plays what has been rendered. The producer is what makes more.
@@ -789,11 +886,12 @@ The station plays what has been rendered. The producer is what makes more.
 
 ### What one run does
 
-1. **Pick.** The lanes of `radio/topics.txt`, in order. For each lane, every
-   engine that has no song in the catalogue yet. The catalogue is the state: a
-   song that already sits in `radio/audio/` is never made again, so the
-   rotation fills lane by lane and the second engine of a lane reuses the
-   sheet the first one wrote.
+1. **Pick.** The lanes of every channel, in the order of
+   `radio/channels.txt`. For each channel, the lanes it carries that have no
+   song in the catalogue yet. The catalogue is the state: a song that already
+   sits in `radio/audio/` is never made again, so a channel fills lane by
+   lane. A channel that sings in a voice of its own makes its song at its own
+   pace and in its own style, so the night programme is made slow and plain.
 2. **Write.** The sheet for the topic, when the station does not have one yet:
    the corpus excerpts, the learnteaching card, the hymn manuscript. When the
    radio already holds the card the topic wants, only the hymn is written from
@@ -805,7 +903,9 @@ The station plays what has been rendered. The producer is what makes more.
    `radio producer seeds` seeds and keeps the one that carries the most of the
    words. The whole render is heard: the hear lane says what it hears, and the
    lyric recovery says how much of the sheet came back. An instrumental render
-   answers "(upbeat music)" and recovers nothing.
+   answers "(upbeat music)" and recovers nothing. The pace of every render is
+   measured too, so the producer says what the song actually is and not only
+   what it was asked for.
 4. **Name.** The song is named before it is sung: the house asks the mind for
    the name of the song in the sheet and keeps the answer beside the sheet, in
    `radio/lyrics/name-<topic>.txt`. A song that already has a name keeps it,
@@ -857,11 +957,12 @@ better spent on the next song than on waiting.
 ### The engines
 
 `radio producer engines` says which engines make songs. It holds `ace-step`
-alone at the moment: the YuE2 renders came back instrumental more often, they
-take three times as long, and the variety the rotation needs comes from the
-lanes, not from the engines. The YuE2 song that is already made stays on the
-air — it is named in `radio/rotation.txt`, and a song the rotation file names
-is a song the station plays.
+and `night` at the moment: both are the same workflow, and they differ in the
+voice they sing in and in the pace they sing at. The YuE2 renders came back
+instrumental more often, they take three times as long, and the variety the
+rotation needs comes from the lanes, not from the engines. The YuE2 song that
+is already made stays on the air — it is named in `radio/rotation.txt`, and a
+song the rotation file names is a song the station plays.
 
 Adding YuE2 back is one line in the map:
 
@@ -877,6 +978,8 @@ prah
 | Fact | Default | Meaning |
 | --- | --- | --- |
 | `radio producer lanes` | `radio/topics.txt` | the topic rotation |
+| `radio channels` | `radio/channels.txt` | the programmes of the station |
+| `radio producer channel` | `""` | the channel the producer fills; empty is every channel |
 | `radio producer engines` | map | the engine and the workflow that serves it |
 | `radio producer durations` | map | the engine and the length of its song |
 | `radio producer seeds` | `2` | seeds rendered per song |
@@ -887,6 +990,11 @@ prah
 | `radio producer loop` | `lie` | keep going until the rotation is full |
 | `radio producer pause seconds` | `0` | the pause between songs |
 | `radio producer command` | `node command/yiniana_producer.mjs` | the command the ceremony runs |
+
+`radio producer channel` names the one channel the producer fills. It is
+empty by default, so the producer fills every channel in the order of the
+channels file; naming a channel keeps the producer to that programme, which is
+what the night programme wanted while it was being filled.
 
 ### Running it
 
@@ -987,6 +1095,19 @@ node command/run_pya_program.mjs examples/pyash/yiniana-radio-import.pya
 
 The import is idempotent: a song that is already in the catalogue is left
 alone, so the command can be run again whenever the house makes more songs.
+
+The night programme takes two of its songs from the import. They are the two
+hymns the house had already sung slow, in the plain Mennonite hymn style at
+70 bpm, and they come from the other ComfyUI folder, where the mp3s carry the
+whole prompt they were rendered with — the style, the pace and the words:
+
+```
+night-god-remembers.mp3 | /home/htaf/hven/comfyui/comfyui/output/audio/ACE_Step1.5_xl_turbo_00003_.mp3 | /home/htaf/pyac/pyash/know/input/night-god-remembers.lyrics.txt | God Remembers All
+night-holy-spirit.mp3 | /home/htaf/hven/comfyui/comfyui/output/audio/ACE_Step1.5_xl_turbo_00047.mp3 | /home/htaf/pyac/pyash/know/input/night-holy-spirit.lyrics.txt | Holy Spirit
+```
+
+Their sheet lands at `radio/lyrics/song-night-<topic>.txt`, named for the voice
+that sings them, so the night programme times them by their own hearing.
 
 ### What the archive holds
 

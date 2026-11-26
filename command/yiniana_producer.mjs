@@ -14,8 +14,10 @@ import { fileURLToPath } from "node:url";
 
 import { interpret } from "../program/bridge/index.mjs";
 import { resolveConfigBool, resolveConfigMap, resolveConfigMapNum, resolveConfigMapText, resolveConfigNum, resolveConfigText } from "../program/configure/env.mjs";
+import { channelLanes, channelProgrammes, parseChannels, readChannels } from "../program/library/radio/channels.mjs";
 import { parseLanes } from "../program/library/radio/rotation.mjs";
-import { alignedPathFor, keepFile, srtPathFor, transcriptPathFor } from "../program/library/radio/ticker.mjs";
+import { keepFile, srtPathFor, wordPathsFor } from "../program/library/radio/ticker.mjs";
+import { measureTempo } from "../program/library/radio/tempo.mjs";
 import { fileDay, songTags, stampSong } from "../program/library/radio/tags.mjs";
 import { alignWordsToFile } from "./lyrics_to_srt_from_timing.mjs";
 import { recoverRate, transcriptText } from "./yiniana_lyric_recovery.mjs";
@@ -27,6 +29,7 @@ import { loadDefaultConfig } from "./run_pya_helpers.mjs";
 export { parseLanes };
 
 const DEFAULT_LANES = "radio/topics.txt";
+const DEFAULT_CHANNELS = "radio/channels.txt";
 const DEFAULT_SEEDS = 2;
 const DEFAULT_SONGS_PER_RUN = 1;
 export const DEFAULT_AUDITION_SECONDS = 0;
@@ -46,18 +49,29 @@ export function pickSeed(random = Math.random) {
 }
 
 /**
- * The songs the catalogue is still missing: every lane, every engine, in the
- * order the rotation should hear them. A song that is already in the
+ * The songs the catalogue is still missing: every lane of every channel, in
+ * the order the channels should hear them. A song that is already in the
  * catalogue is never made again.
+ *
+ * A channel carries its own voice, its own tempo and its own style, so the
+ * song of a lane is made the way that channel sings it.
  */
-export function buildWorkList({ lanes = [], engines = [], published = [] } = {}) {
+export function buildWorkList({ channels = [], topics = [], published = [] } = {}) {
   const done = new Set(published);
   const work = [];
-  for (const topic of lanes) {
-    for (const engine of engines) {
-      const filename = `${engine}-${topic}.mp3`;
+  for (const channel of channels) {
+    for (const topic of channelLanes(channel, topics)) {
+      const filename = `${channel.engine}-${topic}.mp3`;
       if (done.has(filename)) continue;
-      work.push({ topic, engine, filename });
+      work.push({
+        topic,
+        engine: channel.engine,
+        filename,
+        channel: channel.name,
+        bpm: Number(channel.bpm ?? 0),
+        style: String(channel.style ?? ""),
+        own: Boolean(channel.own)
+      });
     }
   }
   return work;
@@ -248,13 +262,13 @@ export async function ensureSongName({
 }
 
 /**
- * Keep the transcript of a song beside its sheet: the words the house heard,
- * with the time of every line. The file is written beside the sheet and
- * renamed onto it, so a half written transcript is never on the air.
+ * Keep the transcript of a song: the words the house heard, with the time of
+ * every line. The file is written to its place and renamed onto it, so a half
+ * written transcript is never on the air.
  */
-export async function keepTranscript({ srtPath = "", sheetPath = "", log = () => {} }) {
-  if (!srtPath || !sheetPath) return "";
-  const target = transcriptPathFor(sheetPath);
+export async function keepTranscript({ srtPath = "", transcriptPath = "", log = () => {} }) {
+  if (!srtPath || !transcriptPath) return "";
+  const target = transcriptPath;
   try {
     await fs.access(srtPath);
   } catch {
@@ -263,7 +277,7 @@ export async function keepTranscript({ srtPath = "", sheetPath = "", log = () =>
   const staging = `${target}.part`;
   await fs.copyFile(srtPath, staging);
   await fs.rename(staging, target);
-  log(`kept the transcript of ${path.basename(sheetPath, ".txt")}`);
+  log(`kept the transcript of ${path.basename(target)}`);
   return target;
 }
 
@@ -317,18 +331,23 @@ async function renderSeed({
   lyrics,
   seed,
   duration,
+  bpm = 0,
+  style = "",
   outputPath,
   comfyHost,
   housekeeperUrl
 }) {
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
+  const options = { seed, maxDuration: duration };
+  if (Number(bpm) > 0) options.bpm = Number(bpm);
   await run(process.execPath, [
     path.join(repoRoot, "command", "music_comfyui_runner.mjs"),
     "--lyrics", lyrics,
+    ...(style ? ["--style", style] : []),
     "--workflow-name", workflow,
     "--workflow-root", "./music/",
     "--host", comfyHost,
-    "--options-json", JSON.stringify({ seed, maxDuration: duration }),
+    "--options-json", JSON.stringify(options),
     "--output", outputPath
   ], {
     cwd: repoRoot,
@@ -355,16 +374,35 @@ export async function chooseSheetExample({ teachingPath, cardDepth = DEFAULT_CAR
 
 /**
  * Write the sheet for a topic when the station does not have one yet.
+ *
+ * The house sings in one voice for the lanes of the day programme, so those
+ * songs carry the sheet of their lane. A channel that sings in a voice of its
+ * own takes the words of the lane with it: the song it makes carries a sheet
+ * of its own, so it is timed by its own hearing and not by the hearing of the
+ * lane it was made for.
  */
-async function ensureSheet({ repoRoot, topic, radioDirectory, cardDepth = DEFAULT_CARD_DEPTH, log }) {
-  const sheetPath = path.join(radioDirectory, "lyrics", `song-${topic}.txt`);
+async function ensureSheet({ repoRoot, topic, radioDirectory, engine = "", own = false, cardDepth = DEFAULT_CARD_DEPTH, log }) {
+  const lyricsDirectory = path.join(radioDirectory, "lyrics");
+  const words = wordPathsFor({ lyricsDirectory, engine, topic, own });
   try {
-    await fs.access(sheetPath);
-    return sheetPath;
+    await fs.access(words.sheetPath);
+    return words.sheetPath;
   } catch {
     // no sheet yet
   }
-  const teachingPath = path.join(radioDirectory, "lyrics", `teaching-${topic}.txt`);
+  if (own) {
+    // The words of the lane, taken into the voice of the channel.
+    const lanePath = wordPathsFor({ lyricsDirectory, topic }).sheetPath;
+    try {
+      await fs.access(lanePath);
+      await keepFile({ from: lanePath, to: words.sheetPath });
+      log(`took the words of ${topic} into the voice of ${engine}`);
+      return words.sheetPath;
+    } catch {
+      // the lane has no words yet
+    }
+  }
+  const teachingPath = path.join(lyricsDirectory, `teaching-${topic}.txt`);
   const example = await chooseSheetExample({ teachingPath, cardDepth });
   const card = example === SHEET_EXAMPLES.hymn;
   log(card
@@ -376,8 +414,8 @@ async function ensureSheet({ repoRoot, topic, radioDirectory, cardDepth = DEFAUL
     "ob", "text", topic, "to", "name", "topic", "ya",
     "ob", "text", radioDirectory, "to", "name", "radio_dir"
   ], { cwd: repoRoot, label: "lyrics chain" });
-  await fs.access(sheetPath);
-  return sheetPath;
+  await fs.access(words.sheetPath);
+  return words.sheetPath;
 }
 
 /**
@@ -387,6 +425,8 @@ async function ensureSheet({ repoRoot, topic, radioDirectory, cardDepth = DEFAUL
 export async function produce({
   repoRoot = process.cwd(),
   lanesFile = DEFAULT_LANES,
+  channels = [],
+  channel = "",
   engines = [],
   workflows = {},
   durations = {},
@@ -405,6 +445,7 @@ export async function produce({
   score = scoreRender,
   publish = publishSong,
   name = nameSong,
+  measure = measureTempo,
   loop = false,
   pauseSeconds = 0,
   log = () => {}
@@ -413,18 +454,23 @@ export async function produce({
   const catalogue = path.resolve(repoRoot, catalogueDirectory);
   const radio = path.resolve(repoRoot, radioDirectory);
   await fs.mkdir(catalogue, { recursive: true });
+  // The channel the producer fills. A producer that fills every channel
+  // takes the house's own programme first, and the night programme after it.
+  const wanted = String(channel ?? "").trim();
+  const chosen = wanted ? channels.filter((entry) => entry.name === wanted) : channels;
   const listPublished = async () => (await fs.readdir(catalogue))
     .filter((name) => name.toLowerCase().endsWith(".mp3"));
   let published = await listPublished();
   const summary = {
     lanes: lanes.length,
+    channels: chosen.length,
     engines: engines.length,
     published: published.length,
-    queued: buildWorkList({ lanes, engines, published }).length,
+    queued: buildWorkList({ channels: chosen, topics: lanes, published }).length,
     songs: []
   };
   for (;;) {
-    const work = buildWorkList({ lanes, engines, published });
+    const work = buildWorkList({ channels: chosen, topics: lanes, published });
     summary.queued = work.length;
     summary.published = published.length;
     if (!work.length) {
@@ -433,10 +479,26 @@ export async function produce({
     }
     const queue = work.slice(0, Math.max(1, songsPerRun));
     for (const item of queue) {
-      const record = { topic: item.topic, engine: item.engine, status: "skipped", seeds: [], published: "" };
+      const record = { topic: item.topic, engine: item.engine, channel: item.channel, status: "skipped", seeds: [], published: "" };
       const workflow = workflows[item.engine];
       const duration = Number(durations[item.engine] ?? DEFAULT_DURATION_SECONDS);
-      const sheetPath = await ensureSheet({ repoRoot, topic: item.topic, radioDirectory: radio, cardDepth, log });
+      let sheetPath = "";
+      try {
+        sheetPath = await ensureSheet({
+          repoRoot,
+          topic: item.topic,
+          radioDirectory: radio,
+          engine: item.engine,
+          own: item.own,
+          cardDepth,
+          log
+        });
+      } catch (error) {
+        record.note = `the house has no words for ${item.topic}: ${String(error?.message ?? error)}`;
+        log(record.note);
+        summary.songs.push(record);
+        continue;
+      }
       const lyrics = await fs.readFile(sheetPath, "utf8");
       // The song is named before it is sung: a player shows the name a
       // listener would remember, not the lane the song was made for.
@@ -459,6 +521,8 @@ export async function produce({
           lyrics,
           seed,
           duration,
+          bpm: item.bpm,
+          style: item.style,
           outputPath: renderPath,
           comfyHost,
           housekeeperUrl
@@ -471,14 +535,26 @@ export async function produce({
           hearModel,
           repoRoot
         });
+        // The pace of the render is measured, not hoped for: a song the
+        // channel asked for slow is slow only if the song itself is slow.
+        // The channel's pace is the one the measurement counts in, so a slow
+        // song is not reported as the double of itself.
+        let tempoBpm = 0;
+        try {
+          const pace = await measure(renderPath, { likelyBpm: item.bpm });
+          tempoBpm = Number(pace?.bpm ?? pace ?? 0) || 0;
+        } catch (error) {
+          log(`the pace of ${item.topic} could not be measured: ${String(error?.message ?? error)}`);
+        }
         record.seeds.push({
           seed,
           percent: measured.percent,
           hits: measured.hits,
           total: measured.total,
-          srtPath: measured.srtPath
+          srtPath: measured.srtPath,
+          tempoBpm
         });
-        log(`seed ${seed} carried ${measured.percent}% of the words`);
+        log(`seed ${seed} carried ${measured.percent}% of the words at ${Math.round(tempoBpm)} bpm`);
       }
       const winner = chooseWinner(record.seeds);
       if (!winner || Number(winner.percent ?? 0) < Number(minRecovery)) {
@@ -495,17 +571,25 @@ export async function produce({
         filename: item.filename
       });
       // The words the house heard are kept with the song, so a listener can
-      // read along with it.
+      // read along with it. The words of a song are the words of that song:
+      // a song sung at another tempo is timed by its own hearing, not by the
+      // hearing of the lane it was made for.
+      const words = wordPathsFor({
+        lyricsDirectory: path.join(radio, "lyrics"),
+        engine: item.engine,
+        topic: item.topic,
+        own: item.own
+      });
       await keepTranscript({
         srtPath: winner.srtPath,
-        sheetPath,
+        transcriptPath: words.transcriptPath,
         log
       });
       // The words of the song, placed at the times the house heard them.
       await alignWords({
         srtPath: winner.srtPath,
         sheetPath,
-        alignedPath: alignedPathFor(sheetPath),
+        alignedPath: words.alignedPath,
         repoRoot,
         log
       });
@@ -516,6 +600,7 @@ export async function produce({
       record.status = "published";
       record.seed = winner.seed;
       record.percent = winner.percent;
+      record.tempoBpm = Number(winner.tempoBpm ?? 0);
       record.published = target;
       log(`published ${item.filename} from seed ${winner.seed}`);
       summary.songs.push(record);
@@ -548,9 +633,28 @@ export async function startProducer({ cwd = process.cwd() } = {}) {
   }
   const catalogueDirectory = resolveConfigText("radio catalogue") ?? "radio/audio";
   const radioDirectory = path.dirname(path.resolve(cwd, catalogueDirectory));
+  const lanesFile = resolveConfigText("radio producer lanes") ?? DEFAULT_LANES;
+  const lanes = parseLanes(await fs.readFile(path.resolve(cwd, lanesFile), "utf8"));
+  // The channels are the programmes of the station: the producer fills the
+  // lanes of each of them, in the voice and at the pace of that channel.
+  const channelsFile = resolveConfigText("radio channels") ?? DEFAULT_CHANNELS;
+  const fallback = engines.map((engine) => ({
+    name: engine,
+    engine,
+    bpm: 0,
+    style: "",
+    lanes: [],
+    everyLane: true
+  }));
+  const channels = channelProgrammes({
+    channels: await readChannels(path.resolve(cwd, channelsFile), { fallback }),
+    topics: lanes
+  });
   const summary = await produce({
     repoRoot: cwd,
-    lanesFile: resolveConfigText("radio producer lanes") ?? DEFAULT_LANES,
+    lanesFile,
+    channels,
+    channel: resolveConfigText("radio producer channel") ?? "",
     engines,
     workflows,
     durations,

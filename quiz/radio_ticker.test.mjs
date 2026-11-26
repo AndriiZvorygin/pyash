@@ -20,7 +20,8 @@ import {
   alignedPathFor,
   timedLines,
   transcriptPathFor,
-  withinSong
+  withinSong,
+  wordPathsFor
 } from "../program/library/radio/ticker.mjs";
 
 const SRT = [
@@ -198,4 +199,20 @@ test("the words of a song are read from the files that hold them", async () => {
   assert.equal(sheet.source, "sheet", "a song whose words were never heard shows its sheet");
 
   await fs.rm(root, { recursive: true, force: true });
+});
+
+test("the words of a song lie beside its sheet, named for the voice that sings it", () => {
+  const shared = wordPathsFor({ lyricsDirectory: "/radio/lyrics", topic: "peace" });
+  assert.equal(shared.sheetPath, "/radio/lyrics/song-peace.txt");
+  assert.equal(shared.transcriptPath, "/radio/lyrics/song-peace.srt");
+  assert.equal(shared.alignedPath, "/radio/lyrics/song-peace.aligned.srt");
+
+  const own = wordPathsFor({ lyricsDirectory: "/radio/lyrics", engine: "night", topic: "peace", own: true });
+  assert.equal(own.sheetPath, "/radio/lyrics/song-night-peace.txt");
+  assert.equal(own.transcriptPath, "/radio/lyrics/song-night-peace.srt");
+  assert.equal(own.alignedPath, "/radio/lyrics/song-night-peace.aligned.srt");
+
+  const without = wordPathsFor({ engine: "night", topic: "peace" });
+  assert.equal(without.sheetPath, "", "words without a place to lie are no words");
+  assert.equal(wordPathsFor({ lyricsDirectory: "/radio/lyrics", topic: "" }).sheetPath, "");
 });

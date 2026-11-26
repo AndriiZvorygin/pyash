@@ -45,6 +45,7 @@ const ENV_BINDINGS = [
   { env: "PYA_RADIO_SONG_IMPORTS", name: "radio song imports", type: "text" },
   { env: "PYA_RADIO_PRODUCER_LOOP", name: "radio producer loop", type: "bool" },
   { env: "PYA_RADIO_PRODUCER_PAUSE_SECONDS", name: "radio producer pause seconds", type: "num" },
+  { env: "PYA_RADIO_PRODUCER_CHANNEL", name: "radio producer channel", type: "text" },
   { env: "YAGO_API_KEY", name: "yago api key", type: "text" },
   { env: "PYA_KATAGO_PROFILE", name: "katago profile", type: "text" },
   { env: "PYA_REFINERY", name: "refinery name", type: "text" },

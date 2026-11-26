@@ -45,6 +45,29 @@ export function srtPathFor(transcriptPath) {
 }
 
 /**
+ * The words of a song: the sheet it carries, the transcript of what the house
+ * heard, and the alignment of the two.
+ *
+ * A song the house sings in one voice shares the sheet of its lane: the sheet
+ * of "peace" is the words of peace, whoever sings them. A song of a channel
+ * that has a voice of its own carries a sheet of its own, named for that
+ * voice, so a song sung slow is timed by its own hearing and not by the
+ * hearing of the lane it was made for.
+ */
+export function wordPathsFor({ lyricsDirectory = "", engine = "", topic = "", own = false } = {}) {
+  const directory = String(lyricsDirectory ?? "").trim();
+  const name = String(topic ?? "").trim();
+  if (!directory || !name) return { sheetPath: "", transcriptPath: "", alignedPath: "" };
+  const voice = own ? String(engine ?? "").trim() : "";
+  const stem = voice ? `song-${voice}-${name}` : `song-${name}`;
+  return {
+    sheetPath: path.join(directory, `${stem}.txt`),
+    transcriptPath: path.join(directory, `${stem}.srt`),
+    alignedPath: path.join(directory, `${stem}.aligned.srt`)
+  };
+}
+
+/**
  * Read one timestamp of a subtitle: hours, minutes, seconds and thousandths.
  */
 function parseStamp(stamp) {

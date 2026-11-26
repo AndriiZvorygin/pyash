@@ -13,10 +13,11 @@ import { forget, remember } from "../program/remember/index.mjs";
 import { measureMp3Buffer, parseFrameHeader } from "../program/library/radio/mp3.mjs";
 import { id3v2Size, writeId3Tags } from "../program/library/radio/id3.mjs";
 import { parseTrackName, publicCatalogue, scanCatalogue } from "../program/library/radio/catalogue.mjs";
+import { channelProgrammes, parseChannels } from "../program/library/radio/channels.mjs";
 import { renderStationPage } from "../program/library/radio/page.mjs";
 import { contractNames, contractWithOrder, inContract, orderTracks, parseLanes, parseRotation, readLanes, readRotation } from "../program/library/radio/rotation.mjs";
 import { createRadioStation, shuffleTracks } from "../program/library/radio/station.mjs";
-import { createRadioServer, formatHost, rotationContract } from "../command/yiniana_radio.mjs";
+import { createRadioServer, formatHost, publicChannels, stationProgrammes } from "../command/yiniana_radio.mjs";
 import { loadDefaultConfig } from "../command/run_pya_helpers.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -232,16 +233,20 @@ test("the lanes of a file that is not there are empty", async () => {
   assert.deepEqual(await readLanes(""), []);
 });
 
-test("the station builds its rotation from the lanes and the engines", async () => {
+test("the station builds its programmes from the channels", async () => {
   forget();
   await loadDefaultConfig({ cwd: REPO_ROOT, interpretFn: interpret });
-  const { contract, order } = await rotationContract({ cwd: REPO_ROOT });
-  assert.ok(contract.has("ace-step-love.mp3"), "a lane of the first engine is in the rotation");
-  assert.ok(contract.has("ace-step-gratitude.mp3"), "another lane is in the rotation");
-  assert.ok(!contract.has("ace-step-love-reference-shape.mp3"), "an experiment is not in the rotation");
-  assert.ok(contract.has("az-god-remembers.mp3"), "a song of the house is in the rotation");
-  assert.ok(!contract.has("yue2-love.mp3"), "an engine that is on the backburner is not in the rotation");
-  assert.equal(contract.size, order.length, "the contract and the order hold the same songs");
+  const programmes = await stationProgrammes({ cwd: REPO_ROOT });
+  const day = programmes[0];
+  const night = programmes.find((programme) => programme.name === "night");
+  assert.ok(day, "the station has a day programme");
+  assert.ok(night, "the station has a night programme");
+  assert.ok(day.contract.has("ace-step-love.mp3"), "a lane of the day programme is in its contract");
+  assert.ok(day.contract.has("az-god-remembers.mp3"), "a song of the house is in the day programme");
+  assert.ok(!day.contract.has("night-peace.mp3"), "the night song is not in the day programme");
+  assert.ok(night.contract.has("night-peace.mp3"), "a lane of the night programme is in its contract");
+  assert.ok(!night.contract.has("az-god-remembers.mp3"), "the house songs do not play in the night programme");
+  assert.equal(night.contract.size, night.lanes.length, "the contract holds the lanes of the programme");
   forget();
 });
 
@@ -416,11 +421,36 @@ test("an ipv6 address in a url is written in brackets", () => {
   assert.equal(formatHost(""), "");
 });
 
-test("the station page carries the station name and the stream", () => {  const page = renderStationPage({ stationName: "Zvorygin Radio", streamUrl: "/stream.mp3" });
+const PAGE_CHANNELS = [
+  { name: "day", bpm: 128, style: "", lanes: [], streamUrl: "/stream.mp3", songs: 122 },
+  { name: "night", bpm: 75, style: "plain Mennonite hymn", lanes: ["peace"], streamUrl: "/night.mp3", songs: 10 }
+];
+
+function stationPage({ channel = PAGE_CHANNELS[0] } = {}) {
+  return renderStationPage({ stationName: "Zvorygin Radio", channels: PAGE_CHANNELS, channel });
+}
+
+test("the station page carries the station name and the stream", () => {
+  const page = stationPage();
   assert.match(page, /Zvorygin Radio/u);
   assert.match(page, /\/stream\.mp3/u);
   assert.match(page, /<audio/u);
   assert.match(page, /\/events/u, "the page takes the words of the song from the station");
+});
+
+test("the station page offers the channels and the plain url of each", () => {
+  const page = stationPage();
+  assert.match(page, /\/\?channel=night/u, "the night channel is a link on the page");
+  assert.match(page, /75 bpm/u, "the page says the pace of the channel");
+  assert.match(page, /id="listen-url"/u, "the page shows the url of the stream");
+  assert.match(page, /\/night\.mp3/u, "the night channel has a plain mp3 url");
+  assert.match(page, /\/events\?channel=/u, "the words come from the channel the listener asked for");
+});
+
+test("the page of the night channel plays the night stream", () => {
+  const page = stationPage({ channel: PAGE_CHANNELS[1] });
+  assert.match(page, /src="\/night\.mp3"/u, "the player is tuned to the channel that was asked for");
+  assert.match(page, /aria-current="true"/u, "the channel the listener is on is marked");
 });
 
 test("the station serves the words of the song that is playing", async () => {
@@ -617,7 +647,7 @@ test("a download serves nothing that is not a song of the programme", async () =
 });
 
 test("the station page offers the download of the song and of the catalogue", () => {
-  const page = renderStationPage({ stationName: "Zvorygin Radio", streamUrl: "/stream.mp3" });
+  const page = stationPage();
   assert.match(page, /id="now-download"/u);
   assert.match(page, /downloadLink\(song\.downloadUrl/u);
   assert.match(page, /downloadLink\(track\.downloadUrl/u);
@@ -625,13 +655,13 @@ test("the station page offers the download of the song and of the catalogue", ()
 });
 
 test("the station page lists the catalogue in alphabetical order", () => {
-  const page = renderStationPage({ stationName: "Zvorygin Radio", streamUrl: "/stream.mp3" });
+  const page = stationPage();
   assert.match(page, /sort\(\(a, b\) =>/u);
   assert.match(page, /String\(a\.title \?\? ""\)\.localeCompare\(String\(b\.title \?\? ""\)\)/u);
 });
 
 test("a listener can find a song on the page by a word of its name", () => {
-  const page = renderStationPage({ stationName: "Zvorygin Radio", streamUrl: "/stream.mp3" });
+  const page = stationPage();
   assert.match(page, /id="find"/u, "the page carries a field to find a song");
   assert.match(page, /id="find-count"/u, "the page says how many songs carry the name");
   assert.match(page, /addEventListener\("input", renderCatalogue\)/u, "the list follows what is typed");
@@ -725,4 +755,136 @@ test("the station streams the words of the song in step with the audio", async (
   server.closeAllConnections?.();
   server.close();
   station.stop();
+});
+
+test("a station that had nothing to play begins when the catalogue brings it a song", async () => {
+  const root = await makeTempDir();
+  const track = await writeTrack(root, "night-peace.mp3", { frames: 40 });
+  const station = createRadioStation({ tracks: [], gapMs: 0 });
+  station.start();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(station.state().track, null, "the station is silent while it has nothing to play");
+
+  station.setTracks([track]);
+
+  const playing = await waitFor(() => station.state().track);
+  assert.ok(playing, "the station did not begin to play");
+  assert.equal(station.state().track.filename, "night-peace.mp3");
+  station.stop();
+});
+
+test("every channel has a plain stream of its own", async () => {
+  const root = await makeTempDir();
+  const day = await writeTrack(root, "ace-step-dignity.mp3", { frames: 40 });
+  const night = await writeTrack(root, "night-peace.mp3", { frames: 40 });
+  const dayStation = createRadioStation({ tracks: [day], gapMs: 0 });
+  const nightStation = createRadioStation({ tracks: [night], gapMs: 0 });
+  dayStation.start();
+  nightStation.start();
+  const { server } = createRadioServer({
+    channels: [
+      { name: "day", bpm: 128, style: "", lanes: [], station: dayStation },
+      { name: "night", bpm: 75, style: "plain Mennonite hymn", lanes: ["peace"], station: nightStation }
+    ],
+    stationName: "Zvorygin Radio",
+    catalogueDirectory: root
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+
+  for (const url of ["/stream.mp3", "/day.mp3", "/night.mp3"]) {
+    const stream = await fetch(`${base}${url}`);
+    assert.equal(stream.headers.get("content-type"), "audio/mpeg", `${url} carries the audio`);
+    const reader = stream.body.getReader();
+    const first = await reader.read();
+    assert.ok(first.value.length > 0, `${url} carried no audio`);
+    await reader.cancel();
+  }
+
+  const unknown = await fetch(`${base}/morning.mp3`);
+  assert.equal(unknown.status, 404, "a channel the station does not have is refused");
+
+  const listed = await (await fetch(`${base}/channels.json`)).json();
+  assert.equal(listed.channels.length, 2);
+  assert.equal(listed.channels[0].streamUrl, "/stream.mp3");
+  assert.equal(listed.channels[1].streamUrl, "/night.mp3");
+  assert.equal(listed.channels[1].bpm, 75, "the listener is told the pace of the channel");
+
+  await new Promise((resolve) => server.close(resolve));
+  dayStation.stop();
+  nightStation.stop();
+});
+
+test("the words of a channel are the words of the song that channel is playing", async () => {
+  const root = await makeTempDir();
+  const lyrics = path.join(root, "lyrics");
+  await fs.mkdir(lyrics, { recursive: true });
+  await fs.writeFile(path.join(lyrics, "song-night-peace.txt"), "[Verse]\nThe quiet of the night\n");
+  await fs.writeFile(path.join(lyrics, "song-night-peace.aligned.srt"), [
+    "1",
+    "00:00:05,000 --> 00:00:12,000",
+    "The quiet of the night.",
+    ""
+  ].join("\n"));
+  const night = await writeTrack(root, "night-peace.mp3", { frames: 900 });
+  night.lyricSheet = path.join(lyrics, "song-night-peace.txt");
+  const nightStation = createRadioStation({ tracks: [night], gapMs: 0 });
+  nightStation.start();
+  const { server } = createRadioServer({
+    channels: [{ name: "night", bpm: 75, style: "", lanes: ["peace"], station: nightStation }],
+    stationName: "Zvorygin Radio",
+    catalogueDirectory: root
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+
+  const words = await (await fetch(`${base}/lyrics.json?channel=night`)).json();
+  assert.equal(words.channel, "night");
+  assert.equal(words.filename, "night-peace.mp3");
+  assert.equal(words.source, "lyrics");
+  assert.equal(words.lines[0].text, "The quiet of the night.");
+
+  const status = await (await fetch(`${base}/status.json?channel=night`)).json();
+  assert.equal(status.channel, "night");
+  assert.equal(status.track.filename, "night-peace.mp3");
+
+  const controller = new AbortController();
+  const response = await fetch(`${base}/events?channel=night`, { signal: controller.signal });
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  while (!text.includes("event: clock")) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    text += decoder.decode(value, { stream: true });
+  }
+  controller.abort();
+  const song = JSON.parse(text.split("event: song")[1]?.split("data: ")[1]?.split("\n")[0] || "{}");
+  assert.equal(song.channel, "night");
+  assert.equal(song.filename, "night-peace.mp3");
+  assert.equal(song.lines[0].text, "The quiet of the night.");
+
+  server.closeAllConnections?.();
+  server.close();
+  nightStation.stop();
+});
+
+test("a channel with a voice of its own keeps to the sheet of that voice", async () => {
+  const root = await makeTempDir();
+  const audio = path.join(root, "audio");
+  const lyrics = path.join(root, "lyrics");
+  await fs.mkdir(audio, { recursive: true });
+  await fs.mkdir(lyrics, { recursive: true });
+  await fs.writeFile(path.join(audio, "night-peace.mp3"), syntheticMp3({ frames: 8 }));
+  await fs.writeFile(path.join(lyrics, "song-peace.txt"), "the words of the lane");
+  await fs.writeFile(path.join(lyrics, "song-night-peace.txt"), "the words of the night");
+
+  const own = await scanCatalogue({ directory: audio, lyricsDirectory: lyrics, own: true });
+  assert.equal(path.basename(own[0].lyricSheet), "song-night-peace.txt", "the song is timed by its own voice");
+
+  const shared = await scanCatalogue({ directory: audio, lyricsDirectory: lyrics });
+  assert.equal(path.basename(shared[0].lyricSheet), "song-night-peace.txt",
+    "the sheet of the voice is still the first one to be found");
 });

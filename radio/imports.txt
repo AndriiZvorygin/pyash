@@ -43,3 +43,11 @@ az-balance-love-wisdom.mp3 | /home/htaf/Downloads/dance_festival_ComfyUI_00107_.
 az-mirror-stranger.mp3 | /home/htaf/Downloads/AZ - Lover is Closer.mp3 | | Lover Is Closer
 az-samantha.mp3 | /home/htaf/pyac/pyash/know/input/samantha2026.mp3 | /home/htaf/pyac/pyash/know/input/samantha2026.txt |
 az-open-the-weights.mp3 | /home/htaf/pyac/pyash/know/input/open_the_weights.mp3 | /home/htaf/pyac/pyash/know/input/open_the_weights.txt | Open the Weights
+
+# The night programme: the two hymns the house already sang slow.
+#
+# These are the house's own words at a slow pace, sung before the radio had
+# channels. They carry the voice of the night channel, so the station times
+# them by their own hearing and not by the hearing of the lane.
+night-god-remembers.mp3 | /home/htaf/hven/comfyui/comfyui/output/audio/ACE_Step1.5_xl_turbo_00003_.mp3 | /home/htaf/pyac/pyash/know/input/night-god-remembers.lyrics.txt | God Remembers All
+night-holy-spirit.mp3 | /home/htaf/hven/comfyui/comfyui/output/audio/ACE_Step1.5_xl_turbo_00047.mp3 | /home/htaf/pyac/pyash/know/input/night-holy-spirit.lyrics.txt | Holy Spirit

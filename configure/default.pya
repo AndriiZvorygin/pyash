@@ -189,6 +189,7 @@ exists su name radio catalogue ob text "radio/audio" be default ya
 exists su name radio station name ob text "Zvorygin Radio" be default ya
 exists su name radio station command ob text "node command/yiniana_radio.mjs" be default ya
 exists su name radio rotation ob text "radio/rotation.txt" be default ya
+exists su name radio channels ob text "radio/channels.txt" be default ya
 exists su name radio song imports ob text "radio/imports.txt" be default ya
 exists su name radio tags command ob text "node command/yiniana_tag_catalogue.mjs" be default ya
 exists su name radio transcribe command ob text "node command/yiniana_transcribe_catalogue.mjs" be default ya
@@ -201,11 +202,14 @@ exists su name radio producer audition seconds ob num 0 be default ya
 exists su name radio producer min recovery ob num 10 be default ya
 exists su name radio producer loop ob bool lie be default ya
 exists su name radio producer pause seconds ob num 0 be default ya
+exists su name radio producer channel ob text "" be default ya
 su name radio producer engines be map def
   su name ace-step ob text "audio_ace_step_1_5_xl_turbo" ya
+  su name night ob text "audio_ace_step_1_5_xl_turbo" ya
 prah
 su name radio producer durations be map def
   su name ace-step ob num 175 ya
+  su name night ob num 175 ya
 prah
 su name web archive configure be map def
   su name web archive prefix ob text "prefix" ya

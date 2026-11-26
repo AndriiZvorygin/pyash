@@ -10,8 +10,8 @@ import { inContract } from "./rotation.mjs";
 // `radio/audio/<engine>-<topic>.mp3`. The engine prefix is known, so the
 // topic can be read off the name without guessing where the engine ends.
 // "az" is Andrii Zvorygin, the house's own voice, for the songs the house
-// made before the radio.
-const ENGINE_PREFIXES = ["ace-step", "yue2", "az"];
+// made before the radio. "night" is the voice of the night channel.
+const ENGINE_PREFIXES = ["ace-step", "yue2", "az", "night"];
 
 function titleCase(text) {
   return String(text ?? "")
@@ -49,15 +49,19 @@ export function parseTrackName(filename) {
  * A song of the house carries its own sheet, named for the song, so two songs
  * about the same theme do not fight over one file. A song of the rotation
  * carries the sheet of its lane.
+ *
+ * A channel that sings in a voice of its own keeps to the sheet of that
+ * voice: a song sung slow is timed by its own hearing, and never by the
+ * hearing of the lane it was made for.
  */
-export async function findLyricSheet(lyricsDirectory, topic, engine = "") {
+export async function findLyricSheet(lyricsDirectory, topic, engine = "", { own = false } = {}) {
   const directory = String(lyricsDirectory ?? "").trim();
   const name = String(topic ?? "").trim();
   if (!directory || !name) return "";
   const prefix = String(engine ?? "").trim();
   const candidates = [];
   if (prefix) candidates.push(path.join(directory, `song-${prefix}-${name}.txt`));
-  candidates.push(path.join(directory, `song-${name}.txt`));
+  if (!own) candidates.push(path.join(directory, `song-${name}.txt`));
   for (const candidate of candidates) {
     try {
       await fs.access(candidate);
@@ -78,7 +82,7 @@ export async function findLyricSheet(lyricsDirectory, topic, engine = "") {
  * experiment that shares the catalogue folder is kept on disk and stays out
  * of the programme.
  */
-export async function scanCatalogue({ directory, lyricsDirectory = "", contract = null } = {}) {
+export async function scanCatalogue({ directory, lyricsDirectory = "", contract = null, own = false } = {}) {
   const folder = String(directory ?? "").trim();
   if (!folder) return [];
   let entries = [];
@@ -120,7 +124,7 @@ export async function scanCatalogue({ directory, lyricsDirectory = "", contract 
       bytes: media.bytes,
       sampleRate: media.sampleRate,
       channels: media.channels,
-      lyricSheet: await findLyricSheet(lyricsDirectory, topic, engine)
+      lyricSheet: await findLyricSheet(lyricsDirectory, topic, engine, { own })
     });
   }
   return tracks;

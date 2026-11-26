@@ -1,0 +1,27 @@
+# The channels of the station.
+#
+# A radio that plays one programme at one pace is a radio that never rests.
+# Every channel is a name, the voice that sings it, the tempo it is rendered
+# at, the style it is rendered in, and the lanes it carries:
+#
+#   <name> | <engine> | <bpm> | <style> | <lane>, <lane>, ...
+#
+# The name is what a listener asks for: the stream of a channel is
+# /<name>.mp3, a plain mp3 that any player can open. The engine is the voice:
+# the song of a lane in a channel is named for it, so the night channel sings
+# night-peace.mp3 and carries the words of the peace lane.
+#
+# The lane list may be "*", which is every lane of radio/topics.txt. A style of
+# "-" is the style the workflow carries of its own.
+#
+# The first channel of the file is the default one: its stream is
+# /stream.mp3, and the songs that came before the radio play in it.
+
+# The day programme: the whole rotation, at the tempo the house has always
+# sung at.
+day | ace-step | 128 | - | *
+
+# The night programme: slow, calm, and sung like a hymn. The style is the one
+# the house already sang God Remembers All in, and the tempo is the slow one.
+# The lanes are the calm ones, and the two hymns the house already sang slow.
+night | night | 75 | plain Mennonite hymn, natural male lead, soft female response, slow acoustic hymn, call and response, clear dry vocals, 75 bpm | acceptance, contemplation, god-remembers, gratitude, harmony, holy-spirit, patience, peace, stillness, solitude
