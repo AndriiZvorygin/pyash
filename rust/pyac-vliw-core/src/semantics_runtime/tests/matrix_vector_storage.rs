@@ -2,7 +2,11 @@ use super::*;
 
 const INPUT: u32 = 0x4123;
 const OUTPUT: u32 = 0x4567;
-const WEIGHTS: u32 = 0x4890;
+/// `hgip` = cabbage. The fixture uses it as a section name for weights; the
+/// atom's own meaning is unrelated, which is exactly the confusion this naming
+/// avoids — the slot alias says what the test is doing with it.
+const HGIP_CABBAGE: u32 = 0x4890;
+const WEIGHTS: u32 = HGIP_CABBAGE;
 const NUMBER_QUOTE: u32 = 0x881d;
 const DESTINATION: u32 = 0x243e;
 const LOCATIVE: u32 = 0x615f;

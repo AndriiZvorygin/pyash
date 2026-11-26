@@ -5,10 +5,17 @@ use super::*;
 const SOFTMAX_NAME: [u32; 2] = [0x6844, 0xa8a0];
 const LOGITS_NAME: u32 = 0xa8a0;
 const ANSWER_NAME: u32 = 0x4930;
-const MAXIMUM_NAME: u32 = 0xaa90;
+/// `hgut` = count. This is the atom, and it is what `MAXIMUM_NAME` and
+/// `DENOMINATOR_NAME` below both were: two names for one value, used in the
+/// same file to mean different things. The slot names stay as local aliases so
+/// each use still reads as what the test is doing.
+const HGUT_COUNT: u32 = 0xaa90;
+const MAXIMUM_NAME: u32 = HGUT_COUNT;
 const SHIFTED_NAME: u32 = 0x6844;
-const EXPONENTIALS_NAME: u32 = 0x2b73;
-const DENOMINATOR_NAME: u32 = 0xaa90;
+/// `dlek` = vector.
+const DLEK_VECTOR: u32 = 0x2b73;
+const EXPONENTIALS_NAME: u32 = DLEK_VECTOR;
+const DENOMINATOR_NAME: u32 = HGUT_COUNT;
 const ANSWER_ROUTINE: u32 = 0x4930;
 
 fn append_sentence(words: &mut std::vec::Vec<u32>, tokens: &[u32], boundaries: &[usize]) {

@@ -4,7 +4,9 @@ const PLUK: u32 = 0x2a64;
 const TLAS: u32 = 0x896a;
 const PREDICTION: u32 = 0x68b1;
 const ANSWER: u32 = 0x4930;
-const CORRECT_COUNT: u32 = 0xaa90;
+/// `hgut` = count.
+const HGUT_COUNT: u32 = 0xaa90;
+const CORRECT_COUNT: u32 = HGUT_COUNT;
 
 fn append_group(
     words: &mut std::vec::Vec<u32>,

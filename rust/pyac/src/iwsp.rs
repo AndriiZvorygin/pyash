@@ -24,7 +24,10 @@ const PLUK: u32 = 0x2a64;
 const TLAS: u32 = 0x896a;
 const PREDICTION: u32 = 0x68b1;
 const ANSWER: u32 = 0x4930;
-const CORRECT_COUNT: u32 = 0xaa90;
+/// `hgut` = count. The slot holds how many predictions were right; the atom
+/// itself just means "count".
+const HGUT_COUNT: u32 = 0xaa90;
+const CORRECT_COUNT: u32 = HGUT_COUNT;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IwspScore {
