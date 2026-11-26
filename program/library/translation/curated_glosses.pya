@@ -1,0 +1,9 @@
+su name translation_curated_glosses be map def
+su text "format" ob text "curated-gloss-v1" ya
+su text "scope" ob text "English glosses for atoms whose concept WordNet does not index. These are interim definitions, not WordNet senses: the logical connectives have no WordNet entries at all, so a linked exact sense is impossible and a plain English gloss stands in until a compositional Pyash definition is authored." ya
+su text "wa" ob text "logical conjunction: the result is true only when both operands are true" ya
+su text "ba" ob text "logical disjunction: the result is true when at least one operand is true" ya
+su text "hkit" ob text "exclusive disjunction: the result is true when the operands differ and false when they agree" ya
+su text "hwan" ob text "the English conjunction and; joins two noun phrases rather than combining truth values" ya
+su text "bluh" ob text "the boolean type marker; a value is either true or false" ya
+prah

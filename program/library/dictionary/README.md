@@ -9,7 +9,7 @@ The volume format and record grammar are specified in
 `reference.pya` is the generated source snapshot of accepted Pyash vocabulary.
 Its profile-v3 marker describes the source entry grammar; the Rust build
 converts it to the current profile-v4 runtime volume in `reference.pyac`. Both
-contain 64,595 entries. The current v4 volume is 131,231,040 bytes. The snapshot includes
+contain 64,595 entries. The current v4 volume is 131,233,984 bytes. The snapshot includes
 7,084 promoted SUMO links: 5,658 `superclass-of` and 1,426 `equivalent-to`.
 
 ## Operation signatures
@@ -58,6 +58,14 @@ bridge lacks.
 WordNet does not index the logical connectives — `and`, `or`, and `xor` have no
 senses at all — so `wa`, `ba`, and `hkit` carry no `wordnet` link. That is a
 property of the lexical resource, not a missing linkage.
+
+Because such an atom would otherwise carry no definition at all, it takes an
+authored English gloss from
+`program/library/translation/curated_glosses.pya`. The gloss is recorded under
+its own `pyash-curated` dataset and paired with a matching `source-link`,
+because the volume writer rejects a gloss that does not name a source the entry
+also links. These are interim definitions, not WordNet senses; a compositional
+Pyash definition remains the long-term form.
 
 A surface with no existing word is absent on purpose — `promptify` and the
 engine-named TTS verbs (`piper say`, `qwen say`) skip rather than take an
@@ -209,10 +217,10 @@ count. `artifacts/` is git-ignored; use a unique filename for each run and
 retain or copy the record where local benchmark history is maintained.
 
 Current reference-volume verification on Mriczo, 2026-11-25: rebuilding
-`reference.pyac` from the checked-in `reference.pya` parsed 101,451,187 source
-bytes and wrote the volume in about 15 s. The result contains 64,595 entries
-and 4,100,969 codelets, occupies 131,231,040 bytes, and has SHA-256
-`85a1db5fb8ebd61538c824e94ba4a250e9e1a791c45241a8bee80bcfdfd03925`. A
+`reference.pyac` from the checked-in `reference.pya` parsed 101,453,130 source
+bytes and wrote the volume in about 20 s. The result contains 64,595 entries
+and 4,101,061 codelets, occupies 131,233,984 bytes, and has SHA-256
+`0c167bf29c41bd0c27dfeef5e71c490715edd3ad1cb0a79c61d661fc2e7f8687`. A
 10,000-iteration warmed `en`/`tensor` lookup measured 106,218 ns mean
 (9,414.5 lookups/s) on the previous volume, one result per lookup; re-measure
 against this one before quoting a rate. The local Pyash run record for that

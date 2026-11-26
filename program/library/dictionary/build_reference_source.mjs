@@ -24,6 +24,7 @@ import { defaultVerbSpelling } from "./verb_defaults.mjs";
 const OUTPUT = new URL("./reference.pya", import.meta.url);
 const RELEASE = "Open English WordNet 2025";
 const SUMO_RELEASE = "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed";
+const CURATED_GLOSS_RELEASE = "pyash authored";
 const ACCEPTED_CURATED_STATUSES = new Set(["accepted-curated", "accepted-delimited", "accepted-deterministic"]);
 const ACCEPTED_WORDNET_STATUSES = new Set(["accepted-llm", "repaired-llm", "accepted-deterministic"]);
 const LANGUAGE_FILES = Object.freeze({
@@ -85,6 +86,18 @@ function addSourceLink(entry, dataset, release, identifier, relation) {
     entry.sourceLinkIdentities.add(identity);
     entry.sourceLinks.push({ dataset, release, identifier, relation });
   }
+}
+
+// An authored gloss for a concept with no WordNet sense. It is recorded under
+// its own dataset so a reader can distinguish an authored definition from a
+// WordNet sense gloss.
+function addSourceGloss(entry, language, dataset, release, identifier, gloss) {
+  const text = String(gloss ?? "").normalize("NFC").trim();
+  if (!text) return;
+  const identity = `${language}\u0000${dataset}\u0000${release}\u0000${identifier}\u0000${text}`;
+  if (entry.sourceGlossIdentities.has(identity)) return;
+  entry.sourceGlossIdentities.add(identity);
+  entry.sourceGlosses.push({ language, dataset, release, identifier, text });
 }
 
 function addWordNetSense(entry, candidate) {
@@ -521,6 +534,7 @@ export function buildAcceptedReferenceSource({
   legacyDictionaries = [],
   sumoRows = [],
   sumoConceptLinkRows = [],
+  curatedGlosses = [],
   render = true
 } = {}) {
   const entriesByKey = new Map();
@@ -704,6 +718,19 @@ export function buildAcceptedReferenceSource({
     if (!Array.isArray(record?.pyashSequence) || record.pyashSequence.length === 0) continue;
     addSourceLink(getEntry(record.pyashSequence), "sumo", SUMO_RELEASE, record.sumoId, record.relation ?? "equivalent-to");
   }
+  // A concept WordNet does not index cannot have an exact linked sense, so its
+  // entry would carry no definition at all. An authored English gloss stands in
+  // as the interim definition, marked with its own dataset so a reader can tell
+  // it apart from a WordNet gloss.
+  for (const record of curatedGlosses) {
+    if (!Array.isArray(record?.pyashSequence) || record.pyashSequence.length === 0) continue;
+    const entry = getEntry(record.pyashSequence);
+    const identifier = record.pyashSequence.join(" ");
+    // The writer requires a gloss to name a source that the entry also links,
+    // so the authored gloss is paired with its own link record.
+    addSourceLink(entry, "pyash-curated", CURATED_GLOSS_RELEASE, identifier, "authored-gloss");
+    addSourceGloss(entry, "en", "pyash-curated", CURATED_GLOSS_RELEASE, identifier, record.gloss);
+  }
 
   const languages = [...new Set([
     "en", ...Object.keys(LANGUAGE_FILES), "zh-Latn-pinyin", "yue-Latn-jyutping"
@@ -769,7 +796,8 @@ export async function loadReferenceSourceInputs() {
     englishSource,
     frequencyResources,
     legacyDictionaries,
-    vocabularyReviewSource
+    vocabularyReviewSource,
+    curatedGlossSource
   ] = await Promise.all([
     loadEnglishWordNetBridges(),
     readFile(translation("compound_coverage_curated.pya"), "utf8"),
@@ -792,7 +820,8 @@ export async function loadReferenceSourceInputs() {
       language,
       rows: await readJson(legacy(filename))
     }))),
-    readFile(translation("vocabulary_entry_reviews.pya"), "utf8")
+    readFile(translation("vocabulary_entry_reviews.pya"), "utf8"),
+    readFile(translation("curated_glosses.pya"), "utf8")
   ]);
   const curatedEntries = parseCompoundLexicon(curatedSource, {
     name: "translation_compounds_derived_curated",
@@ -839,6 +868,15 @@ export async function loadReferenceSourceInputs() {
     ? decodeJsonRows(parseMapRows(sumoConceptLinkSource, "sumo_concept_links")
       .filter((sentence) => sentence.su.text !== "format"), "SUMO concept links")
     : [];
+  // The map key is the Pyash spelling; the value is the authored English gloss.
+  const curatedGlossRows = parseMapRows(curatedGlossSource, "translation_curated_glosses")
+    .filter((sentence) => sentence.su.text !== "format" && sentence.su.text !== "scope")
+    .flatMap((sentence) => {
+      const pya = sentence.su.text.split(/\s+/u).filter(Boolean);
+      const gloss = sentence.ob?.text;
+      if (!pya.length || typeof gloss !== "string" || !gloss.trim()) return [];
+      return [{ pyashSequence: pya, gloss: gloss.trim() }];
+    });
   return {
     bridgeCatalog,
     vocabularyReviews,
@@ -853,7 +891,8 @@ export async function loadReferenceSourceInputs() {
     jyutpingRows,
     legacyDictionaries,
     sumoRows,
-    sumoConceptLinkRows
+    sumoConceptLinkRows,
+    curatedGlosses: curatedGlossRows
   };
 }
 

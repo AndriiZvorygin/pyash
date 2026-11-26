@@ -6,6 +6,8 @@ su name tlat kwon ob text "ba" at text "entry" be text ya
 su name tlat kwon ob text "ba" as text "en" from text "and_or_" to text "and_or_" at text "lexical-form" be text ya
 su name tlat kwon ob text "ba" as text "zh" from text "或" to text "或" at text "lexical-form" be text ya
 su name tlat kwon ob text "ba" as text "zh-Latn-pinyin" from text "huò" to text "huò" at text "lexical-form" be text ya
+su name tlat kwon ob text "ba" as text "pyash-curated" from text "pyash authored" to text "ba" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "ba" as text "en" from text "pyash-curated" to text "pyash authored" by text "ba" with text "logical disjunction: the result is true when at least one operand is true" at text "source-gloss" be text ya
 su name tlat kwon ob text "ba" from ve 13 1 9790 1 10590 2 1 9310 1 9598 1 18703 1 9598 at text "operation-signature" be text ya
 su name tlat kwon ob text "ba" as ve 4 1 9310 1 9598 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
 su name tlat kwon ob text "ba" as ve 4 1 18703 1 9598 from text "with" to text "value supplied in the with case" at text "operation-argument" be text ya
@@ -6355,6 +6357,8 @@ su name tlat kwon ob text "bluf kwut" from text "bluf" at text "component" be te
 su name tlat kwon ob text "bluf kwut" from text "kwut" at text "component" be text ya
 su name tlat kwon ob text "bluh" at text "entry" be text ya
 su name tlat kwon ob text "bluh" as text "en" from text "boolean_" to text "boolean_" at text "lexical-form" be text ya
+su name tlat kwon ob text "bluh" as text "pyash-curated" from text "pyash authored" to text "bluh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "bluh" as text "en" from text "pyash-curated" to text "pyash authored" by text "bluh" with text "the boolean type marker; a value is either true or false" at text "source-gloss" be text ya
 su name tlat kwon ob text "bluk" at text "entry" be text ya
 su name tlat kwon ob text "bluk" as text "ar" from text "ﻚﻴﺘﻜﺗ" to text "ﻚﻴﺘﻜﺗ" at text "lexical-form" be text ya
 su name tlat kwon ob text "bluk" as text "en" from text "maneuver" to text "maneuver" at text "lexical-form" be text ya
@@ -210724,6 +210728,8 @@ su name tlat kwon ob text "hkis zyam" from text "hkis" at text "component" be te
 su name tlat kwon ob text "hkis zyam" from text "zyam" at text "component" be text ya
 su name tlat kwon ob text "hkit" at text "entry" be text ya
 su name tlat kwon ob text "hkit" as text "en" from text "exclusive_or" to text "exclusive_or" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkit" as text "pyash-curated" from text "pyash authored" to text "hkit" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "hkit" as text "en" from text "pyash-curated" to text "pyash authored" by text "hkit" with text "exclusive disjunction: the result is true when the operands differ and false when they agree" at text "source-gloss" be text ya
 su name tlat kwon ob text "hkit" from ve 13 1 43024 1 10590 2 1 9310 1 12926 1 9278 1 12926 at text "operation-signature" be text ya
 su name tlat kwon ob text "hkit" as ve 4 1 9310 1 12926 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
 su name tlat kwon ob text "hkit" as ve 4 1 9278 1 12926 from text "to" to text "value supplied in the to case" at text "operation-argument" be text ya
@@ -322223,6 +322229,8 @@ su name tlat kwon ob text "hwam" as text "zh-Latn-pinyin" from text "zá" to tex
 su name tlat kwon ob text "hwam" as text "zh-Latn-pinyin" from text "zán" to text "zán" at text "lexical-form" be text ya
 su name tlat kwon ob text "hwan" at text "entry" be text ya
 su name tlat kwon ob text "hwan" as text "en" from text "and" to text "and" at text "lexical-form" be text ya
+su name tlat kwon ob text "hwan" as text "pyash-curated" from text "pyash authored" to text "hwan" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "hwan" as text "en" from text "pyash-curated" to text "pyash authored" by text "hwan" with text "the English conjunction and; joins two noun phrases rather than combining truth values" at text "source-gloss" be text ya
 su name tlat kwon ob text "hwan" from ve 13 1 26920 1 10590 2 1 9310 1 9598 1 18703 1 9598 at text "operation-signature" be text ya
 su name tlat kwon ob text "hwan" as ve 4 1 9310 1 9598 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
 su name tlat kwon ob text "hwan" as ve 4 1 18703 1 9598 from text "with" to text "value supplied in the with case" at text "operation-argument" be text ya
@@ -709320,6 +709328,8 @@ su name tlat kwon ob text "w6" at text "entry" be text ya
 su name tlat kwon ob text "w6" as text "en" from text "_ium_" to text "_ium_" at text "lexical-form" be text ya
 su name tlat kwon ob text "wa" at text "entry" be text ya
 su name tlat kwon ob text "wa" as text "en" from text "and_" to text "and_" at text "lexical-form" be text ya
+su name tlat kwon ob text "wa" as text "pyash-curated" from text "pyash authored" to text "wa" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "wa" as text "en" from text "pyash-curated" to text "pyash authored" by text "wa" with text "logical conjunction: the result is true only when both operands are true" at text "source-gloss" be text ya
 su name tlat kwon ob text "we" at text "entry" be text ya
 su name tlat kwon ob text "we" as text "en" from text "vialis_case_" to text "vialis_case_" at text "lexical-form" be text ya
 su name tlat kwon ob text "wi" at text "entry" be text ya
