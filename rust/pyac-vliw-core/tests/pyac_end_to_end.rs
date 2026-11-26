@@ -78,16 +78,16 @@ fn sana_pyanli_round_trips_through_codelets() {
 
 #[test]
 fn a_name_round_trips_as_gi_plus_a_root() {
-    let hnan = spell_word("hnan").unwrap() as u32;
-    let subject = [NAME_TYPE, hnan];
+    let hnim = spell_word("hnim").unwrap() as u32;
+    let subject = [NAME_TYPE, hnim];
     let fields = [EncodeField {
         case: NA,
         value: &subject,
     }];
     let (text, payload) = round_trip(&fields, &[PYAN]);
-    // gi hnan na pyan li -> "gihnanna pyanli": the name tag leads, as agreed.
-    assert_eq!(text.trim(), "gihnanna pyanli");
-    assert_eq!(payload, [NAME_TYPE, hnan, NA, PYAN, LI]);
+    // gi hnim na pyan li -> "gihnimna pyanli": the name tag leads, as agreed.
+    assert_eq!(text.trim(), "gihnimna pyanli");
+    assert_eq!(payload, [NAME_TYPE, hnim, NA, PYAN, LI]);
 }
 
 #[test]
@@ -109,7 +109,7 @@ fn a_width_tagged_value_round_trips_without_a_name_tag() {
 fn two_fields_round_trip_in_order() {
     let ka = spell_word("ka").unwrap() as u32;
     let left = [SA];
-    let right = [spell_word("hnan").unwrap() as u32];
+    let right = [spell_word("hnim").unwrap() as u32];
     let fields = [
         EncodeField {
             case: NA,
@@ -123,5 +123,5 @@ fn two_fields_round_trip_in_order() {
     let (text, payload) = round_trip(&fields, &[PYAN]);
     assert_eq!(payload, [SA, NA, right[0], ka, PYAN, LI]);
     assert!(text.contains("sana"), "{text}");
-    assert!(text.contains("hnanka"), "{text}");
+    assert!(text.contains("hnimka"), "{text}");
 }

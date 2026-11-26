@@ -198,10 +198,14 @@ const NUMBER_DIGITS: &[(u32, u32)] = &[
 
 /// How a numeric literal's digit words combine into a value.
 ///
-/// The C reads the run backwards in base 16, so `hyik tyut do` is 1*16 + 2. That is
-/// a historical choice: base 16 needs sixteen digit words and little-endian reads
-/// against the direction of speech. Decimal big-endian is the portable default —
-/// `do hyik tyut` reads as twelve, in the order it is written.
+/// The digit words are the six-vowel-sound numerals, so base 6 is the natural
+/// radix: `zron`, `hyik`, `tyut`, `tyin`, `ksas`, `hfak` are 0..5. Base 10 would
+/// need four more words that do not exist, and base 16 was a historical detour
+/// that also read against the direction of speech.
+///
+/// Big-endian is the default because it reads in the order it is written —
+/// `do hyik tyut` is 1*6 + 2 — and because the leading terminator means the digits
+/// arrive already in that order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NumberFormat {
     /// Radix. Digit words with a value at or above this are rejected.
@@ -211,9 +215,10 @@ pub struct NumberFormat {
 }
 
 impl NumberFormat {
-    /// Decimal, most significant digit first: portable and reads left to right.
+    /// Base 6, most significant digit first: the digit vocabulary is base 6, and
+    /// this order matches the direction of speech.
     pub const DEFAULT: Self = Self {
-        base: 10,
+        base: 6,
         big_endian: true,
     };
 

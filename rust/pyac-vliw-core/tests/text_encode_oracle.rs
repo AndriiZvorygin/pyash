@@ -87,14 +87,14 @@ fn dohyikpwih_prifgika_djancu_plustu_matches_the_c_tablet_except_a_stale_word() 
 
 #[test]
 fn a_two_digit_number_reads_left_to_right() {
-    // `do hyik tyut` in the written order: twelve, not twenty-one.
+    // `do hyik tyut` in the written order, base 6: 1*6 + 2 = 8.
     let mut codelets = [[0u32; CODELET_WIDTH]; 4];
     let count = encode_sentence("dohyiktyut", &mut codelets).unwrap();
     let flat: std::vec::Vec<u32> = codelets[..count]
         .iter()
         .flat_map(|c| c.iter().copied())
         .collect();
-    assert_eq!(&flat[..3], &[0x1, 0x881d, 12]);
+    assert_eq!(&flat[..3], &[0x1, 0x881d, 8]);
 }
 
 #[test]
@@ -115,21 +115,22 @@ fn a_word_containing_the_vowel_glyph_one_parses() {
 }
 
 #[test]
-fn a_leading_do_reads_decimal_big_endian() {
-    // `do hyik tyut` = 12: the terminator leads and the digits read in order.
+fn a_leading_do_reads_base_six_big_endian() {
+    // `do hyik tyut` in base 6, digits in written order: 1*6 + 2 = 8.
     let mut codelets = [[0u32; CODELET_WIDTH]; 4];
     let count = encode_sentence("dohyiktyut", &mut codelets).expect("encodes");
     let flat: std::vec::Vec<u32> = codelets[..count]
         .iter()
         .flat_map(|c| c.iter().copied())
         .collect();
-    assert_eq!(&flat[..3], &[0x1, 0x881d, 12]);
+    assert_eq!(&flat[..3], &[0x1, 0x881d, 8]);
 }
 
 #[test]
 fn number_order_does_not_depend_on_length() {
     // A single digit and a three-digit number both read left to right.
-    for (text, value) in [("dohyik", 1u32), ("dohyiktyuttyin", 123)] {
+    // 1, and 1*36 + 2*6 + 3 = 51 in base 6.
+    for (text, value) in [("dohyik", 1u32), ("dohyiktyuttyin", 51)] {
         let mut codelets = [[0u32; CODELET_WIDTH]; 4];
         let count = encode_sentence(text, &mut codelets).expect("encodes");
         let flat: std::vec::Vec<u32> = codelets[..count]
@@ -156,3 +157,4 @@ fn the_legacy_hex_little_endian_format_still_works() {
         .collect();
     assert_eq!(flat[2], 0x21, "legacy little-endian hex");
 }
+

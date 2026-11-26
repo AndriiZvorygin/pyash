@@ -52,7 +52,7 @@ fn a_descriptor_names_a_root_not_a_grammar_width() {
         );
     }
     // Roots can be.
-    for root in ["hnan", "kcot", "kyut", "flut"] {
+    for root in ["hnim", "kcot", "kyut", "flut"] {
         assert!(is_root(w(root)), "{root} is a root");
     }
 }

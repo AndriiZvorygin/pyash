@@ -1,14 +1,14 @@
 //! Sentence encoding: the structural inverse of the decoder.
 //!
 //! The pyac base form carries no tag at all — `sa na pyan li` is `sana pyanli`.
-//! A name adds `gi` and its payload must be root words, so `gi hnan na` is
-//! `hnangina`, while a bare pronoun stays a grammar word.
+//! A name adds `gi` and its payload must be root words, so `gi hnim na` is
+//! `gihnimna`, while a bare pronoun stays a grammar word.
 
 use pyac_vliw_core::{decode_sentence, validate_encode, Codelets, EncodeField, EncodeSentence};
 
 const NAME_TYPE: u32 = 0x225e; // gi
 const SA: u32 = 0x253e; // you_ (grammar form)
-const HNAN: u32 = 0x6930; // name (root)
+const HNIM: u32 = 0x0830; // name (root)
 const NA: u32 = 0x24de; // nominative
 const KA: u32 = 0x245e; // accusative
 const PYAN: u32 = 0x6904; // love
@@ -78,13 +78,13 @@ fn a_bare_pronoun_stays_the_grammar_word() {
     let (decoded, _) = decode_sentence(&words, 1, 0).expect("decodes");
     let field = decoded.field(NA).expect("subject");
     // Header occupies slot 0, so payload slot `n` is `words[n + 1]`.
-    assert_eq!(words[field.start + 1], SA, "sa, never the root hnan");
+    assert_eq!(words[field.start + 1], SA, "sa, never the root hnim");
 }
 
 #[test]
 fn a_name_is_gi_plus_a_root() {
-    // gi hnan na pyan li -> hnangina pyanli
-    let subject = [NAME_TYPE, HNAN];
+    // gi hnim na pyan li -> gihnimna pyanli
+    let subject = [NAME_TYPE, HNIM];
     let fields = [EncodeField {
         case: NA,
         value: &subject,
@@ -95,9 +95,9 @@ fn a_name_is_gi_plus_a_root() {
     let words: Vec<u32> = codelet.iter().copied().collect();
     let (decoded, _) = decode_sentence(&words, 1, 0).expect("decodes");
     let field = decoded.field(NA).expect("subject");
-    assert_eq!((field.start, field.length), (0, 2), "gi + hnan");
+    assert_eq!((field.start, field.length), (0, 2), "gi + hnim");
     assert_eq!(words[field.start + 1], NAME_TYPE);
-    assert_eq!(words[field.start + 2], HNAN);
+    assert_eq!(words[field.start + 2], HNIM);
 }
 
 #[test]
@@ -121,7 +121,7 @@ fn a_name_of_a_grammar_word_is_rejected() {
 #[test]
 fn two_fields_survive_the_round_trip() {
     let value_a = [SA];
-    let value_b = [HNAN];
+    let value_b = [HNIM];
     let fields = [
         EncodeField {
             case: NA,

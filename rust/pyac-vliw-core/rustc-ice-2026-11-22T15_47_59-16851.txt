@@ -1,0 +1,84 @@
+thread 'rustc' panicked at /home/htaf/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustc_codegen_spirv-0.11.0/src/abi.rs:582:18:
+Box<dyn Any>
+stack backtrace:
+   0:     0x744cfd470bd5 - <std[5a41d20a063701f0]::backtrace::Backtrace>::create
+   1:     0x744cfd470b25 - <std[5a41d20a063701f0]::backtrace::Backtrace>::force_capture
+   2:     0x744cfc408a9e - std[5a41d20a063701f0]::panicking::update_hook::<alloc[7eac85f6001fa66c]::boxed::Box<rustc_driver_impl[be15a1de4f8adf7c]::install_ice_hook::{closure#1}>>::{closure#0}
+   3:     0x744cfc4085da - std[5a41d20a063701f0]::panicking::update_hook::<alloc[7eac85f6001fa66c]::boxed::Box<rustc_driver_impl[be15a1de4f8adf7c]::install_ice_hook::{closure#1}>>::{closure#0}
+   4:     0x744cfd486f92 - std[5a41d20a063701f0]::panicking::panic_with_hook
+   5:     0x744cfc436794 - std[5a41d20a063701f0]::panicking::begin_panic::<rustc_errors[94eadca46b56c897]::ExplicitBug>::{closure#0}
+   6:     0x744cfc42f22e - std[5a41d20a063701f0]::sys::backtrace::__rust_end_short_backtrace::<std[5a41d20a063701f0]::panicking::begin_panic<rustc_errors[94eadca46b56c897]::ExplicitBug>::{closure#0}, !>
+   7:     0x744cfc42d2ce - std[5a41d20a063701f0]::panicking::begin_panic::<rustc_errors[94eadca46b56c897]::ExplicitBug>
+   8:     0x744cfc442141 - <rustc_errors[94eadca46b56c897]::diagnostic::BugAbort as rustc_errors[94eadca46b56c897]::diagnostic::EmissionGuarantee>::emit_producing_guarantee
+   9:     0x744cfc9cba39 - rustc_middle[eaf9c16cfa793976]::util::bug::opt_span_bug_fmt::<rustc_span[ef40f68008e55623]::span_encoding::Span>::{closure#0}
+  10:     0x744cfc9cbe32 - rustc_middle[eaf9c16cfa793976]::ty::context::tls::with_opt::<rustc_middle[eaf9c16cfa793976]::util::bug::opt_span_bug_fmt<rustc_span[ef40f68008e55623]::span_encoding::Span>::{closure#0}, !>::{closure#0}
+  11:     0x744cfc9b67e0 - rustc_middle[eaf9c16cfa793976]::ty::context::tls::with_context_opt::<rustc_middle[eaf9c16cfa793976]::ty::context::tls::with_opt<rustc_middle[eaf9c16cfa793976]::util::bug::opt_span_bug_fmt<rustc_span[ef40f68008e55623]::span_encoding::Span>::{closure#0}, !>::{closure#0}, !>
+  12:     0x744cf992c914 - rustc_middle[eaf9c16cfa793976]::util::bug::bug_fmt
+  13:     0x744cea06f32d - rustc_codegen_spirv[9895590a2682e99b]::abi::dig_scalar_pointee
+  14:     0x744cea06f13b - rustc_codegen_spirv[9895590a2682e99b]::abi::dig_scalar_pointee
+  15:     0x744cea06e5d9 - rustc_codegen_spirv[9895590a2682e99b]::abi::trans_scalar
+  16:     0x744ce9eced39 - <rustc_abi[c63ffb8fca693f98]::layout::ty::TyAndLayout<rustc_middle[eaf9c16cfa793976]::ty::Ty> as rustc_codegen_spirv[9895590a2682e99b]::abi::ConvSpirvType>::spirv_type
+  17:     0x744cea07a411 - <rustc_target[5db01e48fb8a645d]::callconv::FnAbi<rustc_middle[eaf9c16cfa793976]::ty::Ty> as rustc_codegen_spirv[9895590a2682e99b]::abi::ConvSpirvType>::spirv_type
+  18:     0x744cea061e03 - <rustc_codegen_spirv[9895590a2682e99b]::codegen_cx::CodegenCx>::declare_fn_ext
+  19:     0x744cea0805f9 - <rustc_codegen_spirv[9895590a2682e99b]::codegen_cx::CodegenCx as rustc_codegen_spirv[9895590a2682e99b]::maybe_pqp_cg_ssa::traits::declare::PreDefineCodegenMethods>::predefine_fn
+  20:     0x744ce9e5ab2b - <rustc_middle[eaf9c16cfa793976]::mono::MonoItem as rustc_codegen_spirv[9895590a2682e99b]::maybe_pqp_cg_ssa::mono_item::MonoItemExt>::predefine::<rustc_codegen_spirv[9895590a2682e99b]::builder::Builder>
+  21:     0x744ce9eae4f3 - <rustc_codegen_spirv[9895590a2682e99b]::SpirvCodegenBackend as rustc_codegen_spirv[9895590a2682e99b]::maybe_pqp_cg_ssa::traits::backend::ExtraBackendMethods>::compile_codegen_unit::{closure#0}
+  22:     0x744ce9ed038a - <rustc_codegen_spirv[9895590a2682e99b]::SpirvCodegenBackend as rustc_codegen_spirv[9895590a2682e99b]::maybe_pqp_cg_ssa::traits::backend::ExtraBackendMethods>::compile_codegen_unit
+  23:     0x744ce9ebd457 - <rustc_codegen_spirv[9895590a2682e99b]::SpirvCodegenBackend as rustc_codegen_spirv[9895590a2682e99b]::maybe_pqp_cg_ssa::traits::backend::CodegenBackend>::codegen_crate
+  24:     0x744cfec879cc - <rustc_interface[727e6560ae5ab0f8]::queries::Linker>::codegen_and_build_linker
+  25:     0x744cfec7f395 - rustc_interface[727e6560ae5ab0f8]::interface::run_compiler::<(), rustc_driver_impl[be15a1de4f8adf7c]::run_compiler::{closure#0}>::{closure#2}
+  26:     0x744cfecae7a4 - std[5a41d20a063701f0]::sys::backtrace::__rust_begin_short_backtrace::<rustc_interface[727e6560ae5ab0f8]::util::run_in_thread_with_globals<rustc_interface[727e6560ae5ab0f8]::util::run_in_thread_pool_with_globals<rustc_interface[727e6560ae5ab0f8]::interface::run_compiler<(), rustc_driver_impl[be15a1de4f8adf7c]::run_compiler::{closure#0}>::{closure#2}, ()>::{closure#0}, ()>::{closure#0}::{closure#0}, ()>
+  27:     0x744cfecae56d - <std[5a41d20a063701f0]::thread::lifecycle::spawn_unchecked<rustc_interface[727e6560ae5ab0f8]::util::run_in_thread_with_globals<rustc_interface[727e6560ae5ab0f8]::util::run_in_thread_pool_with_globals<rustc_interface[727e6560ae5ab0f8]::interface::run_compiler<(), rustc_driver_impl[be15a1de4f8adf7c]::run_compiler::{closure#0}>::{closure#2}, ()>::{closure#0}, ()>::{closure#0}::{closure#0}, ()>::{closure#1} as core[cb6dd95fb6db39b2]::ops::function::FnOnce<()>>::call_once::{shim:vtable#0}
+  28:     0x744cfecab807 - <std[5a41d20a063701f0]::sys::thread::unix::Thread>::new::thread_start
+  29:     0x744cf829cb64 - start_thread
+                               at ./nptl/pthread_create.c:447:8
+  30:     0x744cf8329e8c - clone3
+                               at ./misc/../sysdeps/unix/sysv/linux/x86_64/clone3.S:78:0
+  31:                0x0 - <unknown>
+
+
+rustc version: 1.99.0-nightly (d453bdd8f 2026-08-14)
+platform: x86_64-unknown-linux-gnu
+
+query stack during panic:
+end of query stack
+thread 'rustc' panicked at /home/htaf/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustc_codegen_spirv-0.11.0/src/abi.rs:582:18:
+Box<dyn Any>
+stack backtrace:
+   0:     0x744cfd470bd5 - <std[5a41d20a063701f0]::backtrace::Backtrace>::create
+   1:     0x744cfd470b25 - <std[5a41d20a063701f0]::backtrace::Backtrace>::force_capture
+   2:     0x744cfc408a9e - std[5a41d20a063701f0]::panicking::update_hook::<alloc[7eac85f6001fa66c]::boxed::Box<rustc_driver_impl[be15a1de4f8adf7c]::install_ice_hook::{closure#1}>>::{closure#0}
+   3:     0x744cfd486f92 - std[5a41d20a063701f0]::panicking::panic_with_hook
+   4:     0x744cfc436794 - std[5a41d20a063701f0]::panicking::begin_panic::<rustc_errors[94eadca46b56c897]::ExplicitBug>::{closure#0}
+   5:     0x744cfc42f22e - std[5a41d20a063701f0]::sys::backtrace::__rust_end_short_backtrace::<std[5a41d20a063701f0]::panicking::begin_panic<rustc_errors[94eadca46b56c897]::ExplicitBug>::{closure#0}, !>
+   6:     0x744cfc42d2ce - std[5a41d20a063701f0]::panicking::begin_panic::<rustc_errors[94eadca46b56c897]::ExplicitBug>
+   7:     0x744cfc442141 - <rustc_errors[94eadca46b56c897]::diagnostic::BugAbort as rustc_errors[94eadca46b56c897]::diagnostic::EmissionGuarantee>::emit_producing_guarantee
+   8:     0x744cfc9cba39 - rustc_middle[eaf9c16cfa793976]::util::bug::opt_span_bug_fmt::<rustc_span[ef40f68008e55623]::span_encoding::Span>::{closure#0}
+   9:     0x744cfc9cbe32 - rustc_middle[eaf9c16cfa793976]::ty::context::tls::with_opt::<rustc_middle[eaf9c16cfa793976]::util::bug::opt_span_bug_fmt<rustc_span[ef40f68008e55623]::span_encoding::Span>::{closure#0}, !>::{closure#0}
+  10:     0x744cfc9b67e0 - rustc_middle[eaf9c16cfa793976]::ty::context::tls::with_context_opt::<rustc_middle[eaf9c16cfa793976]::ty::context::tls::with_opt<rustc_middle[eaf9c16cfa793976]::util::bug::opt_span_bug_fmt<rustc_span[ef40f68008e55623]::span_encoding::Span>::{closure#0}, !>::{closure#0}, !>
+  11:     0x744cf992c914 - rustc_middle[eaf9c16cfa793976]::util::bug::bug_fmt
+  12:     0x744cea06f32d - rustc_codegen_spirv[9895590a2682e99b]::abi::dig_scalar_pointee
+  13:     0x744cea06f13b - rustc_codegen_spirv[9895590a2682e99b]::abi::dig_scalar_pointee
+  14:     0x744cea06e5d9 - rustc_codegen_spirv[9895590a2682e99b]::abi::trans_scalar
+  15:     0x744ce9eced39 - <rustc_abi[c63ffb8fca693f98]::layout::ty::TyAndLayout<rustc_middle[eaf9c16cfa793976]::ty::Ty> as rustc_codegen_spirv[9895590a2682e99b]::abi::ConvSpirvType>::spirv_type
+  16:     0x744cea07a411 - <rustc_target[5db01e48fb8a645d]::callconv::FnAbi<rustc_middle[eaf9c16cfa793976]::ty::Ty> as rustc_codegen_spirv[9895590a2682e99b]::abi::ConvSpirvType>::spirv_type
+  17:     0x744cea061e03 - <rustc_codegen_spirv[9895590a2682e99b]::codegen_cx::CodegenCx>::declare_fn_ext
+  18:     0x744cea0805f9 - <rustc_codegen_spirv[9895590a2682e99b]::codegen_cx::CodegenCx as rustc_codegen_spirv[9895590a2682e99b]::maybe_pqp_cg_ssa::traits::declare::PreDefineCodegenMethods>::predefine_fn
+  19:     0x744ce9e5ab2b - <rustc_middle[eaf9c16cfa793976]::mono::MonoItem as rustc_codegen_spirv[9895590a2682e99b]::maybe_pqp_cg_ssa::mono_item::MonoItemExt>::predefine::<rustc_codegen_spirv[9895590a2682e99b]::builder::Builder>
+  20:     0x744ce9eae4f3 - <rustc_codegen_spirv[9895590a2682e99b]::SpirvCodegenBackend as rustc_codegen_spirv[9895590a2682e99b]::maybe_pqp_cg_ssa::traits::backend::ExtraBackendMethods>::compile_codegen_unit::{closure#0}
+  21:     0x744ce9ed038a - <rustc_codegen_spirv[9895590a2682e99b]::SpirvCodegenBackend as rustc_codegen_spirv[9895590a2682e99b]::maybe_pqp_cg_ssa::traits::backend::ExtraBackendMethods>::compile_codegen_unit
+  22:     0x744ce9ebd457 - <rustc_codegen_spirv[9895590a2682e99b]::SpirvCodegenBackend as rustc_codegen_spirv[9895590a2682e99b]::maybe_pqp_cg_ssa::traits::backend::CodegenBackend>::codegen_crate
+  23:     0x744cfec879cc - <rustc_interface[727e6560ae5ab0f8]::queries::Linker>::codegen_and_build_linker
+  24:     0x744cfec7f395 - rustc_interface[727e6560ae5ab0f8]::interface::run_compiler::<(), rustc_driver_impl[be15a1de4f8adf7c]::run_compiler::{closure#0}>::{closure#2}
+  25:     0x744cfecae7a4 - std[5a41d20a063701f0]::sys::backtrace::__rust_begin_short_backtrace::<rustc_interface[727e6560ae5ab0f8]::util::run_in_thread_with_globals<rustc_interface[727e6560ae5ab0f8]::util::run_in_thread_pool_with_globals<rustc_interface[727e6560ae5ab0f8]::interface::run_compiler<(), rustc_driver_impl[be15a1de4f8adf7c]::run_compiler::{closure#0}>::{closure#2}, ()>::{closure#0}, ()>::{closure#0}::{closure#0}, ()>
+  26:     0x744cfecae56d - <std[5a41d20a063701f0]::thread::lifecycle::spawn_unchecked<rustc_interface[727e6560ae5ab0f8]::util::run_in_thread_with_globals<rustc_interface[727e6560ae5ab0f8]::util::run_in_thread_pool_with_globals<rustc_interface[727e6560ae5ab0f8]::interface::run_compiler<(), rustc_driver_impl[be15a1de4f8adf7c]::run_compiler::{closure#0}>::{closure#2}, ()>::{closure#0}, ()>::{closure#0}::{closure#0}, ()>::{closure#1} as core[cb6dd95fb6db39b2]::ops::function::FnOnce<()>>::call_once::{shim:vtable#0}
+  27:     0x744cfecab807 - <std[5a41d20a063701f0]::sys::thread::unix::Thread>::new::thread_start
+  28:     0x744cf829cb64 - start_thread
+                               at ./nptl/pthread_create.c:447:8
+  29:     0x744cf8329e8c - clone3
+                               at ./misc/../sysdeps/unix/sysv/linux/x86_64/clone3.S:78:0
+  30:                0x0 - <unknown>
+
+
+query stack during panic:
+end of query stack

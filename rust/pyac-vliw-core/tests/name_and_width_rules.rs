@@ -20,8 +20,8 @@ fn is_grammar(value: u16) -> bool {
 
 #[test]
 fn a_name_payload_is_a_root_word() {
-    // hnan "name", hnap "answer": roots.
-    assert!(is_root(encode("hnan").unwrap()));
+    // hnim "name", hnap "answer": roots.
+    assert!(is_root(encode("hnim").unwrap()));
     assert!(is_root(encode("hnap").unwrap()));
 }
 
