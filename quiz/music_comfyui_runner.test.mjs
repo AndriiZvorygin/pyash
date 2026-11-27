@@ -329,3 +329,29 @@ test("isInterruptedExecution tells an interrupted render from a failed one", () 
   assert.equal(isInterruptedExecution({}), false);
   assert.equal(isInterruptedExecution(null), false);
 });
+
+test("the key is the model's choice, not a constant", async () => {
+  // The key used to be pinned in the workflow graph and again in the channel's
+  // base style, so every song of a channel came back in D. ACE-Step's encoder
+  // takes "auto" and picks the key from the words, which is the behaviour the
+  // station wants: a song about grief and a song about gratitude are not the
+  // same song, and they need not share a key.
+  for (const name of ["audio_ace_step_1_5_xl_turbo", "audio_ace_step_1_5_sft_voice"]) {
+    const workflow = await readWorkflow(name);
+    const encode = Object.entries(workflow.prompt).find(([, entry]) =>
+      ["TextEncodeAceStepAudio1.5", "AceStepSFTTextEncode"].includes(entry.class_type));
+    assert.ok(encode, `${name} carries a text encoder`);
+    assert.equal(encode[1].inputs.keyscale, "auto", `${name} lets the model choose the key`);
+  }
+});
+
+test("a channel's base style does not pin the key either", async () => {
+  const fs2 = await import("node:fs/promises");
+  const text = await fs2.readFile(path.join(process.cwd(), "world/house/radio/radio/channels.txt"), "utf8");
+  const lines = text.split(/\r?\n/u).filter((line) => /^(?:day|night|christian)\s*\|/u.test(line));
+  assert.ok(lines.length >= 3, "the three channels are declared");
+  for (const line of lines) {
+    const style = line.split("|")[3] ?? "";
+    assert.doesNotMatch(style, /\b(?:[A-G](#|b)?\s*(?:major|minor))\b/u, `the key is not pinned in: ${style.slice(0, 60)}`);
+  }
+});

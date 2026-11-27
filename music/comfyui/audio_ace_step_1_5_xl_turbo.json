@@ -87,7 +87,7 @@
         "duration": 175.0,
         "timesignature": "4",
         "language": "en",
-        "keyscale": "D minor",
+        "keyscale": "auto",
         "generate_audio_codes": true,
         "cfg_scale": 2.0,
         "temperature": 0.85,
