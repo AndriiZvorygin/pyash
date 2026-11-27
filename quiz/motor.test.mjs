@@ -37,7 +37,9 @@ test("generate streams responses from HTTP server", async () => {
     assert.equal(result, "Hello world");
     assert.equal(calls[0].url, "http://localhost:11434/api/generate");
     const payload = JSON.parse(calls[0].options.body);
-    assert.deepEqual(payload, { model: "model-x", prompt: "say hi", stream: true });
+    // A thinking model reasons first and can return its answer empty, so a
+    // caller that has not asked for reasoning is answered without it.
+    assert.deepEqual(payload, { model: "model-x", prompt: "say hi", stream: true, think: false });
     assert.equal(calls[0].options.headers["Content-Type"], "application/json");
   });
 });

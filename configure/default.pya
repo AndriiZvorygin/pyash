@@ -45,6 +45,9 @@ exists su name see default prompter ob la be see ko ob text "Describe the image.
 exists su name ai host ob text "http://localhost:11434" be default ya
 exists su name ollama host ob text "http://localhost:11434" be default ya
 exists su name mind model ob text "qwen3.5:9b" be default ya
+# A thinking model answers in its reasoning and leaves the answer empty, which
+# reads as a stage that never replies. Off unless the house wants the reasoning.
+exists su name mind think ob bool lie be default ya
 exists su name coding saddle mind ob text "mind" be default ya
 exists su name zai be mind from state "zai" from space "https://api.z.ai/api/coding/paas/v4" via state "glm-5.3" ya
 exists su name openai be mind from state "openai" from space "https://api.openai.com" via state "gpt-5.3-codex" ya
