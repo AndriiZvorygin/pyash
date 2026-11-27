@@ -104,6 +104,41 @@ test("aborting a managed Ollama turn cancels its Housekeeper job before returnin
   });
 });
 
+test("managed Ollama retries transient Housekeeper transport failures with one submission handle", async () => {
+  const calls = [];
+  let submitAttempts = 0;
+  const fetchImpl = async (url, options = {}) => {
+    const body = options.body ? JSON.parse(options.body) : null;
+    calls.push({ url, body });
+    if (url.endsWith("/submit")) {
+      submitAttempts += 1;
+      if (submitAttempts < 3) {
+        const error = new TypeError("fetch failed");
+        error.cause = Object.assign(new Error("connection reset"), { code: "ECONNRESET" });
+        throw error;
+      }
+      return response({ accepted: true, remoteJobId: "job-after-retry" });
+    }
+    if (url.endsWith("/job/job-after-retry")) {
+      return response({ status: "success", result: { message: { content: "ok" } } });
+    }
+    throw new Error(`unexpected URL ${url}`);
+  };
+
+  const result = await requestManagedOllamaChat({
+    ollamaUrl: "http://mriczo:11434/api/chat",
+    managerUrl: "http://test-housekeeper:8090",
+    messages: [{ role: "user", content: "Say ok" }],
+    fetchImpl,
+    pollIntervalMs: 1,
+  });
+
+  assert.equal(result.message.content, "ok");
+  assert.equal(submitAttempts, 3);
+  assert.equal(new Set(calls.filter((call) => call.url.endsWith("/submit")).map((call) => call.body.handleId)).size, 1);
+  assert.equal(calls.length, 4);
+});
+
 test("manager-required Ollama requests fail closed before any direct provider call", async () => {
   let providerCalls = 0;
   await assert.rejects(
@@ -258,6 +293,71 @@ test("managed GPU submit retries transport failures and readiness responses with
   assert.deepEqual(submits.map((call) => call.body), [submits[0].body, submits[0].body, submits[0].body]);
   assert.equal(submits[0].body.handleId, "stable-retry-handle");
   assert.equal(result.remoteJobId, "job-retried");
+});
+
+test("managed GPU jobs retry a terminal ComfyUI execution interruption once", async () => {
+  const calls = [];
+  let submissions = 0;
+  const interrupted = {
+    status_str: "error",
+    completed: false,
+    messages: [["execution_interrupted", { node_id: "5", node_type: "PreviewAny" }]],
+  };
+  const fetchImpl = async (url, options = {}) => {
+    const body = options.body ? JSON.parse(options.body) : null;
+    calls.push({ url, body });
+    if (url.endsWith("/submit")) {
+      submissions += 1;
+      return response({ remoteJobId: submissions === 1 ? "job-interrupted" : "job-recovered" });
+    }
+    if (url.endsWith("/job/job-interrupted")) {
+      return response({ status: "error", error: { message: JSON.stringify(interrupted) } });
+    }
+    if (url.endsWith("/job/job-recovered")) {
+      return response({ status: "success", result: { promptId: "prompt-recovered" } });
+    }
+    throw new Error(`unexpected URL ${url}`);
+  };
+
+  const result = await submitManagedGpuJob({
+    runtimeName: "comfyui",
+    profileName: "qwen3-asr",
+    managerUrl: "http://test-housekeeper:8090",
+    handleId: "stable-comfy-recovery",
+    jobSpec: { kind: "comfyui-hear", prompt: { "1": { class_type: "LoadAudio", inputs: {} } } },
+    fetchImpl,
+    pollIntervalMs: 1,
+  });
+
+  assert.equal(result.promptId, "prompt-recovered");
+  assert.equal(submissions, 2);
+  const submitted = calls.filter((call) => call.url.endsWith("/submit"));
+  assert.equal(submitted.length, 2);
+  assert.deepEqual(submitted.map((call) => call.body.handleId), [
+    "stable-comfy-recovery",
+    "stable-comfy-recovery-retry-1",
+  ]);
+});
+
+test("managed GPU jobs do not retry a non-interrupted ComfyUI failure", async () => {
+  let submissions = 0;
+  const fetchImpl = async (url) => {
+    if (url.endsWith("/submit")) {
+      submissions += 1;
+      return response({ remoteJobId: "job-invalid-workflow" });
+    }
+    return response({ status: "error", error: "workflow node validation failed" });
+  };
+
+  await assert.rejects(submitManagedGpuJob({
+    runtimeName: "comfyui",
+    profileName: "qwen3-asr",
+    managerUrl: "http://test-housekeeper:8090",
+    jobSpec: { kind: "comfyui-hear", prompt: {} },
+    fetchImpl,
+    pollIntervalMs: 1,
+  }), /workflow node validation failed/u);
+  assert.equal(submissions, 1);
 });
 
 test("Ollama model provisioning uses one exact queued housekeeper job", async () => {

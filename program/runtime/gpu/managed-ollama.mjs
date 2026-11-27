@@ -14,6 +14,23 @@ export { DEFAULT_TEXT_MODEL } from "./text-model.mjs";
 export const DEFAULT_GPU_HOUSEKEEPER_URL = resolveDefaultGpuHousekeeperUrl();
 
 const DEFAULT_FETCH = globalThis.fetch;
+const MANAGER_TRANSPORT_RETRY_DELAYS_MS = [250, 500, 1000, 2000, 4000];
+
+function isTransientTransportFailure(error) {
+  const code = text(error?.cause?.code || error?.code).toUpperCase();
+  if ([
+    "ECONNRESET",
+    "ECONNREFUSED",
+    "EHOSTUNREACH",
+    "ENETUNREACH",
+    "EAI_AGAIN",
+    "ENOTFOUND",
+    "ETIMEDOUT",
+    "UND_ERR_CONNECT_TIMEOUT",
+    "UND_ERR_SOCKET",
+  ].includes(code)) return true;
+  return /fetch failed|connection\s+(?:refused|reset)|network|socket|timed?\s*out/iu.test(text(error?.message || error));
+}
 
 function text(value) {
   return String(value ?? "").trim();
@@ -93,7 +110,7 @@ async function requestJson({ fetchImpl, url, method = "GET", body, timeoutMs, si
   } catch (cause) {
     if (signal?.aborted) throw abortError(signal);
     const error = new Error(`gpu-managed Ollama transport failed: ${text(cause?.message || cause)}`, { cause });
-    error.retryableTransport = true;
+    error.retryableTransport = isTransientTransportFailure(cause);
     throw error;
   }
 
@@ -137,6 +154,17 @@ function terminalStatus(value = "") {
   if (["cancel", "cancelled", "canceled"].includes(status)) return "cancelled";
   if (["fail", "failed", "error", "defective"].includes(status)) return "fail";
   return "";
+}
+
+function isInterruptedComfyUiResult(status = {}) {
+  const detail = status?.error?.message ?? status?.error ?? status?.message ?? status;
+  let result = detail;
+  if (typeof detail === "string") {
+    try { result = JSON.parse(detail); } catch { return false; }
+  }
+  if (!result || typeof result !== "object" || result.completed !== false) return false;
+  return Array.isArray(result.messages)
+    && result.messages.some((entry) => Array.isArray(entry) && entry[0] === "execution_interrupted");
 }
 
 function resultContent(result = {}) {
@@ -213,8 +241,9 @@ async function waitForManagedJob({
     const terminal = terminalStatus(status?.status);
     if (terminal === "success") return resultContent(status);
     if (terminal === "fail") {
-
-      throw new Error(`${jobLabel} failed: ${text(status?.error?.message || status?.error || status?.message || "unknown error")}`);
+      const error = new Error(`${jobLabel} failed: ${text(status?.error?.message || status?.error || status?.message || "unknown error")}`);
+      error.jobStatus = status;
+      throw error;
     }
     if (terminal === "cancelled") throw new Error("gpu-managed job was cancelled");
     const delayMs = Math.max(50, Number(pollIntervalMs) || 500);
@@ -295,60 +324,68 @@ export async function submitManagedGpuJob({
   const normalizedJobSpec = { ...jobSpec };
   if (Object.keys(resourceRequest).length) normalizedJobSpec.resourceRequest = resourceRequest;
   else delete normalizedJobSpec.resourceRequest;
-  const resolvedHandleId = text(handleId) || `managed-${normalizedRuntime}-${Date.now().toString(36)}`;
+  const baseHandleId = text(handleId) || `managed-${normalizedRuntime}-${Date.now().toString(36)}`;
+  let interruptedRetries = 0;
   let id = "";
-  try {
-
-    const submit = await requestJsonWithRetry({
-
-      fetchImpl,
-      url: `${resolvedManager}/submit`,
-      method: "POST",
-      timeoutMs,
-
-      body: {
-      handleId: resolvedHandleId,
-      ...sourceFields({ hostId, username, workerId }),
-      runtimeName: normalizedRuntime,
-      profileName: normalizedProfile,
-      dischargeAllowed: dischargeAllowed !== false,
-      ...(text(deviceId) ? { deviceId: text(deviceId) } : {}),
-      ...(text(targetHostId) ? { targetHostId: text(targetHostId).toLowerCase() } : {}),
-      jobSpec: normalizedJobSpec,
-
-      },
-    });
-    id = remoteJobId(submit);
-    if (!id) throw new Error(`gpu-managed ${normalizedRuntime} submit returned no remote job id`);
-    const result = await waitForManagedJob({
-      fetchImpl,
-      managerUrl: resolvedManager,
-      remoteId: id,
-      timeoutMs,
-      pollIntervalMs,
-      signal,
-
-      jobLabel: `gpu-managed ${normalizedRuntime} job`,
-
-    });
-    return { ...result, remoteJobId: id };
-  } catch (error) {
-    if (signal?.aborted) {
-      try {
-
-        await cancelHousekeeperJob({
-          fetchImpl,
-          managerUrl: resolvedManager,
-          remoteJobId: id,
-          handleId: resolvedHandleId,
-        });
-
-      } catch (cancelError) {
-        throw new Error(`gpu-managed job cancellation failed: ${text(cancelError?.message || cancelError)}`, { cause: cancelError });
+  let activeHandleId = baseHandleId;
+  while (true) {
+    activeHandleId = interruptedRetries
+      ? `${baseHandleId}-retry-${interruptedRetries}`
+      : baseHandleId;
+    try {
+      const submit = await requestJsonWithRetry({
+        fetchImpl,
+        url: `${resolvedManager}/submit`,
+        method: "POST",
+        timeoutMs,
+        signal,
+        body: {
+          handleId: activeHandleId,
+          ...sourceFields({ hostId, username, workerId }),
+          runtimeName: normalizedRuntime,
+          profileName: normalizedProfile,
+          dischargeAllowed: dischargeAllowed !== false,
+          ...(text(deviceId) ? { deviceId: text(deviceId) } : {}),
+          ...(text(targetHostId) ? { targetHostId: text(targetHostId).toLowerCase() } : {}),
+          jobSpec: normalizedJobSpec,
+        },
+      });
+      id = remoteJobId(submit);
+      if (!id) throw new Error(`gpu-managed ${normalizedRuntime} submit returned no remote job id`);
+      const result = await waitForManagedJob({
+        fetchImpl,
+        managerUrl: resolvedManager,
+        remoteId: id,
+        timeoutMs,
+        pollIntervalMs,
+        signal,
+        jobLabel: `gpu-managed ${normalizedRuntime} job`,
+      });
+      return { ...result, remoteJobId: id };
+    } catch (error) {
+      if (signal?.aborted) {
+        try {
+          await cancelHousekeeperJob({
+            fetchImpl,
+            managerUrl: resolvedManager,
+            remoteJobId: id,
+            handleId: activeHandleId,
+          });
+        } catch (cancelError) {
+          throw new Error(`gpu-managed job cancellation failed: ${text(cancelError?.message || cancelError)}`, { cause: cancelError });
+        }
+        throw abortError(signal);
       }
-      throw abortError(signal);
+      if (normalizedRuntime === "comfyui"
+        && interruptedRetries === 0
+        && isInterruptedComfyUiResult(error?.jobStatus)) {
+        interruptedRetries += 1;
+        id = "";
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        continue;
+      }
+      throw error;
     }
-    throw error;
   }
 }
 
