@@ -330,19 +330,35 @@ test("isInterruptedExecution tells an interrupted render from a failed one", () 
   assert.equal(isInterruptedExecution(null), false);
 });
 
-test("the key is the model's choice, not a constant", async () => {
-  // The key used to be pinned in the workflow graph and again in the channel's
-  // base style, so every song of a channel came back in D. ACE-Step's encoder
-  // takes "auto" and picks the key from the words, which is the behaviour the
-  // station wants: a song about grief and a song about gratitude are not the
-  // same song, and they need not share a key.
-  for (const name of ["audio_ace_step_1_5_xl_turbo", "audio_ace_step_1_5_sft_voice"]) {
-    const workflow = await readWorkflow(name);
-    const encode = Object.entries(workflow.prompt).find(([, entry]) =>
-      ["TextEncodeAceStepAudio1.5", "AceStepSFTTextEncode"].includes(entry.class_type));
-    assert.ok(encode, `${name} carries a text encoder`);
-    assert.equal(encode[1].inputs.keyscale, "auto", `${name} lets the model choose the key`);
-  }
+test("the key is chosen per song, and the graph only carries a fallback", async () => {
+  // The key used to be pinned in the graph and again in the channel's base
+  // style, so every song of a channel came back in D. The producer now passes
+  // the key the style mind chose for the song. The graph still has to hold a
+  // real key, because the turbo encoder rejects "auto" — it takes only named
+  // keys — and a run that names no key must still render.
+  const turbo = await readWorkflow("audio_ace_step_1_5_xl_turbo");
+  const turboEncode = Object.entries(turbo.prompt).find(([, e]) => e.class_type === "TextEncodeAceStepAudio1.5");
+  assert.ok(turboEncode, "the turbo graph carries a text encoder");
+  assert.doesNotMatch(turboEncode[1].inputs.keyscale, /auto/u, "the turbo encoder has no auto key");
+  assert.match(turboEncode[1].inputs.keyscale, /^[A-G](#|b)? (major|minor)$/u, "the fallback is a real key");
+
+  // The SFT encoder does accept "auto", so that graph may leave it to the model.
+  const sft = await readWorkflow("audio_ace_step_1_5_sft_voice");
+  const sftEncode = Object.entries(sft.prompt).find(([, e]) => e.class_type === "AceStepSFTTextEncode");
+  assert.ok(sftEncode, "the voice graph carries a text encoder");
+  assert.ok(["auto", "C major"].includes(sftEncode[1].inputs.keyscale) || /^[A-G](#|b)? (major|minor)$/u.test(sftEncode[1].inputs.keyscale));
+});
+
+test("the key the model chose reaches the graph as its own field", async () => {
+  const { splitKey, KEY_NAMES } = await import("../world/house/radio/program/library/style.mjs");
+  assert.ok(KEY_NAMES.includes("A minor"));
+  assert.ok(KEY_NAMES.includes("F# major"));
+  assert.ok(!KEY_NAMES.includes("H major"));
+  const split = splitKey("felt piano, swelling strings, A minor");
+  assert.equal(split.key, "A minor");
+  assert.equal(split.caption, "felt piano, swelling strings", "the key is not left in the caption");
+  assert.deepEqual(splitKey("felt piano"), { key: "", caption: "felt piano" });
+  assert.deepEqual(splitKey("felt piano, H major"), { key: "", caption: "felt piano, H major" });
 });
 
 test("a channel's base style does not pin the key either", async () => {
