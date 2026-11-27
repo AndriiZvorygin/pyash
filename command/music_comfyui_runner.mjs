@@ -17,7 +17,8 @@ function parseArgs(argv) {
     workflowName: null,
     workflowFile: null,
     optionsJson: null,
-    output: null
+    output: null,
+    reference: null
   };
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
@@ -30,6 +31,7 @@ function parseArgs(argv) {
     else if (arg === "--workflow-file") out.workflowFile = args[++i] ?? null;
     else if (arg === "--options-json") out.optionsJson = args[++i] ?? null;
     else if (arg === "--output") out.output = args[++i] ?? null;
+    else if (arg === "--reference") out.reference = args[++i] ?? null;
   }
   return out;
 }
@@ -224,6 +226,8 @@ const STYLE_NODE_TYPES = ["AceStepSFTTextEncode", "YuE2GenerateMusic", "TextEnco
 const SAMPLER_NODE_TYPES = ["AceStepSFTGenerate", "KSampler"];
 const LATENT_NODE_TYPES = ["EmptyYuE2LatentAudio", "EmptyAceStep1.5LatentAudio"];
 const SAVE_NODE_TYPES = ["AceStepSFTSaveAudio", "SaveAudioMP3", "SaveAudioOpus", "SaveAudio"];
+// A workflow may take the voice it sings in from a recording of that voice.
+const REFERENCE_NODE_TYPES = ["AceStepSFTLoadReferenceAudio"];
 
 // A save node may name its format outright or fix it in the node type.
 const SAVE_NODE_FORMATS = { SaveAudioMP3: "mp3", SaveAudioOpus: "opus" };
@@ -298,6 +302,28 @@ async function requestBytes(url) {
     throw new Error(`music_comfyui_runner: request failed ${res.status} ${res.statusText}: ${text}`);
   }
   return Buffer.from(await res.arrayBuffer());
+}
+
+// A reference voice is a local recording, but ComfyUI only reads files already
+// in its own input folder. Upload the bytes first and hand the loader the name
+// ComfyUI gave them, so no one has to copy files into the container by hand.
+async function uploadReferenceAudio(host, filePath) {
+  const bytes = await fs.readFile(filePath);
+  const name = path.basename(filePath);
+  const form = new FormData();
+  form.append("image", new Blob([bytes]), name);
+  form.append("type", "input");
+  form.append("overwrite", "true");
+  const res = await fetch(`${host.replace(/\/$/, "")}/upload/image`, { method: "POST", body: form });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`music_comfyui_runner: reference upload failed ${res.status} ${res.statusText}: ${text}`);
+  }
+  const payload = await res.json();
+  const stored = String(payload?.name ?? "").trim();
+  if (!stored) throw new Error("music_comfyui_runner: reference upload returned no name");
+  const subfolder = String(payload?.subfolder ?? "").trim();
+  return subfolder ? `${subfolder}/${stored}` : stored;
 }
 
 function extractExecutionError(historyEntry) {
@@ -437,6 +463,21 @@ async function main() {
     if (stylePath) setAtPath(promptObject, stylePath, style);
   }
 
+  // A voice reference is the recording whose timbre the song is sung in. The
+  // workflow must carry a loader for it; the file itself is a caller's choice,
+  // never baked into the graph.
+  const referenceFile = String(opts.reference ?? "").trim();
+  if (referenceFile) {
+    const referencePath = mappingLookup(mapping, "referenceAudioPath")
+      || detectInputPath(workflow, promptObject, "audio", REFERENCE_NODE_TYPES);
+    if (!referencePath) throw new Error("music_comfyui_runner: reference audio path unresolved");
+    const stored = await uploadReferenceAudio(host, referenceFile);
+    setAtPath(promptObject, referencePath, stored);
+    const enabledPath = mappingLookup(mapping, "referenceEnabledPath")
+      || detectInputPath(workflow, promptObject, "enabled", REFERENCE_NODE_TYPES);
+    if (enabledPath) setAtPath(promptObject, enabledPath, true);
+  }
+
   const keyAliases = new Map([
     ["bpm", ["bpm"]],
     ["timesignature", ["timesignature", "time signature"]],
@@ -463,7 +504,9 @@ async function main() {
     ["quality", ["quality"]],
     ["maxDuration", ["maxDuration", "max_duration", "max duration"]],
     ["voiceBoost", ["voiceBoost", "voice_boost", "voice boost"]],
-    ["repetitionPenalty", ["repetitionPenalty", "repetition_penalty", "repetition penalty"]]
+    ["repetitionPenalty", ["repetitionPenalty", "repetition_penalty", "repetition penalty"]],
+    ["referenceGuidance", ["referenceGuidance", "reference_guidance", "reference guidance"]],
+    ["referenceTimbreRepeats", ["referenceTimbreRepeats", "reference_timbre_repeats", "reference timbre repeats"]]
   ]);
 
   const optionsByCanonical = {};
@@ -624,6 +667,7 @@ export {
   setAtPath,
   sniffAudioFormat,
   LYRICS_NODE_TYPES,
+  REFERENCE_NODE_TYPES,
   SAMPLER_NODE_TYPES,
   SAVE_NODE_TYPES,
   STYLE_NODE_TYPES

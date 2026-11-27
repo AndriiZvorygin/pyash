@@ -109,6 +109,15 @@ mapping, then falls back to node-type detection: `AceStepSFTTextEncode`,
 `EmptyYuE2LatentAudio` and `EmptyAceStep1.5LatentAudio` carry the length;
 `AceStepSFTSaveAudio`, `SaveAudioOpus` and `SaveAudio` carry the output.
 
+`--reference <file>` sings the song in a recording's timbre. The runner uploads
+the file to ComfyUI (`/upload/image`) because ComfyUI reads only its own input
+folder, then points `AceStepSFTLoadReferenceAudio` at the stored name and sets
+its `enabled` switch. The workflow `audio_ace_step_1_5_sft_voice` carries that
+loader; the loader ships empty and disabled, so a workflow is never tied to one
+recording. `referenceGuidance` and `referenceTimbreRepeats` tune how strongly the
+reference is followed, and `reference guidance path` / `reference enabled path` /
+`reference audio path` in the companion `.pya` name the nodes.
+
 Option names are accepted in camel case, snake case and spaced form, so
 `voiceBoost`, `voice_boost` and `voice boost` are the same option.
 

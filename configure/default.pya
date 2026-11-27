@@ -215,10 +215,12 @@ exists su name radio rebuild count ob num 1 be default ya
 su name radio producer engines be map def
   su name ace-step ob text "audio_ace_step_1_5_xl_turbo" ya
   su name night ob text "audio_ace_step_1_5_xl_turbo" ya
+  su name christian ob text "audio_ace_step_1_5_xl_turbo" ya
 prah
 su name radio producer durations be map def
   su name ace-step ob num 240 ya
   su name night ob num 240 ya
+  su name christian ob num 240 ya
 prah
 su name web archive configure be map def
   su name web archive prefix ob text "prefix" ya

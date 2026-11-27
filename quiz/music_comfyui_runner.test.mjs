@@ -5,6 +5,7 @@ import path from "node:path";
 
 import {
   LYRICS_NODE_TYPES,
+  REFERENCE_NODE_TYPES,
   SAMPLER_NODE_TYPES,
   SAVE_NODE_TYPES,
   STYLE_NODE_TYPES,
@@ -28,7 +29,7 @@ async function readWorkflow(name) {
 }
 
 test("the new music workflows ship with their mappings", async () => {
-  for (const name of ["audio_ace_step_1_5_xl_turbo", "audio_yue2_own_melody"]) {
+  for (const name of ["audio_ace_step_1_5_xl_turbo", "audio_yue2_own_melody", "audio_ace_step_1_5_sft_voice"]) {
     const workflow = await readWorkflow(name);
     assert.ok(workflow?.prompt, `${name} must carry an API prompt graph`);
     const mapping = await readMappingPya(path.join(MUSIC_ROOT, `${name}.json`));
@@ -37,6 +38,68 @@ test("the new music workflows ship with their mappings", async () => {
     assert.ok(mapping.stylePath, `${name} needs a style path`);
     assert.ok(mapping.saveAudioPrefixPath, `${name} needs a save prefix path`);
   }
+});
+
+test("the voice workflow sings in a recording's timbre", async () => {
+  const workflow = await readWorkflow("audio_ace_step_1_5_sft_voice");
+  const prompt = workflow.prompt;
+  const byType = (type) => Object.entries(prompt).find(([, entry]) => entry.class_type === type);
+
+  const generate = byType("AceStepSFTGenerate");
+  assert.ok(generate, "the voice workflow generates with AceStepSFTGenerate");
+  assert.equal(generate[1].inputs.reference_xl_attention, true);
+  assert.equal(generate[1].inputs.reference_guidance_scale, 1.0);
+  assert.equal(generate[1].inputs.reference_timbre_repeats, 1);
+
+  const loader = byType("AceStepSFTLoadReferenceAudio");
+  assert.ok(loader, "the voice workflow loads a reference voice");
+  assert.deepEqual(generate[1].inputs.reference_audio, [loader[0], 0]);
+  assert.equal(loader[1].inputs.enabled, false);
+  assert.equal(loader[1].inputs.audio, "");
+
+  const save = byType("SaveAudioMP3");
+  assert.deepEqual(save[1].inputs.audio, [generate[0], 5]);
+  assert.ok(!byType("VAEDecodeAudio"), "the generate node decodes its own audio");
+});
+
+test("the voice workflow carries no reference file of its own", async () => {
+  const workflow = await readWorkflow("audio_ace_step_1_5_sft_voice");
+  for (const entry of Object.values(workflow.prompt)) {
+    for (const value of Object.values(entry.inputs ?? {})) {
+      if (typeof value !== "string") continue;
+      assert.ok(
+        !/\.(mp3|wav|flac|opus)$/iu.test(value),
+        `the voice workflow depends on the input file ${value}`
+      );
+    }
+  }
+});
+
+test("the voice mapping points at the reference nodes", async () => {
+  const mapping = await readMappingPya(path.join(MUSIC_ROOT, "audio_ace_step_1_5_sft_voice.json"));
+  assert.equal(mapping.lyricsPath, "47.inputs.lyrics");
+  assert.equal(mapping.stylePath, "47.inputs.caption");
+  assert.equal(mapping.durationPath, "47.inputs.duration");
+  assert.equal(mapping.seedPath, "109.inputs.value");
+  assert.equal(mapping.stepsPath, "3.inputs.steps");
+  assert.equal(mapping.cfgPath, "3.inputs.cfg");
+  assert.equal(mapping.cfgScalePath, "47.inputs.lm_cfg_scale");
+  assert.equal(mapping.referenceAudioPath, "110.inputs.audio");
+  assert.equal(mapping.referenceEnabledPath, "110.inputs.enabled");
+  assert.equal(mapping.qualityPath, "107.inputs.quality");
+  assert.equal(mapping.saveAudioPrefixPath, "107.inputs.filename_prefix");
+});
+
+test("a reference voice resolves without a mapping", async () => {
+  const workflow = await readWorkflow("audio_ace_step_1_5_sft_voice");
+  assert.equal(
+    detectInputPath(workflow, workflow.prompt, "audio", REFERENCE_NODE_TYPES),
+    "110.inputs.audio"
+  );
+  assert.equal(
+    detectInputPath(workflow, workflow.prompt, "enabled", REFERENCE_NODE_TYPES),
+    "110.inputs.enabled"
+  );
 });
 
 test("the ACE-Step mapping points at the reference graph nodes", async () => {
