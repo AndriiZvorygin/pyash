@@ -231,6 +231,7 @@ exit 2
       encoding: "utf8",
       env: {
         ...process.env,
+        PYA_MASTER_SAFETY_ADDITIONAL_SOURCE_BRANCHES: "dev-vocab dev-vliw-backend",
         PATH: `${fakeBin}:${process.env.PATH}`,
         PYA_MASTER_SAFETY_REMOTE: "github",
         PYA_MASTER_SAFETY_BRANCH: "master",
@@ -328,6 +329,7 @@ exit 2
       encoding: "utf8",
       env: {
         ...process.env,
+        PYA_MASTER_SAFETY_ADDITIONAL_SOURCE_BRANCHES: "dev-vocab dev-vliw-backend",
         PATH: `${fakeBin}:${process.env.PATH}`,
         PYA_MASTER_SAFETY_REMOTE: "github",
         PYA_MASTER_SAFETY_BRANCH: "master",
@@ -436,6 +438,7 @@ printf '{"type":"turn.completed"}\\n'
       encoding: "utf8",
       env: {
         ...process.env,
+        PYA_MASTER_SAFETY_ADDITIONAL_SOURCE_BRANCHES: "dev-vocab dev-vliw-backend",
         PATH: `${fakeBin}:${process.env.PATH}`,
         PYA_MASTER_SAFETY_REMOTE: "github",
         PYA_MASTER_SAFETY_BRANCH: "master",
@@ -537,6 +540,7 @@ exit 2
       encoding: "utf8",
       env: {
         ...process.env,
+        PYA_MASTER_SAFETY_ADDITIONAL_SOURCE_BRANCHES: "dev-vocab dev-vliw-backend",
         PATH: `${fakeBin}:${process.env.PATH}`,
         PYA_MASTER_SAFETY_REMOTE: "github",
         PYA_MASTER_SAFETY_BRANCH: "master",
@@ -667,6 +671,7 @@ exit 2
       encoding: "utf8",
       env: {
         ...process.env,
+        PYA_MASTER_SAFETY_ADDITIONAL_SOURCE_BRANCHES: "dev-vocab dev-vliw-backend",
         PATH: `${fakeBin}:${process.env.PATH}`,
         PYA_MASTER_SAFETY_REMOTE: "github",
         PYA_MASTER_SAFETY_BRANCH: "master",
@@ -787,6 +792,7 @@ printf '{"type":"turn.completed"}\\n'
       encoding: "utf8",
       env: {
         ...process.env,
+        PYA_MASTER_SAFETY_ADDITIONAL_SOURCE_BRANCHES: "dev-vocab dev-vliw-backend",
         PATH: `${fakeBin}:${process.env.PATH}`,
         PYA_MASTER_SAFETY_REMOTE: "github",
         PYA_MASTER_SAFETY_BRANCH: "master",
