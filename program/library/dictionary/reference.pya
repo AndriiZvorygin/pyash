@@ -15,6 +15,8 @@ su name tlat kwon ob text "be" at text "entry" be text ya
 su name tlat kwon ob text "be" as text "en" from text "verbal_" to text "verbal_" at text "lexical-form" be text ya
 su name tlat kwon ob text "bi" at text "entry" be text ya
 su name tlat kwon ob text "bi" as text "en" from text "future_tense_" to text "future_tense_" at text "lexical-form" be text ya
+su name tlat kwon ob text "bi" as text "wiktionary" from text "en_all_nopic_2026-08" to text "future_tense" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "bi" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "future_tense" with text "The tense or time form of a verb used to refer to an event or occurrence that has not yet happened or is expected to happen in the future." at text "source-gloss" be text ya
 su name tlat kwon ob text "bi7" at text "entry" be text ya
 su name tlat kwon ob text "bi7" as text "en" from text "_ing_" to text "_ing_" at text "lexical-form" be text ya
 su name tlat kwon ob text "bj6t" at text "entry" be text ya
@@ -794,6 +796,8 @@ su name tlat kwon ob text "bjat tcut" from text "bjat" at text "component" be te
 su name tlat kwon ob text "bjat tcut" from text "tcut" at text "component" be text ya
 su name tlat kwon ob text "bjeh" at text "entry" be text ya
 su name tlat kwon ob text "bjeh" as text "en" from text "locality_gender_" to text "locality_gender_" at text "lexical-form" be text ya
+su name tlat kwon ob text "bjeh" as text "pyash-curated" from text "pyash authored" to text "bjeh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "bjeh" as text "en" from text "pyash-curated" to text "pyash authored" by text "bjeh" with text "a noun class whose members are places and locations" at text "source-gloss" be text ya
 su name tlat kwon ob text "bjen" at text "entry" be text ya
 su name tlat kwon ob text "bjen" as text "en" from text "beachfront" to text "beachfront" at text "lexical-form" be text ya
 su name tlat kwon ob text "bjen" as text "zh" from text "岸" to text "岸" at text "lexical-form" be text ya
@@ -13039,6 +13043,8 @@ su name tlat kwon ob text "brut nri2c" from text "brut" at text "component" be t
 su name tlat kwon ob text "brut nri2c" from text "nri2c" at text "component" be text ya
 su name tlat kwon ob text "bu" at text "entry" be text ya
 su name tlat kwon ob text "bu" as text "en" from text "absolutive_case_" to text "absolutive_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "bu" as text "wiktionary" from text "en_all_nopic_2026-08" to text "absolutive_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "bu" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "absolutive_case" with text "case used to indicate the patient or experiencer of a verb’s action. The absolutive case is used to mark the subject of an intransitive verb, as well as the object of a transitive verb (inasmuch as they are codified in the English nominative-accusative system). Some languages that employ the absolutive case include Abkhaz, Basque, Chechen, Dyirbal, Hindi, Inuktitut, Hiligaynon, and Yup'ik." at text "source-gloss" be text ya
 su name tlat kwon ob text "bva7n" at text "entry" be text ya
 su name tlat kwon ob text "bva7n" as text "ar" from text "الذكرى المئوية الثانية" to text "الذكرى المئوية الثانية" at text "lexical-form" be text ya
 su name tlat kwon ob text "bva7n" as text "ar" from text "مائتي سنة" to text "مائتي سنة" at text "lexical-form" be text ya
@@ -13200,6 +13206,8 @@ su name tlat kwon ob text "bvaf hte2c" from text "bvaf" at text "component" be t
 su name tlat kwon ob text "bvaf hte2c" from text "hte2c" at text "component" be text ya
 su name tlat kwon ob text "bvah" at text "entry" be text ya
 su name tlat kwon ob text "bvah" as text "en" from text "abessive_case_" to text "abessive_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "bvah" as text "wiktionary" from text "en_all_nopic_2026-08" to text "abessive_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "bvah" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "abessive_case" with text "A grammatical case used to express the lack or absence of something. It has the meaning of the English preposition without or the affix -less." at text "source-gloss" be text ya
 su name tlat kwon ob text "bvak" at text "entry" be text ya
 su name tlat kwon ob text "bvak" as text "en" from text "abessive_case" to text "abessive_case" at text "lexical-form" be text ya
 su name tlat kwon ob text "bvam" at text "entry" be text ya
@@ -13440,6 +13448,8 @@ su name tlat kwon ob text "bvat tlim" from text "bvat" at text "component" be te
 su name tlat kwon ob text "bvat tlim" from text "tlim" at text "component" be text ya
 su name tlat kwon ob text "bveh" at text "entry" be text ya
 su name tlat kwon ob text "bveh" as text "en" from text "subessive_case_" to text "subessive_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "bveh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "subessive_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "bveh" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "subessive_case" with text "The grammatical case that is subessive." at text "source-gloss" be text ya
 su name tlat kwon ob text "bvek" at text "entry" be text ya
 su name tlat kwon ob text "bvek" as text "ar" from text "سحن" to text "سحن" at text "lexical-form" be text ya
 su name tlat kwon ob text "bvek" as text "en" from text "levigate" to text "levigate" at text "lexical-form" be text ya
@@ -15211,6 +15221,8 @@ su name tlat kwon ob text "bwic xlak" from text "xlak" at text "component" be te
 su name tlat kwon ob text "bwih" at text "entry" be text ya
 su name tlat kwon ob text "bwih" as text "en" from text "wise_gender_" to text "wise_gender_" at text "lexical-form" be text ya
 su name tlat kwon ob text "bwih" as text "isv" from text "мудрыпол" to text "мудрыпол" at text "lexical-form" be text ya
+su name tlat kwon ob text "bwih" as text "pyash-curated" from text "pyash authored" to text "bwih" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "bwih" as text "en" from text "pyash-curated" to text "pyash authored" by text "bwih" with text "a noun class whose members are wisdom and sound judgement" at text "source-gloss" be text ya
 su name tlat kwon ob text "bwik" at text "entry" be text ya
 su name tlat kwon ob text "bwik" as text "en" from text "sublative_case" to text "sublative_case" at text "lexical-form" be text ya
 su name tlat kwon ob text "bwim" at text "entry" be text ya
@@ -18636,6 +18648,8 @@ su name tlat kwon ob text "bxif pwot" from text "bxif" at text "component" be te
 su name tlat kwon ob text "bxif pwot" from text "pwot" at text "component" be text ya
 su name tlat kwon ob text "bxih" at text "entry" be text ya
 su name tlat kwon ob text "bxih" as text "en" from text "universe_gender_" to text "universe_gender_" at text "lexical-form" be text ya
+su name tlat kwon ob text "bxih" as text "pyash-curated" from text "pyash authored" to text "bxih" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "bxih" as text "en" from text "pyash-curated" to text "pyash authored" by text "bxih" with text "a noun class whose members are universes" at text "source-gloss" be text ya
 su name tlat kwon ob text "bxik" at text "entry" be text ya
 su name tlat kwon ob text "bxik" as text "en" from text "inhabit" to text "inhabit" at text "lexical-form" be text ya
 su name tlat kwon ob text "bxik brin" at text "entry" be text ya
@@ -21748,6 +21762,9 @@ su name tlat kwon ob text "byif syis" from text "byif" at text "component" be te
 su name tlat kwon ob text "byif syis" from text "syis" at text "component" be text ya
 su name tlat kwon ob text "byih" at text "entry" be text ya
 su name tlat kwon ob text "byih" as text "en" from text "benedictive_mood_" to text "benedictive_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "byih" as text "pyash-curated" from text "pyash authored" to text "byih" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "byih" as text "wiktionary" from text "en_all_nopic_2026-08" to text "benedictive_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "byih" as text "en" from text "pyash-curated" to text "pyash authored" by text "byih" with text "a mood expressing a blessing or good wish" at text "source-gloss" be text ya
 su name tlat kwon ob text "byik" at text "entry" be text ya
 su name tlat kwon ob text "byik" as text "ar" from text "ﺔﻌﻃﺎﻘﻣ" to text "ﺔﻌﻃﺎﻘﻣ" at text "lexical-form" be text ya
 su name tlat kwon ob text "byik" as text "en" from text "boycott" to text "boycott" at text "lexical-form" be text ya
@@ -29136,6 +29153,8 @@ su name tlat kwon ob text "clef" as text "wordnet" from text "Open English WordN
 su name tlat kwon ob text "clef" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:03005945-n" with text "a ski lift on which riders (skiers or sightseers) are seated and carried up or down a mountainside" at text "source-gloss" be text ya
 su name tlat kwon ob text "cleh" at text "entry" be text ya
 su name tlat kwon ob text "cleh" as text "en" from text "recent_past_tense_" to text "recent_past_tense_" at text "lexical-form" be text ya
+su name tlat kwon ob text "cleh" as text "pyash-curated" from text "pyash authored" to text "cleh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "cleh" as text "en" from text "pyash-curated" to text "pyash authored" by text "cleh" with text "a tense placing the event in the immediate past, earlier on the day of speaking" at text "source-gloss" be text ya
 su name tlat kwon ob text "clek" at text "entry" be text ya
 su name tlat kwon ob text "clek" as text "en" from text "leak" to text "leak" at text "lexical-form" be text ya
 su name tlat kwon ob text "clek" as text "zh" from text "漏" to text "漏" at text "lexical-form" be text ya
@@ -32494,6 +32513,8 @@ su name tlat kwon ob text "clof" as text "zh-Latn-pinyin" from text "jié kè s�
 su name tlat kwon ob text "clof" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "Czechoslovakia" by text "equivalent-to" at text "source-link" be text ya
 su name tlat kwon ob text "cloh" at text "entry" be text ya
 su name tlat kwon ob text "cloh" as text "en" from text "rational_gender_" to text "rational_gender_" at text "lexical-form" be text ya
+su name tlat kwon ob text "cloh" as text "pyash-curated" from text "pyash authored" to text "cloh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "cloh" as text "en" from text "pyash-curated" to text "pyash authored" by text "cloh" with text "a noun class whose members are beings capable of reason" at text "source-gloss" be text ya
 su name tlat kwon ob text "clok" at text "entry" be text ya
 su name tlat kwon ob text "clok" as text "en" from text "chocolate" to text "chocolate" at text "lexical-form" be text ya
 su name tlat kwon ob text "clok" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "Chocolate" by text "equivalent-to" at text "source-link" be text ya
@@ -41386,6 +41407,8 @@ su name tlat kwon ob text "crut" as text "wordnet" from text "Open English WordN
 su name tlat kwon ob text "crut" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:15189510-n" with text "the sixth day of the week; the fifth working day" at text "source-gloss" be text ya
 su name tlat kwon ob text "cu" at text "entry" be text ya
 su name tlat kwon ob text "cu" as text "en" from text "conditional_mood_" to text "conditional_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "cu" as text "wiktionary" from text "en_all_nopic_2026-08" to text "conditional_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "cu" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "conditional_mood" with text "A form of the verb used to signify that something is contingent upon the outcome of something else." at text "source-gloss" be text ya
 su name tlat kwon ob text "cw6t" at text "entry" be text ya
 su name tlat kwon ob text "cw6t" as text "ar" from text "بلورات" to text "بلورات" at text "lexical-form" be text ya
 su name tlat kwon ob text "cw6t" as text "ar" from text "بلوري" to text "بلوري" at text "lexical-form" be text ya
@@ -51980,6 +52003,8 @@ su name tlat kwon ob text "cyif dlit" from text "cyif" at text "component" be te
 su name tlat kwon ob text "cyif dlit" from text "dlit" at text "component" be text ya
 su name tlat kwon ob text "cyih" at text "entry" be text ya
 su name tlat kwon ob text "cyih" as text "en" from text "deliberative_mood_" to text "deliberative_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "cyih" as text "pyash-curated" from text "pyash authored" to text "cyih" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "cyih" as text "en" from text "pyash-curated" to text "pyash authored" by text "cyih" with text "a mood posing a question the speaker is reasoning through rather than asking the hearer" at text "source-gloss" be text ya
 su name tlat kwon ob text "cyik" at text "entry" be text ya
 su name tlat kwon ob text "cyik" as text "en" from text "authority" to text "authority" at text "lexical-form" be text ya
 su name tlat kwon ob text "cyik" as text "zh" from text "权" to text "权" at text "lexical-form" be text ya
@@ -61027,10 +61052,18 @@ su name tlat kwon ob text "d6" at text "entry" be text ya
 su name tlat kwon ob text "d6" as text "en" from text "ideophone_" to text "ideophone_" at text "lexical-form" be text ya
 su name tlat kwon ob text "da" at text "entry" be text ya
 su name tlat kwon ob text "da" as text "en" from text "adpositional_case_" to text "adpositional_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "da" as text "pyash-curated" from text "pyash authored" to text "da" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "da" as text "wiktionary" from text "en_all_nopic_2026-08" to text "adpositional_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "da" as text "en" from text "pyash-curated" to text "pyash authored" by text "da" with text "a case expressed by an adposition, whether preposition or postposition" at text "source-gloss" be text ya
 su name tlat kwon ob text "de" at text "entry" be text ya
 su name tlat kwon ob text "de" as text "en" from text "distributive_case_" to text "distributive_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "de" as text "wiktionary" from text "en_all_nopic_2026-08" to text "distributive_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "de" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "distributive_case" with text "The grammatical case that is distributive, indicating “per” or “each”." at text "source-gloss" be text ya
 su name tlat kwon ob text "di" at text "entry" be text ya
 su name tlat kwon ob text "di" as text "en" from text "directive_mood_" to text "directive_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "di" as text "pyash-curated" from text "pyash authored" to text "di" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "di" as text "wiktionary" from text "en_all_nopic_2026-08" to text "directive_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "di" as text "en" from text "pyash-curated" to text "pyash authored" by text "di" with text "a mood directing the hearer to act" at text "source-gloss" be text ya
 su name tlat kwon ob text "di7" at text "entry" be text ya
 su name tlat kwon ob text "di7" as text "en" from text "short_term_" to text "short_term_" at text "lexical-form" be text ya
 su name tlat kwon ob text "dj6n" at text "entry" be text ya
@@ -68394,6 +68427,8 @@ su name tlat kwon ob text "dlef" as text "wordnet" from text "Open English WordN
 su name tlat kwon ob text "dlef" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "a:03072006-a" with text "of or relating to Delphi or to the oracles of Apollo at Delphi; Delphic oracle" at text "source-gloss" be text ya
 su name tlat kwon ob text "dleh" at text "entry" be text ya
 su name tlat kwon ob text "dleh" as text "en" from text "hodiernal_tense_" to text "hodiernal_tense_" at text "lexical-form" be text ya
+su name tlat kwon ob text "dleh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "hodiernal_tense" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "dleh" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "hodiernal_tense" with text "Referring to events of today, in an absolute tense, or of the day under consideration, in a relative tense." at text "source-gloss" be text ya
 su name tlat kwon ob text "dlek" at text "entry" be text ya
 su name tlat kwon ob text "dlek" as text "en" from text "vector" to text "vector" at text "lexical-form" be text ya
 su name tlat kwon ob text "dlek bzos" at text "entry" be text ya
@@ -71711,6 +71746,8 @@ su name tlat kwon ob text "dluc" as text "uk" from text "Андалусія" to 
 su name tlat kwon ob text "dluc" as text "zh" from text "安达卢西亚" to text "安达卢西亚" at text "lexical-form" be text ya
 su name tlat kwon ob text "dluh" at text "entry" be text ya
 su name tlat kwon ob text "dluh" as text "en" from text "dual_number_" to text "dual_number_" at text "lexical-form" be text ya
+su name tlat kwon ob text "dluh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "dual_number" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "dluh" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "dual_number" with text "A grammatical number denoting a quantity of exactly two." at text "source-gloss" be text ya
 su name tlat kwon ob text "dluk" at text "entry" be text ya
 su name tlat kwon ob text "dluk" as text "en" from text "disconnect" to text "disconnect" at text "lexical-form" be text ya
 su name tlat kwon ob text "dluk cyuc" at text "entry" be text ya
@@ -80178,6 +80215,8 @@ su name tlat kwon ob text "dvaf fyat" from text "dvaf" at text "component" be te
 su name tlat kwon ob text "dvaf fyat" from text "fyat" at text "component" be text ya
 su name tlat kwon ob text "dvah" at text "entry" be text ya
 su name tlat kwon ob text "dvah" as text "en" from text "adessive_case_" to text "adessive_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "dvah" as text "wiktionary" from text "en_all_nopic_2026-08" to text "adessive_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "dvah" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "adessive_case" with text "A noun case used to indicate adjacent location. In English, this is usually expressed by the prepositions \"near\", \"at\", or \"by\". Languages that use the adessive case include Finnish, Hungarian, Estonian, Lezgi and Lithuanian." at text "source-gloss" be text ya
 su name tlat kwon ob text "dvak" at text "entry" be text ya
 su name tlat kwon ob text "dvak" as text "en" from text "lative_case" to text "lative_case" at text "lexical-form" be text ya
 su name tlat kwon ob text "dvam" at text "entry" be text ya
@@ -82191,6 +82230,8 @@ su name tlat kwon ob text "dwec tyuk" from text "dwec" at text "component" be te
 su name tlat kwon ob text "dwec tyuk" from text "tyuk" at text "component" be text ya
 su name tlat kwon ob text "dweh" at text "entry" be text ya
 su name tlat kwon ob text "dweh" as text "en" from text "delimitative_aspect_" to text "delimitative_aspect_" at text "lexical-form" be text ya
+su name tlat kwon ob text "dweh" as text "pyash-curated" from text "pyash authored" to text "dweh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "dweh" as text "en" from text "pyash-curated" to text "pyash authored" by text "dweh" with text "an aspect marking an action as lasting only briefly or as bounded to a short stretch" at text "source-gloss" be text ya
 su name tlat kwon ob text "dwek" at text "entry" be text ya
 su name tlat kwon ob text "dwek" as text "ar" from text "كهربيمائي" to text "كهربيمائي" at text "lexical-form" be text ya
 su name tlat kwon ob text "dwek" as text "en" from text "hydroelectric" to text "hydroelectric" at text "lexical-form" be text ya
@@ -82852,6 +82893,9 @@ su name tlat kwon ob text "dwif hfac" from text "dwif" at text "component" be te
 su name tlat kwon ob text "dwif hfac" from text "hfac" at text "component" be text ya
 su name tlat kwon ob text "dwih" at text "entry" be text ya
 su name tlat kwon ob text "dwih" as text "en" from text "desiderative_mood_" to text "desiderative_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "dwih" as text "pyash-curated" from text "pyash authored" to text "dwih" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "dwih" as text "wiktionary" from text "en_all_nopic_2026-08" to text "desiderative_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "dwih" as text "en" from text "pyash-curated" to text "pyash authored" by text "dwih" with text "a mood expressing a desire for the event" at text "source-gloss" be text ya
 su name tlat kwon ob text "dwik" at text "entry" be text ya
 su name tlat kwon ob text "dwik" as text "en" from text "dividend" to text "dividend" at text "lexical-form" be text ya
 su name tlat kwon ob text "dwik gzan" at text "entry" be text ya
@@ -84026,6 +84070,8 @@ su name tlat kwon ob text "dxaf hfuk" from text "dxaf" at text "component" be te
 su name tlat kwon ob text "dxaf hfuk" from text "hfuk" at text "component" be text ya
 su name tlat kwon ob text "dxah" at text "entry" be text ya
 su name tlat kwon ob text "dxah" as text "en" from text "remote_past_tense_" to text "remote_past_tense_" at text "lexical-form" be text ya
+su name tlat kwon ob text "dxah" as text "pyash-curated" from text "pyash authored" to text "dxah" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "dxah" as text "en" from text "pyash-curated" to text "pyash authored" by text "dxah" with text "a tense placing the event in the distant past, before the remembered past" at text "source-gloss" be text ya
 su name tlat kwon ob text "dxak" at text "entry" be text ya
 su name tlat kwon ob text "dxak" as text "ar" from text "ﺕﺎﻧﺎﻴﺒﻟﺍ ﻦﻳﺪﻌﺗ" to text "ﺕﺎﻧﺎﻴﺒﻟﺍ ﻦﻳﺪﻌﺗ" at text "lexical-form" be text ya
 su name tlat kwon ob text "dxak" as text "en" from text "data mining" to text "data mining" at text "lexical-form" be text ya
@@ -85392,6 +85438,8 @@ su name tlat kwon ob text "dxof" as text "zh" from text "耶和华" to text "耶
 su name tlat kwon ob text "dxof" as text "zh-Latn-pinyin" from text "yē hé huá" to text "yē hé huá" at text "lexical-form" be text ya
 su name tlat kwon ob text "dxoh" at text "entry" be text ya
 su name tlat kwon ob text "dxoh" as text "en" from text "modal_case_" to text "modal_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "dxoh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "modal_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "dxoh" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "modal_case" with text "A case used to express ability, intention, necessity, obligation, permission, possibility, etc." at text "source-gloss" be text ya
 su name tlat kwon ob text "dxok" at text "entry" be text ya
 su name tlat kwon ob text "dxok" as text "en" from text "dominican" to text "dominican" at text "lexical-form" be text ya
 su name tlat kwon ob text "dxok dlan" at text "entry" be text ya
@@ -86211,6 +86259,8 @@ su name tlat kwon ob text "dyaf" as text "wordnet" from text "Open English WordN
 su name tlat kwon ob text "dyaf" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:03865237-n" with text "the area of a baseball playing field beyond the lines connecting the bases" at text "source-gloss" be text ya
 su name tlat kwon ob text "dyah" at text "entry" be text ya
 su name tlat kwon ob text "dyah" as text "en" from text "admonitive_mood_" to text "admonitive_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "dyah" as text "pyash-curated" from text "pyash authored" to text "dyah" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "dyah" as text "en" from text "pyash-curated" to text "pyash authored" by text "dyah" with text "a mood warning the hearer against something, expressing that the action is to be avoided" at text "source-gloss" be text ya
 su name tlat kwon ob text "dyak" at text "entry" be text ya
 su name tlat kwon ob text "dyak" as text "en" from text "dancer" to text "dancer" at text "lexical-form" be text ya
 su name tlat kwon ob text "dyak" as text "en" from text "professional dancer" to text "professional dancer" at text "lexical-form" be text ya
@@ -90822,6 +90872,8 @@ su name tlat kwon ob text "dzic twon" from text "dzic" at text "component" be te
 su name tlat kwon ob text "dzic twon" from text "twon" at text "component" be text ya
 su name tlat kwon ob text "dzih" at text "entry" be text ya
 su name tlat kwon ob text "dzih" as text "en" from text "possessed_case_" to text "possessed_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "dzih" as text "pyash-curated" from text "pyash authored" to text "dzih" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "dzih" as text "en" from text "pyash-curated" to text "pyash authored" by text "dzih" with text "a case marking the thing possessed rather than its possessor" at text "source-gloss" be text ya
 su name tlat kwon ob text "dzik" at text "entry" be text ya
 su name tlat kwon ob text "dzik" as text "ar" from text "ﺔﻐﻠﻟﺍ ﻲﺋﺎﻨﺛ" to text "ﺔﻐﻠﻟﺍ ﻲﺋﺎﻨﺛ" at text "lexical-form" be text ya
 su name tlat kwon ob text "dzik" as text "en" from text "bilingual" to text "bilingual" at text "lexical-form" be text ya
@@ -91286,6 +91338,8 @@ su name tlat kwon ob text "f6" at text "entry" be text ya
 su name tlat kwon ob text "f6" as text "en" from text "epenthetic_morpheme_" to text "epenthetic_morpheme_" at text "lexical-form" be text ya
 su name tlat kwon ob text "fa" at text "entry" be text ya
 su name tlat kwon ob text "fa" as text "en" from text "perfective_aspect_" to text "perfective_aspect_" at text "lexical-form" be text ya
+su name tlat kwon ob text "fa" as text "wiktionary" from text "en_all_nopic_2026-08" to text "perfective_aspect" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "fa" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "perfective_aspect" with text "A feature of the verb which denotes viewing the event the verb describes as a completed whole, rather than from within the event as it unfolds. For example, \"she sat down\" as opposed to \"she was sitting down\". Since the focus is on the completion of what is expressed by the verb, this aspect is generally associated with the past and future tenses. This term is often used interchangeably with aorist aspect. This is not to be confused with the perfect tense." at text "source-gloss" be text ya
 su name tlat kwon ob text "fe" at text "entry" be text ya
 su name tlat kwon ob text "fe" as text "en" from text "finally_" to text "finally_" at text "lexical-form" be text ya
 su name tlat kwon ob text "fi" at text "entry" be text ya
@@ -102472,6 +102526,7 @@ su name tlat kwon ob text "from lyek" from text "from" at text "component" be te
 su name tlat kwon ob text "from lyek" from text "lyek" at text "component" be text ya
 su name tlat kwon ob text "fromindex" at text "entry" be text ya
 su name tlat kwon ob text "fromindex" as text "en" from text "multiplicative_case_" to text "multiplicative_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "fromindex" as text "wiktionary" from text "en_all_nopic_2026-08" to text "multiplicative_case" by text "exact-term" at text "source-link" be text ya
 su name tlat kwon ob text "fron" at text "entry" be text ya
 su name tlat kwon ob text "fron" as text "ar" from text "ﻦﻳﻭﺮﻴﻬﻟﺍ" to text "ﻦﻳﻭﺮﻴﻬﻟﺍ" at text "lexical-form" be text ya
 su name tlat kwon ob text "fron" as text "en" from text "heroin" to text "heroin" at text "lexical-form" be text ya
@@ -107798,6 +107853,8 @@ su name tlat kwon ob text "fyif" at text "entry" be text ya
 su name tlat kwon ob text "fyif" as text "en" from text "reflexive_voice" to text "reflexive_voice" at text "lexical-form" be text ya
 su name tlat kwon ob text "fyih" at text "entry" be text ya
 su name tlat kwon ob text "fyih" as text "en" from text "floating_point_number_" to text "floating_point_number_" at text "lexical-form" be text ya
+su name tlat kwon ob text "fyih" as text "pyash-curated" from text "pyash authored" to text "fyih" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "fyih" as text "en" from text "pyash-curated" to text "pyash authored" by text "fyih" with text "a number stored as a sign, a significand, and an exponent, so it can represent a wide range of magnitudes at limited precision" at text "source-gloss" be text ya
 su name tlat kwon ob text "fyik" at text "entry" be text ya
 su name tlat kwon ob text "fyik" as text "ar" from text "ﻲﻜﺴﻳﻭ" to text "ﻲﻜﺴﻳﻭ" at text "lexical-form" be text ya
 su name tlat kwon ob text "fyik" as text "en" from text "whiskey" to text "whiskey" at text "lexical-form" be text ya
@@ -108370,6 +108427,9 @@ su name tlat kwon ob text "fyit" at text "entry" be text ya
 su name tlat kwon ob text "fyit" as text "en" from text "familiar_register" to text "familiar_register" at text "lexical-form" be text ya
 su name tlat kwon ob text "fyoh" at text "entry" be text ya
 su name tlat kwon ob text "fyoh" as text "en" from text "reflexive_voice_" to text "reflexive_voice_" at text "lexical-form" be text ya
+su name tlat kwon ob text "fyoh" as text "pyash-curated" from text "pyash authored" to text "fyoh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "fyoh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "reflexive_voice" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "fyoh" as text "en" from text "pyash-curated" to text "pyash authored" by text "fyoh" with text "a voice marking that the agent acts on itself" at text "source-gloss" be text ya
 su name tlat kwon ob text "fyok" at text "entry" be text ya
 su name tlat kwon ob text "fyok" as text "ar" from text "كل العضوية" to text "كل العضوية" at text "lexical-form" be text ya
 su name tlat kwon ob text "fyok" as text "en" from text "all_organic" to text "all_organic" at text "lexical-form" be text ya
@@ -108931,6 +108991,8 @@ su name tlat kwon ob text "ga" at text "entry" be text ya
 su name tlat kwon ob text "ga" as text "en" from text "way_case_" to text "way_case_" at text "lexical-form" be text ya
 su name tlat kwon ob text "ga" as text "zh" from text "在" to text "在" at text "lexical-form" be text ya
 su name tlat kwon ob text "ga" as text "zh-Latn-pinyin" from text "zài" to text "zài" at text "lexical-form" be text ya
+su name tlat kwon ob text "ga" as text "pyash-curated" from text "pyash authored" to text "ga" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "ga" as text "en" from text "pyash-curated" to text "pyash authored" by text "ga" with text "a case marking the path a motion follows, synonymous with the vialis" at text "source-gloss" be text ya
 su name tlat kwon ob text "ga7" at text "entry" be text ya
 su name tlat kwon ob text "ga7" as text "en" from text "_graphy_" to text "_graphy_" at text "lexical-form" be text ya
 su name tlat kwon ob text "ge" at text "entry" be text ya
@@ -110310,6 +110372,8 @@ su name tlat kwon ob text "gjic pcan" from text "gjic" at text "component" be te
 su name tlat kwon ob text "gjic pcan" from text "pcan" at text "component" be text ya
 su name tlat kwon ob text "gjih" at text "entry" be text ya
 su name tlat kwon ob text "gjih" as text "en" from text "galaxy_gender_" to text "galaxy_gender_" at text "lexical-form" be text ya
+su name tlat kwon ob text "gjih" as text "pyash-curated" from text "pyash authored" to text "gjih" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "gjih" as text "en" from text "pyash-curated" to text "pyash authored" by text "gjih" with text "a noun class whose members are galaxies" at text "source-gloss" be text ya
 su name tlat kwon ob text "gjik" at text "entry" be text ya
 su name tlat kwon ob text "gjik" as text "ar" from text "كلوي" to text "كلوي" at text "lexical-form" be text ya
 su name tlat kwon ob text "gjik" as text "ar" from text "ﻰﻠﻜﻟﺍ" to text "ﻰﻠﻜﻟﺍ" at text "lexical-form" be text ya
@@ -113375,6 +113439,9 @@ su name tlat kwon ob text "gluc" as text "uk" from text "калоші" to text "
 su name tlat kwon ob text "gluc" as text "zh" from text "胶鞋" to text "胶鞋" at text "lexical-form" be text ya
 su name tlat kwon ob text "gluh" at text "entry" be text ya
 su name tlat kwon ob text "gluh" as text "en" from text "singulative_number_" to text "singulative_number_" at text "lexical-form" be text ya
+su name tlat kwon ob text "gluh" as text "pyash-curated" from text "pyash authored" to text "gluh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "gluh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "singulative_number" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "gluh" as text "en" from text "pyash-curated" to text "pyash authored" by text "gluh" with text "a number marking one member singled out of a collective or mass" at text "source-gloss" be text ya
 su name tlat kwon ob text "gluk" at text "entry" be text ya
 su name tlat kwon ob text "gluk" as text "en" from text "slug" to text "slug" at text "lexical-form" be text ya
 su name tlat kwon ob text "gluk" as text "zh" from text "慢" to text "慢" at text "lexical-form" be text ya
@@ -113613,6 +113680,9 @@ su name tlat kwon ob text "glut" at text "entry" be text ya
 su name tlat kwon ob text "glut" as text "en" from text "calculator" to text "calculator" at text "lexical-form" be text ya
 su name tlat kwon ob text "go" at text "entry" be text ya
 su name tlat kwon ob text "go" as text "en" from text "gnomic_aspect_" to text "gnomic_aspect_" at text "lexical-form" be text ya
+su name tlat kwon ob text "go" as text "pyash-curated" from text "pyash authored" to text "go" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "go" as text "wiktionary" from text "en_all_nopic_2026-08" to text "gnomic_aspect" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "go" as text "en" from text "pyash-curated" to text "pyash authored" by text "go" with text "an aspect presenting a statement as generally true rather than tied to a particular occasion" at text "source-gloss" be text ya
 su name tlat kwon ob text "go" from ve 9 1 26640 1 10590 1 1 9278 1 2422 at text "operation-signature" be text ya
 su name tlat kwon ob text "go" as ve 4 1 9278 1 2422 from text "to" to text "value supplied in the to case" at text "operation-argument" be text ya
 su name tlat kwon ob text "go" from ve 10 1 26640 1 10590 1 1 9278 2 8798 2422 at text "operation-signature" be text ya
@@ -115551,6 +115621,8 @@ su name tlat kwon ob text "grec tlim" from text "grec" at text "component" be te
 su name tlat kwon ob text "grec tlim" from text "tlim" at text "component" be text ya
 su name tlat kwon ob text "greh" at text "entry" be text ya
 su name tlat kwon ob text "greh" as text "en" from text "centric_case_" to text "centric_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "greh" as text "pyash-curated" from text "pyash authored" to text "greh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "greh" as text "en" from text "pyash-curated" to text "pyash authored" by text "greh" with text "a case marking the thing around which the predicate's other participants are arranged" at text "source-gloss" be text ya
 su name tlat kwon ob text "grek" at text "entry" be text ya
 su name tlat kwon ob text "grek" as text "en" from text "garage" to text "garage" at text "lexical-form" be text ya
 su name tlat kwon ob text "grek nwic" at text "entry" be text ya
@@ -118779,6 +118851,8 @@ su name tlat kwon ob text "gva7t" as text "wordnet" from text "Open English Word
 su name tlat kwon ob text "gva7t" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "a:03138067-a" with text "having a valence of three" at text "source-gloss" be text ya
 su name tlat kwon ob text "gvah" at text "entry" be text ya
 su name tlat kwon ob text "gvah" as text "en" from text "lative_case_" to text "lative_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "gvah" as text "wiktionary" from text "en_all_nopic_2026-08" to text "lative_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "gvah" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "lative_case" with text "A case of verbs, found in the Uralic and Northern Caucasian languages, used to indicate motion to a location; in the Northern Caucasian languages, the lative also takes up functions of the dative case" at text "source-gloss" be text ya
 su name tlat kwon ob text "gvak" at text "entry" be text ya
 su name tlat kwon ob text "gvak" as text "ar" from text "ﺓﺪﺣ ﺔﻳﻮﺤﻨﻟﺍ" to text "ﺓﺪﺣ ﺔﻳﻮﺤﻨﻟﺍ" at text "lexical-form" be text ya
 su name tlat kwon ob text "gvak" as text "en" from text "case" to text "case" at text "lexical-form" be text ya
@@ -119223,6 +119297,8 @@ su name tlat kwon ob text "gvat pwic" from text "gvat" at text "component" be te
 su name tlat kwon ob text "gvat pwic" from text "pwic" at text "component" be text ya
 su name tlat kwon ob text "gveh" at text "entry" be text ya
 su name tlat kwon ob text "gveh" as text "en" from text "ergative_case_" to text "ergative_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "gveh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "ergative_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "gveh" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "ergative_case" with text "A grammatical case used to indicate the agent of a transitive verb in ergative-absolutive languages." at text "source-gloss" be text ya
 su name tlat kwon ob text "gven" at text "entry" be text ya
 su name tlat kwon ob text "gven" as text "ar" from text "ﻒﻨﻃ" to text "ﻒﻨﻃ" at text "lexical-form" be text ya
 su name tlat kwon ob text "gven" as text "en" from text "eaves" to text "eaves" at text "lexical-form" be text ya
@@ -119482,6 +119558,8 @@ su name tlat kwon ob text "gvic hzi7p" from text "gvic" at text "component" be t
 su name tlat kwon ob text "gvic hzi7p" from text "hzi7p" at text "component" be text ya
 su name tlat kwon ob text "gvih" at text "entry" be text ya
 su name tlat kwon ob text "gvih" as text "en" from text "pegative_case_" to text "pegative_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "gvih" as text "pyash-curated" from text "pyash authored" to text "gvih" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "gvih" as text "en" from text "pyash-curated" to text "pyash authored" by text "gvih" with text "a case marking the recipient in a clause whose verb assigns a thing to that recipient" at text "source-gloss" be text ya
 su name tlat kwon ob text "gvik" at text "entry" be text ya
 su name tlat kwon ob text "gvik" as text "en" from text "ergative_case" to text "ergative_case" at text "lexical-form" be text ya
 su name tlat kwon ob text "gvin" at text "entry" be text ya
@@ -120398,6 +120476,8 @@ su name tlat kwon ob text "gwat xlok" from text "gwat" at text "component" be te
 su name tlat kwon ob text "gwat xlok" from text "xlok" at text "component" be text ya
 su name tlat kwon ob text "gweh" at text "entry" be text ya
 su name tlat kwon ob text "gweh" as text "en" from text "soon_future_tense_" to text "soon_future_tense_" at text "lexical-form" be text ya
+su name tlat kwon ob text "gweh" as text "pyash-curated" from text "pyash authored" to text "gweh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "gweh" as text "en" from text "pyash-curated" to text "pyash authored" by text "gweh" with text "a tense placing the event in the immediate future, later on the day of speaking" at text "source-gloss" be text ya
 su name tlat kwon ob text "gwen" at text "entry" be text ya
 su name tlat kwon ob text "gwen" as text "ar" from text "ﻥﺍﻮﺻ" to text "ﻥﺍﻮﺻ" at text "lexical-form" be text ya
 su name tlat kwon ob text "gwen" as text "en" from text "granite" to text "granite" at text "lexical-form" be text ya
@@ -123719,6 +123799,8 @@ su name tlat kwon ob text "gxif kwak" from text "gxif" at text "component" be te
 su name tlat kwon ob text "gxif kwak" from text "kwak" at text "component" be text ya
 su name tlat kwon ob text "gxih" at text "entry" be text ya
 su name tlat kwon ob text "gxih" as text "en" from text "common_gender_" to text "common_gender_" at text "lexical-form" be text ya
+su name tlat kwon ob text "gxih" as text "pyash-curated" from text "pyash authored" to text "gxih" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "gxih" as text "en" from text "pyash-curated" to text "pyash authored" by text "gxih" with text "a noun class containing both masculine and feminine nouns, distinguished only by agreement" at text "source-gloss" be text ya
 su name tlat kwon ob text "gxik" at text "entry" be text ya
 su name tlat kwon ob text "gxik" as text "ar" from text "ﺔﻴﻧﺪﻤﻟﺍ ﻕﻮﻘﺤﻟﺍ" to text "ﺔﻴﻧﺪﻤﻟﺍ ﻕﻮﻘﺤﻟﺍ" at text "lexical-form" be text ya
 su name tlat kwon ob text "gxik" as text "en" from text "civil_rights" to text "civil_rights" at text "lexical-form" be text ya
@@ -126015,6 +126097,9 @@ su name tlat kwon ob text "gyif zwin" from text "gyif" at text "component" be te
 su name tlat kwon ob text "gyif zwin" from text "zwin" at text "component" be text ya
 su name tlat kwon ob text "gyih" at text "entry" be text ya
 su name tlat kwon ob text "gyih" as text "en" from text "gnomic_mood_" to text "gnomic_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "gyih" as text "pyash-curated" from text "pyash authored" to text "gyih" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "gyih" as text "wiktionary" from text "en_all_nopic_2026-08" to text "gnomic_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "gyih" as text "en" from text "pyash-curated" to text "pyash authored" by text "gyih" with text "a mood presenting a statement as a general truth" at text "source-gloss" be text ya
 su name tlat kwon ob text "gyik" at text "entry" be text ya
 su name tlat kwon ob text "gyik" as text "ar" from text "ﺕﺎﻴﺿﺎﻳﺮﻟﺍ" to text "ﺕﺎﻴﺿﺎﻳﺮﻟﺍ" at text "lexical-form" be text ya
 su name tlat kwon ob text "gyik" as text "ar" from text "رياضيا" to text "رياضيا" at text "lexical-form" be text ya
@@ -211782,6 +211867,38 @@ su name tlat kwon ob text "hkom tsi7t" as text "wordnet" from text "Open English
 su name tlat kwon ob text "hkom tsi7t" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:06878227-n" with text "a musical notation indicating a silence of a specified duration" at text "source-gloss" be text ya
 su name tlat kwon ob text "hkom tsi7t" from text "hkom" at text "component" be text ya
 su name tlat kwon ob text "hkom tsi7t" from text "tsi7t" at text "component" be text ya
+su name tlat kwon ob text "hkom tyac" at text "entry" be text ya
+su name tlat kwon ob text "hkom tyac" as text "ar" from text "ﺮﻴﻔﺸﺗ ﻚﻓ" to text "ﺮﻴﻔﺸﺗ ﻚﻓ" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "ar" from text "فك تشفير" to text "فك تشفير" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "en" from text "decipher" to text "decipher" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "en" from text "decode" to text "decode" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "en" from text "decrypt" to text "decrypt" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "es" from text "descodificar" to text "descodificar" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "es" from text "desencriptar" to text "desencriptar" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "fi" from text "purkaa" to text "purkaa" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "fi" from text "tulkita" to text "tulkita" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "fr" from text "décoder" to text "décoder" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "fr" from text "décrypter" to text "décrypter" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "he" from text "ַחֵנֲעַפְל" to text "ַחֵנֲעַפְל" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "he" from text "לפענח" to text "לפענח" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "hi" from text "डिक्रिप्ट" to text "डिक्रिप्ट" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "hi" from text "व्याख्या करना" to text "व्याख्या करना" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "id" from text "membaca sandi" to text "membaca sandi" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "id" from text "mendekripsi" to text "mendekripsi" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "isv" from text "разкодовати" to text "разкодовати" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "nl" from text "decoderen" to text "decoderen" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "ru" from text "раскодировать" to text "раскодировать" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "ru" from text "расшифровывать" to text "расшифровывать" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "tr" from text "decode" to text "decode" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "tr" from text "şifresini" to text "şifresini" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "uk" from text "розкодувати" to text "розкодувати" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "uk" from text "розшифровувати" to text "розшифровувати" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "zh" from text "解码" to text "解码" at text "lexical-form" be text ya
+su name tlat kwon ob text "hkom tyac" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "Decoding" by text "subsumed-by" at text "source-link" be text ya
+su name tlat kwon ob text "hkom tyac" as text "wordnet" from text "Open English WordNet 2025" to text "v:00996499-v" by text "exact-sense" at text "source-link" be text ya
+su name tlat kwon ob text "hkom tyac" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "v:00996499-v" with text "convert code into ordinary language" at text "source-gloss" be text ya
+su name tlat kwon ob text "hkom tyac" from text "hkom" at text "component" be text ya
+su name tlat kwon ob text "hkom tyac" from text "tyac" at text "component" be text ya
 su name tlat kwon ob text "hkom xr6s" at text "entry" be text ya
 su name tlat kwon ob text "hkom xr6s" as text "en" from text "hieroglyph" to text "hieroglyph" at text "lexical-form" be text ya
 su name tlat kwon ob text "hkom xr6s" as text "en" from text "hieroglyphic" to text "hieroglyphic" at text "lexical-form" be text ya
@@ -247985,6 +248102,12 @@ su name tlat kwon ob text "hnim tlat" as text "wordnet" from text "Open English 
 su name tlat kwon ob text "hnim tlat" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "a:02646150-a" with text "pertaining to or dealing with or used as a common noun" at text "source-gloss" be text ya
 su name tlat kwon ob text "hnim tlat" from text "hnim" at text "component" be text ya
 su name tlat kwon ob text "hnim tlat" from text "tlat" at text "component" be text ya
+su name tlat kwon ob text "hnim tsuk" at text "entry" be text ya
+su name tlat kwon ob text "hnim tsuk" as text "en" from text "noun class" to text "noun class" at text "lexical-form" be text ya
+su name tlat kwon ob text "hnim tsuk" as text "wiktionary" from text "en_all_nopic_2026-08" to text "noun_class" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "hnim tsuk" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "noun_class" with text "A grammatical category similar to gender in which nouns may be organized according to meaning, such as gender, animacy or shape." at text "source-gloss" be text ya
+su name tlat kwon ob text "hnim tsuk" from text "hnim" at text "component" be text ya
+su name tlat kwon ob text "hnim tsuk" from text "tsuk" at text "component" be text ya
 su name tlat kwon ob text "hnim tsut" at text "entry" be text ya
 su name tlat kwon ob text "hnim tsut" as text "en" from text "onomancer" to text "onomancer" at text "lexical-form" be text ya
 su name tlat kwon ob text "hnim tsut" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "Human" by text "subsumed-by" at text "source-link" be text ya
@@ -358071,8 +358194,13 @@ su name tlat kwon ob text "je" at text "entry" be text ya
 su name tlat kwon ob text "je" as text "en" from text "agentive_case_" to text "agentive_case_" at text "lexical-form" be text ya
 su name tlat kwon ob text "je" as text "zh" from text "于" to text "于" at text "lexical-form" be text ya
 su name tlat kwon ob text "je" as text "zh-Latn-pinyin" from text "yú" to text "yú" at text "lexical-form" be text ya
+su name tlat kwon ob text "je" as text "pyash-curated" from text "pyash authored" to text "je" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "je" as text "wiktionary" from text "en_all_nopic_2026-08" to text "agentive_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "je" as text "en" from text "pyash-curated" to text "pyash authored" by text "je" with text "a case marking the participant who performs the action" at text "source-gloss" be text ya
 su name tlat kwon ob text "ji" at text "entry" be text ya
 su name tlat kwon ob text "ji" as text "en" from text "feminine_gender_" to text "feminine_gender_" at text "lexical-form" be text ya
+su name tlat kwon ob text "ji" as text "pyash-curated" from text "pyash authored" to text "ji" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "ji" as text "en" from text "pyash-curated" to text "pyash authored" by text "ji" with text "a noun class whose members take feminine agreement" at text "source-gloss" be text ya
 su name tlat kwon ob text "ji7" at text "entry" be text ya
 su name tlat kwon ob text "ji7" as text "en" from text "_ize_" to text "_ize_" at text "lexical-form" be text ya
 su name tlat kwon ob text "jl6n" at text "entry" be text ya
@@ -363160,6 +363288,9 @@ su name tlat kwon ob text "jwic nref" from text "jwic" at text "component" be te
 su name tlat kwon ob text "jwic nref" from text "nref" at text "component" be text ya
 su name tlat kwon ob text "jwih" at text "entry" be text ya
 su name tlat kwon ob text "jwih" as text "en" from text "jussive_mood_" to text "jussive_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "jwih" as text "pyash-curated" from text "pyash authored" to text "jwih" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "jwih" as text "wiktionary" from text "en_all_nopic_2026-08" to text "jussive_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "jwih" as text "en" from text "pyash-curated" to text "pyash authored" by text "jwih" with text "a mood expressing a command directed at a third person rather than the hearer" at text "source-gloss" be text ya
 su name tlat kwon ob text "jwik" at text "entry" be text ya
 su name tlat kwon ob text "jwik" as text "en" from text "vitellus" to text "vitellus" at text "lexical-form" be text ya
 su name tlat kwon ob text "jwik" as text "en" from text "yolk" to text "yolk" at text "lexical-form" be text ya
@@ -364674,8 +364805,12 @@ su name tlat kwon ob text "jyut hmuc" from text "jyut" at text "component" be te
 su name tlat kwon ob text "jyut hmuc" from text "hmuc" at text "component" be text ya
 su name tlat kwon ob text "k6" at text "entry" be text ya
 su name tlat kwon ob text "k6" as text "en" from text "allocutive_agreement_" to text "allocutive_agreement_" at text "lexical-form" be text ya
+su name tlat kwon ob text "k6" as text "pyash-curated" from text "pyash authored" to text "k6" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "k6" as text "en" from text "pyash-curated" to text "pyash authored" by text "k6" with text "agreement that marks a verb for the social rank or gender of the addressee rather than for an argument" at text "source-gloss" be text ya
 su name tlat kwon ob text "ka" at text "entry" be text ya
 su name tlat kwon ob text "ka" as text "en" from text "accusative_case_" to text "accusative_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "ka" as text "wiktionary" from text "en_all_nopic_2026-08" to text "accusative_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "ka" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "accusative_case" with text "In English and other modern languages, the case used to mark the immediate object (direct object) on which the transitive verb acts. In Latin grammar, the accusative case (cāsus accūsātīvus) includes functions derived from the Indo-European accusative and lative cases; said Lative Case expresses concepts similar to those of the English prepositions \"to\" and \"towards\"." at text "source-gloss" be text ya
 su name tlat kwon ob text "kc6c" at text "entry" be text ya
 su name tlat kwon ob text "kc6c" as text "ar" from text "جماع" to text "جماع" at text "lexical-form" be text ya
 su name tlat kwon ob text "kc6c" as text "ar" from text "مضاجعة" to text "مضاجعة" at text "lexical-form" be text ya
@@ -377906,6 +378041,8 @@ su name tlat kwon ob text "kcu2n sra7n" from text "kcu2n" at text "component" be
 su name tlat kwon ob text "kcu2n sra7n" from text "sra7n" at text "component" be text ya
 su name tlat kwon ob text "kcu7h" at text "entry" be text ya
 su name tlat kwon ob text "kcu7h" as text "en" from text "inductive_mood_" to text "inductive_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "kcu7h" as text "pyash-curated" from text "pyash authored" to text "kcu7h" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "kcu7h" as text "en" from text "pyash-curated" to text "pyash authored" by text "kcu7h" with text "a mood presenting a conclusion drawn from particular observations rather than stated as fact" at text "source-gloss" be text ya
 su name tlat kwon ob text "kcu7t" at text "entry" be text ya
 su name tlat kwon ob text "kcu7t" as text "en" from text "open_ended" to text "open_ended" at text "lexical-form" be text ya
 su name tlat kwon ob text "kcuc" at text "entry" be text ya
@@ -378532,6 +378669,8 @@ su name tlat kwon ob text "kcuc xwas" from text "xwas" at text "component" be te
 su name tlat kwon ob text "kcuh" at text "entry" be text ya
 su name tlat kwon ob text "kcuh" as text "en" from text "choice_gender_" to text "choice_gender_" at text "lexical-form" be text ya
 su name tlat kwon ob text "kcuh" as text "isv" from text "избрапол" to text "избрапол" at text "lexical-form" be text ya
+su name tlat kwon ob text "kcuh" as text "pyash-curated" from text "pyash authored" to text "kcuh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "kcuh" as text "en" from text "pyash-curated" to text "pyash authored" by text "kcuh" with text "a noun class marking a selection made among alternatives" at text "source-gloss" be text ya
 su name tlat kwon ob text "kcuk" at text "entry" be text ya
 su name tlat kwon ob text "kcuk" as text "en" from text "school" to text "school" at text "lexical-form" be text ya
 su name tlat kwon ob text "kcuk" as text "zh" from text "学" to text "学" at text "lexical-form" be text ya
@@ -386152,6 +386291,8 @@ su name tlat kwon ob text "kfut" as text "en" from text "curfew" to text "curfew
 su name tlat kwon ob text "ki" at text "entry" be text ya
 su name tlat kwon ob text "ki" as text "en" from text "past_tense_" to text "past_tense_" at text "lexical-form" be text ya
 su name tlat kwon ob text "ki" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "pastTense" by text "equivalent-to" at text "source-link" be text ya
+su name tlat kwon ob text "ki" as text "wiktionary" from text "en_all_nopic_2026-08" to text "past_tense" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "ki" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "past_tense" with text "A grammatical form (often a verb form) that refers to an event, transaction, occurrence, or object that happened (or had happened), or existed, at some time before now (the applicable reference time)." at text "source-gloss" be text ya
 su name tlat kwon ob text "ki2" at text "entry" be text ya
 su name tlat kwon ob text "ki2" as text "en" from text "excessive_duration_" to text "excessive_duration_" at text "lexical-form" be text ya
 su name tlat kwon ob text "ki7" at text "entry" be text ya
@@ -413505,6 +413646,9 @@ su name tlat kwon ob text "ksif hgos" from text "ksif" at text "component" be te
 su name tlat kwon ob text "ksif hgos" from text "hgos" at text "component" be text ya
 su name tlat kwon ob text "ksih" at text "entry" be text ya
 su name tlat kwon ob text "ksih" as text "en" from text "causal_case_" to text "causal_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "ksih" as text "pyash-curated" from text "pyash authored" to text "ksih" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "ksih" as text "wiktionary" from text "en_all_nopic_2026-08" to text "causal_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "ksih" as text "en" from text "pyash-curated" to text "pyash authored" by text "ksih" with text "a case marking the cause or reason for the action" at text "source-gloss" be text ya
 su name tlat kwon ob text "ksik" at text "entry" be text ya
 su name tlat kwon ob text "ksik" as text "en" from text "consequence" to text "consequence" at text "lexical-form" be text ya
 su name tlat kwon ob text "ksik blas" at text "entry" be text ya
@@ -417215,6 +417359,9 @@ su name tlat kwon ob text "ksuf" at text "entry" be text ya
 su name tlat kwon ob text "ksuf" as text "en" from text "couscous" to text "couscous" at text "lexical-form" be text ya
 su name tlat kwon ob text "ksuh" at text "entry" be text ya
 su name tlat kwon ob text "ksuh" as text "en" from text "declarative_mood_" to text "declarative_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "ksuh" as text "pyash-curated" from text "pyash authored" to text "ksuh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "ksuh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "declarative_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "ksuh" as text "en" from text "pyash-curated" to text "pyash authored" by text "ksuh" with text "a mood presenting the clause as a statement of fact" at text "source-gloss" be text ya
 su name tlat kwon ob text "ksuk" at text "entry" be text ya
 su name tlat kwon ob text "ksuk" as text "ar" from text "ﻡﻻ﻿ﺍ ﻮﺧﺍ" to text "ﻡﻻ﻿ﺍ ﻮﺧﺍ" at text "lexical-form" be text ya
 su name tlat kwon ob text "ksuk" as text "en" from text "uncle" to text "uncle" at text "lexical-form" be text ya
@@ -422477,6 +422624,9 @@ su name tlat kwon ob text "kwe7t" as text "wordnet" from text "Open English Word
 su name tlat kwon ob text "kwe7t" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "s:02592267-s" with text "worn or shabby from overuse or (of pages) from having corners turned down; an old book with dog-eared pages" at text "source-gloss" be text ya
 su name tlat kwon ob text "kweh" at text "entry" be text ya
 su name tlat kwon ob text "kweh" as text "en" from text "exclusive_person_" to text "exclusive_person_" at text "lexical-form" be text ya
+su name tlat kwon ob text "kweh" as text "pyash-curated" from text "pyash authored" to text "kweh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "kweh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "exclusive_person" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "kweh" as text "en" from text "pyash-curated" to text "pyash authored" by text "kweh" with text "a first-person plural form that excludes the person addressed" at text "source-gloss" be text ya
 su name tlat kwon ob text "kwek" at text "entry" be text ya
 su name tlat kwon ob text "kwek" as text "en" from text "locative" to text "locative" at text "lexical-form" be text ya
 su name tlat kwon ob text "kwek" as text "en" from text "locative case" to text "locative case" at text "lexical-form" be text ya
@@ -427564,6 +427714,9 @@ su name tlat kwon ob text "kxef" as text "wordnet" from text "Open English WordN
 su name tlat kwon ob text "kxef" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:03132059-n" with text "a rotating shaft driven by (or driving) a crank" at text "source-gloss" be text ya
 su name tlat kwon ob text "kxeh" at text "entry" be text ya
 su name tlat kwon ob text "kxeh" as text "en" from text "to_case_" to text "to_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "kxeh" as text "pyash-curated" from text "pyash authored" to text "kxeh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "kxeh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "to_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "kxeh" as text "en" from text "pyash-curated" to text "pyash authored" by text "kxeh" with text "a case marking the destination or goal of motion" at text "source-gloss" be text ya
 su name tlat kwon ob text "kxek" at text "entry" be text ya
 su name tlat kwon ob text "kxek" as text "en" from text "crab" to text "crab" at text "lexical-form" be text ya
 su name tlat kwon ob text "kxek" as text "zh" from text "蟹" to text "蟹" at text "lexical-form" be text ya
@@ -439573,12 +439726,19 @@ su name tlat kwon ob text "le7" at text "entry" be text ya
 su name tlat kwon ob text "le7" as text "en" from text "delayed_imperative_" to text "delayed_imperative_" at text "lexical-form" be text ya
 su name tlat kwon ob text "li" at text "entry" be text ya
 su name tlat kwon ob text "li" as text "en" from text "realis_mood_" to text "realis_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "li" as text "wiktionary" from text "en_all_nopic_2026-08" to text "realis_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "li" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "realis_mood" with text "A category of grammatical moods, the most common of which is the indicative mood, that indicate that something actually is, or is not, the case." at text "source-gloss" be text ya
 su name tlat kwon ob text "li7" at text "entry" be text ya
 su name tlat kwon ob text "li7" as text "en" from text "_ly_" to text "_ly_" at text "lexical-form" be text ya
 su name tlat kwon ob text "lo" at text "entry" be text ya
 su name tlat kwon ob text "lo" as text "en" from text "volitive_mood_" to text "volitive_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "lo" as text "pyash-curated" from text "pyash authored" to text "lo" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "lo" as text "wiktionary" from text "en_all_nopic_2026-08" to text "volitive_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "lo" as text "en" from text "pyash-curated" to text "pyash authored" by text "lo" with text "a mood expressing the speaker's will that the event occur" at text "source-gloss" be text ya
 su name tlat kwon ob text "lu" at text "entry" be text ya
 su name tlat kwon ob text "lu" as text "en" from text "speculative_mood_" to text "speculative_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "lu" as text "pyash-curated" from text "pyash authored" to text "lu" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "lu" as text "en" from text "pyash-curated" to text "pyash authored" by text "lu" with text "a mood presenting the statement as a guess about what may or will be the case" at text "source-gloss" be text ya
 su name tlat kwon ob text "lw6n" at text "entry" be text ya
 su name tlat kwon ob text "lw6n" as text "ar" from text "ﻱﺰﻠﻓ ﺮﺼﻨﻋ ﻡﻮﻧﺎﺜﻨﻠﻟﺍ" to text "ﻱﺰﻠﻓ ﺮﺼﻨﻋ ﻡﻮﻧﺎﺜﻨﻠﻟﺍ" at text "lexical-form" be text ya
 su name tlat kwon ob text "lw6n" as text "en" from text "atomic number 57" to text "atomic number 57" at text "lexical-form" be text ya
@@ -440075,6 +440235,9 @@ su name tlat kwon ob text "lwaf" as text "zh-Latn-pinyin" from text "yù" to tex
 su name tlat kwon ob text "lwaf" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "FlashDrive" by text "equivalent-to" at text "source-link" be text ya
 su name tlat kwon ob text "lwah" at text "entry" be text ya
 su name tlat kwon ob text "lwah" as text "en" from text "perlative_case_" to text "perlative_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "lwah" as text "pyash-curated" from text "pyash authored" to text "lwah" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "lwah" as text "wiktionary" from text "en_all_nopic_2026-08" to text "perlative_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "lwah" as text "en" from text "pyash-curated" to text "pyash authored" by text "lwah" with text "a case marking the path across or through which motion proceeds" at text "source-gloss" be text ya
 su name tlat kwon ob text "lwak" at text "entry" be text ya
 su name tlat kwon ob text "lwak" as text "en" from text "perlative_case" to text "perlative_case" at text "lexical-form" be text ya
 su name tlat kwon ob text "lwak hzan" at text "entry" be text ya
@@ -441573,6 +441736,8 @@ su name tlat kwon ob text "lwef" as text "uk" from text "Йеллоунайф" t
 su name tlat kwon ob text "lwef" as text "zh" from text "耶洛奈夫" to text "耶洛奈夫" at text "lexical-form" be text ya
 su name tlat kwon ob text "lweh" at text "entry" be text ya
 su name tlat kwon ob text "lweh" as text "en" from text "allative_case_" to text "allative_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "lweh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "allative_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "lweh" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "allative_case" with text "A case used to indicate movement onto, or to the adjacency of something. In English, this is usually expressed by the prepositions to or onto, as in \"to the house,\" \"onto the house.\" Languages that use the allative case include Basque, Dyirbal, Estonian, Finnish, Hungarian, and Lithuanian." at text "source-gloss" be text ya
 su name tlat kwon ob text "lwek" at text "entry" be text ya
 su name tlat kwon ob text "lwek" as text "en" from text "lever" to text "lever" at text "lexical-form" be text ya
 su name tlat kwon ob text "lwek" as text "zh" from text "柄" to text "柄" at text "lexical-form" be text ya
@@ -442109,6 +442274,8 @@ su name tlat kwon ob text "lwif srit" from text "lwif" at text "component" be te
 su name tlat kwon ob text "lwif srit" from text "srit" at text "component" be text ya
 su name tlat kwon ob text "lwih" at text "entry" be text ya
 su name tlat kwon ob text "lwih" as text "en" from text "delative_case_" to text "delative_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "lwih" as text "wiktionary" from text "en_all_nopic_2026-08" to text "delative_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "lwih" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "delative_case" with text "case used to indicate movement from an object. In English, this is usually expressed by the prepositions from or off of, as in \"down off of the house.\" Hungarian is a language that uses the delative case, see -ról." at text "source-gloss" be text ya
 su name tlat kwon ob text "lwik" at text "entry" be text ya
 su name tlat kwon ob text "lwik" as text "en" from text "allative_case" to text "allative_case" at text "lexical-form" be text ya
 su name tlat kwon ob text "lwim" at text "entry" be text ya
@@ -442870,6 +443037,9 @@ su name tlat kwon ob text "lwof" as text "zh-Latn-pinyin" from text "lā tuō w�
 su name tlat kwon ob text "lwof" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "Latvia" by text "equivalent-to" at text "source-link" be text ya
 su name tlat kwon ob text "lwoh" at text "entry" be text ya
 su name tlat kwon ob text "lwoh" as text "en" from text "locative_case_" to text "locative_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "lwoh" as text "pyash-curated" from text "pyash authored" to text "lwoh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "lwoh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "locative_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "lwoh" as text "en" from text "pyash-curated" to text "pyash authored" by text "lwoh" with text "a case marking the place where the action occurs" at text "source-gloss" be text ya
 su name tlat kwon ob text "lwok" at text "entry" be text ya
 su name tlat kwon ob text "lwok" as text "ar" from text "ﺭﺎﻌﺷ" to text "ﺭﺎﻌﺷ" at text "lexical-form" be text ya
 su name tlat kwon ob text "lwok" as text "ar" from text "شعار" to text "شعار" at text "lexical-form" be text ya
@@ -447347,6 +447517,9 @@ su name tlat kwon ob text "lyec syas" from text "lyec" at text "component" be te
 su name tlat kwon ob text "lyec syas" from text "syas" at text "component" be text ya
 su name tlat kwon ob text "lyeh" at text "entry" be text ya
 su name tlat kwon ob text "lyeh" as text "en" from text "atelic_aspect_" to text "atelic_aspect_" at text "lexical-form" be text ya
+su name tlat kwon ob text "lyeh" as text "pyash-curated" from text "pyash authored" to text "lyeh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "lyeh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "atelic_aspect" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "lyeh" as text "en" from text "pyash-curated" to text "pyash authored" by text "lyeh" with text "an aspect presenting the action as having no inherent endpoint" at text "source-gloss" be text ya
 su name tlat kwon ob text "lyek" at text "entry" be text ya
 su name tlat kwon ob text "lyek" as text "en" from text "latin" to text "latin" at text "lexical-form" be text ya
 su name tlat kwon ob text "lyek hdas" at text "entry" be text ya
@@ -451927,10 +452100,14 @@ su name tlat kwon ob text "ma" at text "entry" be text ya
 su name tlat kwon ob text "ma" as text "en" from text "destination_case_" to text "destination_case_" at text "lexical-form" be text ya
 su name tlat kwon ob text "ma" as text "zh" from text "对" to text "对" at text "lexical-form" be text ya
 su name tlat kwon ob text "ma" as text "zh-Latn-pinyin" from text "duì" to text "duì" at text "lexical-form" be text ya
+su name tlat kwon ob text "ma" as text "pyash-curated" from text "pyash authored" to text "ma" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "ma" as text "en" from text "pyash-curated" to text "pyash authored" by text "ma" with text "a case marking the place or thing toward which motion proceeds" at text "source-gloss" be text ya
 su name tlat kwon ob text "ma7" at text "entry" be text ya
 su name tlat kwon ob text "ma7" as text "en" from text "amount_of_substance_" to text "amount_of_substance_" at text "lexical-form" be text ya
 su name tlat kwon ob text "me" at text "entry" be text ya
 su name tlat kwon ob text "me" as text "en" from text "imperfective_aspect_" to text "imperfective_aspect_" at text "lexical-form" be text ya
+su name tlat kwon ob text "me" as text "wiktionary" from text "en_all_nopic_2026-08" to text "imperfective_aspect" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "me" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "imperfective_aspect" with text "A feature of a verb which denotes that its action or condition does not have a fixed temporal boundary, but is habitual, unfinished, continuous, repetitive or in progress." at text "source-gloss" be text ya
 su name tlat kwon ob text "mi" at text "entry" be text ya
 su name tlat kwon ob text "mi" as text "en" from text "me_" to text "me_" at text "lexical-form" be text ya
 su name tlat kwon ob text "mi" as text "yue-Latn-jyutping" from text "ngo5" to text "ngo5" at text "lexical-form" be text ya
@@ -451938,6 +452115,9 @@ su name tlat kwon ob text "mi" as text "zh" from text "我" to text "我" at tex
 su name tlat kwon ob text "mi" as text "zh-Latn-pinyin" from text "wǒ" to text "wǒ" at text "lexical-form" be text ya
 su name tlat kwon ob text "mo" at text "entry" be text ya
 su name tlat kwon ob text "mo" as text "en" from text "inclusive_person_" to text "inclusive_person_" at text "lexical-form" be text ya
+su name tlat kwon ob text "mo" as text "pyash-curated" from text "pyash authored" to text "mo" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "mo" as text "wiktionary" from text "en_all_nopic_2026-08" to text "inclusive_person" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "mo" as text "en" from text "pyash-curated" to text "pyash authored" by text "mo" with text "a first-person plural form that includes the person addressed" at text "source-gloss" be text ya
 su name tlat kwon ob text "mr67t" at text "entry" be text ya
 su name tlat kwon ob text "mr67t" as text "ar" from text "عضلة القلب" to text "عضلة القلب" at text "lexical-form" be text ya
 su name tlat kwon ob text "mr67t" as text "en" from text "myocardium" to text "myocardium" at text "lexical-form" be text ya
@@ -455199,6 +455379,9 @@ su name tlat kwon ob text "mref" as text "wordnet" from text "Open English WordN
 su name tlat kwon ob text "mref" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:03789586-n" with text "a railway having a single track" at text "source-gloss" be text ya
 su name tlat kwon ob text "mreh" at text "entry" be text ya
 su name tlat kwon ob text "mreh" as text "en" from text "momentane_aspect_" to text "momentane_aspect_" at text "lexical-form" be text ya
+su name tlat kwon ob text "mreh" as text "pyash-curated" from text "pyash authored" to text "mreh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "mreh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "momentane_aspect" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "mreh" as text "en" from text "pyash-curated" to text "pyash authored" by text "mreh" with text "an aspect presenting the action as a single brief instant" at text "source-gloss" be text ya
 su name tlat kwon ob text "mrek" at text "entry" be text ya
 su name tlat kwon ob text "mrek" as text "ar" from text "ذهل" to text "ذهل" at text "lexical-form" be text ya
 su name tlat kwon ob text "mrek" as text "ar" from text "ﺶﻫﺪﺗ" to text "ﺶﻫﺪﺗ" at text "lexical-form" be text ya
@@ -459817,6 +460000,8 @@ su name tlat kwon ob text "mrut zwas" from text "mrut" at text "component" be te
 su name tlat kwon ob text "mrut zwas" from text "zwas" at text "component" be text ya
 su name tlat kwon ob text "mu" at text "entry" be text ya
 su name tlat kwon ob text "mu" as text "en" from text "commissive_mood_" to text "commissive_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "mu" as text "wiktionary" from text "en_all_nopic_2026-08" to text "commissive_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "mu" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "commissive_mood" with text "A grammatical mood that indicates promises or threats." at text "source-gloss" be text ya
 su name tlat kwon ob text "mw6n" at text "entry" be text ya
 su name tlat kwon ob text "mw6n" as text "ar" from text "ﺎﻴﻧﻭﺪﻘﻣ" to text "ﺎﻴﻧﻭﺪﻘﻣ" at text "lexical-form" be text ya
 su name tlat kwon ob text "mw6n" as text "en" from text "macedonia" to text "macedonia" at text "lexical-form" be text ya
@@ -460211,6 +460396,8 @@ su name tlat kwon ob text "mwah" at text "entry" be text ya
 su name tlat kwon ob text "mwah" as text "en" from text "comitative_case_" to text "comitative_case_" at text "lexical-form" be text ya
 su name tlat kwon ob text "mwah" as text "zh" from text "跟" to text "跟" at text "lexical-form" be text ya
 su name tlat kwon ob text "mwah" as text "zh-Latn-pinyin" from text "gēn" to text "gēn" at text "lexical-form" be text ya
+su name tlat kwon ob text "mwah" as text "wiktionary" from text "en_all_nopic_2026-08" to text "comitative_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "mwah" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "comitative_case" with text "Noun case used to denote companionship. In English, this is usually expressed by the prepositional phrase in company with, together with or with, as in \"with the house.\" Languages that use the comitative case include Estonian, Finnish, Hungarian, Inari Sami, Northern Sami, Skolt Sami, and Quechua. It is also found in many Australian Aboriginal languages, where it is commonly used to form names of places and languages." at text "source-gloss" be text ya
 su name tlat kwon ob text "mwak" at text "entry" be text ya
 su name tlat kwon ob text "mwak" as text "en" from text "pile" to text "pile" at text "lexical-form" be text ya
 su name tlat kwon ob text "mwak" as text "yue-Latn-jyutping" from text "zong1" to text "zong1" at text "lexical-form" be text ya
@@ -461880,6 +462067,9 @@ su name tlat kwon ob text "mwec" as text "wordnet" from text "Open English WordN
 su name tlat kwon ob text "mwec" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "r:00221970-r" with text "in an unambiguous manner; she stated her intentions unequivocally" at text "source-gloss" be text ya
 su name tlat kwon ob text "mweh" at text "entry" be text ya
 su name tlat kwon ob text "mweh" as text "en" from text "completive_aspect_" to text "completive_aspect_" at text "lexical-form" be text ya
+su name tlat kwon ob text "mweh" as text "pyash-curated" from text "pyash authored" to text "mweh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "mweh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "completive_aspect" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "mweh" as text "en" from text "pyash-curated" to text "pyash authored" by text "mweh" with text "an aspect presenting the action as carried through to completion" at text "source-gloss" be text ya
 su name tlat kwon ob text "mwek" at text "entry" be text ya
 su name tlat kwon ob text "mwek" as text "ar" from text "الإمارات" to text "الإمارات" at text "lexical-form" be text ya
 su name tlat kwon ob text "mwek" as text "en" from text "emirates" to text "emirates" at text "lexical-form" be text ya
@@ -462850,6 +463040,9 @@ su name tlat kwon ob text "mwih" as text "en" from text "permissive_mood_" to te
 su name tlat kwon ob text "mwih" as text "zh" from text "可" to text "可" at text "lexical-form" be text ya
 su name tlat kwon ob text "mwih" as text "zh-Latn-pinyin" from text "kè" to text "kè" at text "lexical-form" be text ya
 su name tlat kwon ob text "mwih" as text "zh-Latn-pinyin" from text "kě" to text "kě" at text "lexical-form" be text ya
+su name tlat kwon ob text "mwih" as text "pyash-curated" from text "pyash authored" to text "mwih" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "mwih" as text "wiktionary" from text "en_all_nopic_2026-08" to text "permissive_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "mwih" as text "en" from text "pyash-curated" to text "pyash authored" by text "mwih" with text "a mood granting permission for the event" at text "source-gloss" be text ya
 su name tlat kwon ob text "mwik" at text "entry" be text ya
 su name tlat kwon ob text "mwik" as text "en" from text "magnetic" to text "magnetic" at text "lexical-form" be text ya
 su name tlat kwon ob text "mwik" as text "zh" from text "磁" to text "磁" at text "lexical-form" be text ya
@@ -465853,6 +466046,8 @@ su name tlat kwon ob text "myah" as text "en" from text "temporal_case_" to text
 su name tlat kwon ob text "myah" as text "zh" from text "当" to text "当" at text "lexical-form" be text ya
 su name tlat kwon ob text "myah" as text "zh-Latn-pinyin" from text "dàng" to text "dàng" at text "lexical-form" be text ya
 su name tlat kwon ob text "myah" as text "zh-Latn-pinyin" from text "dāng" to text "dāng" at text "lexical-form" be text ya
+su name tlat kwon ob text "myah" as text "wiktionary" from text "en_all_nopic_2026-08" to text "temporal_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "myah" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "temporal_case" with text "A noun case used to specify a time. In English, this is usually expressed by the preposition \"at,\" as in \"at six o’clock,\" \"at midnight,\" \"at Christmas.\" Hungarian is a language that uses the temporal case." at text "source-gloss" be text ya
 su name tlat kwon ob text "myak" at text "entry" be text ya
 su name tlat kwon ob text "myak" as text "en" from text "march" to text "march" at text "lexical-form" be text ya
 su name tlat kwon ob text "myak" as text "zh" from text "钲" to text "钲" at text "lexical-form" be text ya
@@ -471794,6 +471989,8 @@ su name tlat kwon ob text "myof kcan" from text "myof" at text "component" be te
 su name tlat kwon ob text "myof kcan" from text "kcan" at text "component" be text ya
 su name tlat kwon ob text "myoh" at text "entry" be text ya
 su name tlat kwon ob text "myoh" as text "en" from text "middle_voice_" to text "middle_voice_" at text "lexical-form" be text ya
+su name tlat kwon ob text "myoh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "middle_voice" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "myoh" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "middle_voice" with text "A voice that is neither active nor passive, because the subject of the verb cannot be unambiguously categorized as either agent or patient, having elements of both." at text "source-gloss" be text ya
 su name tlat kwon ob text "myok" at text "entry" be text ya
 su name tlat kwon ob text "myok" as text "en" from text "mosaic" to text "mosaic" at text "lexical-form" be text ya
 su name tlat kwon ob text "myok hdik" at text "entry" be text ya
@@ -473832,12 +474029,18 @@ su name tlat kwon ob text "myut tsec" from text "myut" at text "component" be te
 su name tlat kwon ob text "myut tsec" from text "tsec" at text "component" be text ya
 su name tlat kwon ob text "n6" at text "entry" be text ya
 su name tlat kwon ob text "n6" as text "en" from text "sensory_evidential_mood_" to text "sensory_evidential_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "n6" as text "pyash-curated" from text "pyash authored" to text "n6" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "n6" as text "en" from text "pyash-curated" to text "pyash authored" by text "n6" with text "a mood marking the statement as based on the speaker's own sensory observation" at text "source-gloss" be text ya
 su name tlat kwon ob text "na" at text "entry" be text ya
 su name tlat kwon ob text "na" as text "en" from text "nominative_case_" to text "nominative_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "na" as text "wiktionary" from text "en_all_nopic_2026-08" to text "nominative_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "na" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "nominative_case" with text "The case used to indicate the subject—or agent—of a finite verb." at text "source-gloss" be text ya
 su name tlat kwon ob text "na2" at text "entry" be text ya
 su name tlat kwon ob text "na2" as text "en" from text "_naphthol_" to text "_naphthol_" at text "lexical-form" be text ya
 su name tlat kwon ob text "ne" at text "entry" be text ya
 su name tlat kwon ob text "ne" as text "en" from text "masculine_gender_" to text "masculine_gender_" at text "lexical-form" be text ya
+su name tlat kwon ob text "ne" as text "pyash-curated" from text "pyash authored" to text "ne" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "ne" as text "en" from text "pyash-curated" to text "pyash authored" by text "ne" with text "a noun class whose members take masculine agreement" at text "source-gloss" be text ya
 su name tlat kwon ob text "ne2" at text "entry" be text ya
 su name tlat kwon ob text "ne2" as text "en" from text "nth_power_" to text "nth_power_" at text "lexical-form" be text ya
 su name tlat kwon ob text "ni" at text "entry" be text ya
@@ -478901,6 +479104,8 @@ su name tlat kwon ob text "nri7c txic" from text "nri7c" at text "component" be 
 su name tlat kwon ob text "nri7c txic" from text "txic" at text "component" be text ya
 su name tlat kwon ob text "nri7h" at text "entry" be text ya
 su name tlat kwon ob text "nri7h" as text "en" from text "inanimate_gender_" to text "inanimate_gender_" at text "lexical-form" be text ya
+su name tlat kwon ob text "nri7h" as text "pyash-curated" from text "pyash authored" to text "nri7h" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "nri7h" as text "en" from text "pyash-curated" to text "pyash authored" by text "nri7h" with text "a noun class whose members are non-living things" at text "source-gloss" be text ya
 su name tlat kwon ob text "nri7k" at text "entry" be text ya
 su name tlat kwon ob text "nri7k" as text "en" from text "ventricle" to text "ventricle" at text "lexical-form" be text ya
 su name tlat kwon ob text "nri7k hdet" at text "entry" be text ya
@@ -479223,6 +479428,8 @@ su name tlat kwon ob text "nrif hvuk" from text "nrif" at text "component" be te
 su name tlat kwon ob text "nrif hvuk" from text "hvuk" at text "component" be text ya
 su name tlat kwon ob text "nrih" at text "entry" be text ya
 su name tlat kwon ob text "nrih" as text "en" from text "anthropic_gender_" to text "anthropic_gender_" at text "lexical-form" be text ya
+su name tlat kwon ob text "nrih" as text "pyash-curated" from text "pyash authored" to text "nrih" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "nrih" as text "en" from text "pyash-curated" to text "pyash authored" by text "nrih" with text "a noun class whose members are human beings" at text "source-gloss" be text ya
 su name tlat kwon ob text "nrik" at text "entry" be text ya
 su name tlat kwon ob text "nrik" as text "en" from text "definite article" to text "definite article" at text "lexical-form" be text ya
 su name tlat kwon ob text "nrik" as text "en" from text "definite_article" to text "definite_article" at text "lexical-form" be text ya
@@ -483002,6 +483209,9 @@ su name tlat kwon ob text "nwaf" as text "wordnet" from text "Open English WordN
 su name tlat kwon ob text "nwaf" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:13600713-n" with text "a data transmission rate; the maximum amount of information (bits/second) that can be transmitted along a channel" at text "source-gloss" be text ya
 su name tlat kwon ob text "nwah" at text "entry" be text ya
 su name tlat kwon ob text "nwah" as text "en" from text "evidential_case_" to text "evidential_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "nwah" as text "pyash-curated" from text "pyash authored" to text "nwah" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "nwah" as text "wiktionary" from text "en_all_nopic_2026-08" to text "evidential_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "nwah" as text "en" from text "pyash-curated" to text "pyash authored" by text "nwah" with text "a case marking the source of the speaker's information" at text "source-gloss" be text ya
 su name tlat kwon ob text "nwak" at text "entry" be text ya
 su name tlat kwon ob text "nwak" as text "ar" from text "ﻲﻧﺎﺜﻟﺍ ﻥﻮﻧﺎﻛ" to text "ﻲﻧﺎﺜﻟﺍ ﻥﻮﻧﺎﻛ" at text "lexical-form" be text ya
 su name tlat kwon ob text "nwak" as text "ar" from text "يناير" to text "يناير" at text "lexical-form" be text ya
@@ -485725,6 +485935,8 @@ su name tlat kwon ob text "nwec zlan" from text "nwec" at text "component" be te
 su name tlat kwon ob text "nwec zlan" from text "zlan" at text "component" be text ya
 su name tlat kwon ob text "nweh" at text "entry" be text ya
 su name tlat kwon ob text "nweh" as text "en" from text "inessive_case_" to text "inessive_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "nweh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "inessive_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "nweh" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "inessive_case" with text "A noun case used to indicate location inside something. In English, this is usually expressed by the prepositions \"in\" or \"inside\". Languages that use the inessive case include Finnish, Hungarian, Estonian, Ossetian, and Erzya." at text "source-gloss" be text ya
 su name tlat kwon ob text "nwek" at text "entry" be text ya
 su name tlat kwon ob text "nwek" as text "ar" from text "ﺔﺛﺍﺭﻮﻟﺍ ﻢﻠﻋ" to text "ﺔﺛﺍﺭﻮﻟﺍ ﻢﻠﻋ" at text "lexical-form" be text ya
 su name tlat kwon ob text "nwek" as text "en" from text "genetic science" to text "genetic science" at text "lexical-form" be text ya
@@ -487331,6 +487543,9 @@ su name tlat kwon ob text "nwof hlup" from text "nwof" at text "component" be te
 su name tlat kwon ob text "nwof hlup" from text "hlup" at text "component" be text ya
 su name tlat kwon ob text "nwoh" at text "entry" be text ya
 su name tlat kwon ob text "nwoh" as text "en" from text "eventive_mood_" to text "eventive_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "nwoh" as text "pyash-curated" from text "pyash authored" to text "nwoh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "nwoh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "eventive_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "nwoh" as text "en" from text "pyash-curated" to text "pyash authored" by text "nwoh" with text "a mood presenting the event as actually occurring rather than as possible or wished" at text "source-gloss" be text ya
 su name tlat kwon ob text "nwok" at text "entry" be text ya
 su name tlat kwon ob text "nwok" as text "ar" from text "ﻰﻟﺰﻨﻤﻟﺍ ﺐﺟﺍﻮﻟﺍ" to text "ﻰﻟﺰﻨﻤﻟﺍ ﺐﺟﺍﻮﻟﺍ" at text "lexical-form" be text ya
 su name tlat kwon ob text "nwok" as text "ar" from text "ﻲﻟﺰﻨﻣ ﺐﺟﺍﻭ" to text "ﻲﻟﺰﻨﻣ ﺐﺟﺍﻭ" at text "lexical-form" be text ya
@@ -488057,6 +488272,8 @@ su name tlat kwon ob text "nwuc" as text "zh-Latn-pinyin" from text "jiàng" to 
 su name tlat kwon ob text "nwuc" as text "zh-Latn-pinyin" from text "xiáng" to text "xiáng" at text "lexical-form" be text ya
 su name tlat kwon ob text "nwuh" at text "entry" be text ya
 su name tlat kwon ob text "nwuh" as text "en" from text "research_gender_" to text "research_gender_" at text "lexical-form" be text ya
+su name tlat kwon ob text "nwuh" as text "pyash-curated" from text "pyash authored" to text "nwuh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "nwuh" as text "en" from text "pyash-curated" to text "pyash authored" by text "nwuh" with text "a noun class whose members are inquiries and studies" at text "source-gloss" be text ya
 su name tlat kwon ob text "nwuk" at text "entry" be text ya
 su name tlat kwon ob text "nwuk" as text "en" from text "unique" to text "unique" at text "lexical-form" be text ya
 su name tlat kwon ob text "nwuk" as text "zh" from text "特" to text "特" at text "lexical-form" be text ya
@@ -492638,6 +492855,8 @@ su name tlat kwon ob text "nyef sri7p" from text "nyef" at text "component" be t
 su name tlat kwon ob text "nyef sri7p" from text "sri7p" at text "component" be text ya
 su name tlat kwon ob text "nyeh" at text "entry" be text ya
 su name tlat kwon ob text "nyeh" as text "en" from text "initiative_case_" to text "initiative_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "nyeh" as text "pyash-curated" from text "pyash authored" to text "nyeh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "nyeh" as text "en" from text "pyash-curated" to text "pyash authored" by text "nyeh" with text "a case marking the participant who initiates an action, distinct from the one who completes it" at text "source-gloss" be text ya
 su name tlat kwon ob text "nyek" at text "entry" be text ya
 su name tlat kwon ob text "nyek" as text "en" from text "nickel" to text "nickel" at text "lexical-form" be text ya
 su name tlat kwon ob text "nyek" as text "yue-Latn-jyutping" from text "nip1" to text "nip1" at text "lexical-form" be text ya
@@ -497354,6 +497573,8 @@ su name tlat kwon ob text "pa" at text "entry" be text ya
 su name tlat kwon ob text "pa" as text "en" from text "person_context_" to text "person_context_" at text "lexical-form" be text ya
 su name tlat kwon ob text "pc6h" at text "entry" be text ya
 su name tlat kwon ob text "pc6h" as text "en" from text "trial_number_" to text "trial_number_" at text "lexical-form" be text ya
+su name tlat kwon ob text "pc6h" as text "wiktionary" from text "en_all_nopic_2026-08" to text "trial_number" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "pc6h" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "trial_number" with text "Grammatical number denoting a quantity of exactly three." at text "source-gloss" be text ya
 su name tlat kwon ob text "pc6n" at text "entry" be text ya
 su name tlat kwon ob text "pc6n" as text "en" from text "trial_number" to text "trial_number" at text "lexical-form" be text ya
 su name tlat kwon ob text "pc6t" at text "entry" be text ya
@@ -501379,6 +501600,9 @@ su name tlat kwon ob text "pcef tsuc" from text "pcef" at text "component" be te
 su name tlat kwon ob text "pcef tsuc" from text "tsuc" at text "component" be text ya
 su name tlat kwon ob text "pceh" at text "entry" be text ya
 su name tlat kwon ob text "pceh" as text "en" from text "apprehensive_mood_" to text "apprehensive_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "pceh" as text "pyash-curated" from text "pyash authored" to text "pceh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "pceh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "apprehensive_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "pceh" as text "en" from text "pyash-curated" to text "pyash authored" by text "pceh" with text "a mood expressing fear that the event may occur" at text "source-gloss" be text ya
 su name tlat kwon ob text "pcek" at text "entry" be text ya
 su name tlat kwon ob text "pcek" as text "ar" from text "خطف" to text "خطف" at text "lexical-form" be text ya
 su name tlat kwon ob text "pcek" as text "ar" from text "ﻒﻄﺧ" to text "ﻒﻄﺧ" at text "lexical-form" be text ya
@@ -502463,6 +502687,8 @@ su name tlat kwon ob text "pcif pyik" from text "pcif" at text "component" be te
 su name tlat kwon ob text "pcif pyik" from text "pyik" at text "component" be text ya
 su name tlat kwon ob text "pcih" at text "entry" be text ya
 su name tlat kwon ob text "pcih" as text "en" from text "imperative_mood_" to text "imperative_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "pcih" as text "wiktionary" from text "en_all_nopic_2026-08" to text "imperative_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "pcih" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "imperative_mood" with text "The grammatical mood generally expressing a command, though also used to express a request or permission." at text "source-gloss" be text ya
 su name tlat kwon ob text "pcik" at text "entry" be text ya
 su name tlat kwon ob text "pcik" as text "ar" from text "ظاهريا" to text "ظاهريا" at text "lexical-form" be text ya
 su name tlat kwon ob text "pcik" as text "ar" from text "على ما يبدو" to text "على ما يبدو" at text "lexical-form" be text ya
@@ -509187,6 +509413,8 @@ su name tlat kwon ob text "pfif tyif" from text "pfif" at text "component" be te
 su name tlat kwon ob text "pfif tyif" from text "tyif" at text "component" be text ya
 su name tlat kwon ob text "pfih" at text "entry" be text ya
 su name tlat kwon ob text "pfih" as text "en" from text "progressive_aspect_" to text "progressive_aspect_" at text "lexical-form" be text ya
+su name tlat kwon ob text "pfih" as text "wiktionary" from text "en_all_nopic_2026-08" to text "progressive_aspect" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "pfih" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "progressive_aspect" with text "A grammatical aspect that expresses the dynamic quality of actions that are in progress." at text "source-gloss" be text ya
 su name tlat kwon ob text "pfik" at text "entry" be text ya
 su name tlat kwon ob text "pfik" as text "en" from text "vindication" to text "vindication" at text "lexical-form" be text ya
 su name tlat kwon ob text "pfik cruc" at text "entry" be text ya
@@ -512763,8 +512991,13 @@ su name tlat kwon ob text "pi" at text "entry" be text ya
 su name tlat kwon ob text "pi" as text "en" from text "surface_context_" to text "surface_context_" at text "lexical-form" be text ya
 su name tlat kwon ob text "pi2" at text "entry" be text ya
 su name tlat kwon ob text "pi2" as text "en" from text "planetary_gender_" to text "planetary_gender_" at text "lexical-form" be text ya
+su name tlat kwon ob text "pi2" as text "pyash-curated" from text "pyash authored" to text "pi2" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "pi2" as text "en" from text "pyash-curated" to text "pyash authored" by text "pi2" with text "a noun class whose members are planets" at text "source-gloss" be text ya
 su name tlat kwon ob text "pi7" at text "entry" be text ya
 su name tlat kwon ob text "pi7" as text "en" from text "propositive_mood_" to text "propositive_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "pi7" as text "pyash-curated" from text "pyash authored" to text "pi7" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "pi7" as text "wiktionary" from text "en_all_nopic_2026-08" to text "propositive_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "pi7" as text "en" from text "pyash-curated" to text "pyash authored" by text "pi7" with text "a mood proposing a course of action for the group to take" at text "source-gloss" be text ya
 su name tlat kwon ob text "pl6c" at text "entry" be text ya
 su name tlat kwon ob text "pl6c" as text "en" from text "panache" to text "panache" at text "lexical-form" be text ya
 su name tlat kwon ob text "pl6c" as text "yue-Latn-jyutping" from text "lou6" to text "lou6" at text "lexical-form" be text ya
@@ -520953,6 +521186,8 @@ su name tlat kwon ob text "pluc" at text "entry" be text ya
 su name tlat kwon ob text "pluc" as text "en" from text "paucal_number" to text "paucal_number" at text "lexical-form" be text ya
 su name tlat kwon ob text "pluh" at text "entry" be text ya
 su name tlat kwon ob text "pluh" as text "en" from text "superlative_degree_" to text "superlative_degree_" at text "lexical-form" be text ya
+su name tlat kwon ob text "pluh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "superlative_degree" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "pluh" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "superlative_degree" with text "The degree of comparison of an adjective or adverb used when comparing three or more entities in terms of a certain property or a certain way of doing something. In English, the superlative of superiority is formed by adding the suffix -est or the word most (e.g. biggest, most fully); the superlative of inferiority, by adding the word least (e.g. least big, least fully)." at text "source-gloss" be text ya
 su name tlat kwon ob text "pluk" at text "entry" be text ya
 su name tlat kwon ob text "pluk" as text "en" from text "assess" to text "assess" at text "lexical-form" be text ya
 su name tlat kwon ob text "pluk" as text "zh" from text "絜" to text "絜" at text "lexical-form" be text ya
@@ -523236,6 +523471,9 @@ su name tlat kwon ob text "plut xyot" from text "plut" at text "component" be te
 su name tlat kwon ob text "plut xyot" from text "xyot" at text "component" be text ya
 su name tlat kwon ob text "po" at text "entry" be text ya
 su name tlat kwon ob text "po" as text "en" from text "paucal_number_" to text "paucal_number_" at text "lexical-form" be text ya
+su name tlat kwon ob text "po" as text "pyash-curated" from text "pyash authored" to text "po" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "po" as text "wiktionary" from text "en_all_nopic_2026-08" to text "paucal_number" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "po" as text "en" from text "pyash-curated" to text "pyash authored" by text "po" with text "a number marking a small countable quantity, more than a few but fewer than many" at text "source-gloss" be text ya
 su name tlat kwon ob text "pr6c" at text "entry" be text ya
 su name tlat kwon ob text "pr6c" as text "en" from text "interpenetration" to text "interpenetration" at text "lexical-form" be text ya
 su name tlat kwon ob text "pr6c hfon" at text "entry" be text ya
@@ -531654,6 +531892,9 @@ su name tlat kwon ob text "pruf hbon" from text "pruf" at text "component" be te
 su name tlat kwon ob text "pruf hbon" from text "hbon" at text "component" be text ya
 su name tlat kwon ob text "pruh" at text "entry" be text ya
 su name tlat kwon ob text "pruh" as text "en" from text "imprecative_mood_" to text "imprecative_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "pruh" as text "pyash-curated" from text "pyash authored" to text "pruh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "pruh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "imprecative_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "pruh" as text "en" from text "pyash-curated" to text "pyash authored" by text "pruh" with text "a mood expressing a curse or malediction" at text "source-gloss" be text ya
 su name tlat kwon ob text "pruk" at text "entry" be text ya
 su name tlat kwon ob text "pruk" as text "ar" from text "ﺖﻛﺭﺎﻣ ﺮﺑﻮﺳ" to text "ﺖﻛﺭﺎﻣ ﺮﺑﻮﺳ" at text "lexical-form" be text ya
 su name tlat kwon ob text "pruk" as text "en" from text "supermarket" to text "supermarket" at text "lexical-form" be text ya
@@ -540353,6 +540594,9 @@ su name tlat kwon ob text "psif srit" from text "psif" at text "component" be te
 su name tlat kwon ob text "psif srit" from text "srit" at text "component" be text ya
 su name tlat kwon ob text "psih" at text "entry" be text ya
 su name tlat kwon ob text "psih" as text "en" from text "optative_mood_" to text "optative_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "psih" as text "pyash-curated" from text "pyash authored" to text "psih" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "psih" as text "wiktionary" from text "en_all_nopic_2026-08" to text "optative_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "psih" as text "en" from text "pyash-curated" to text "pyash authored" by text "psih" with text "a mood expressing a wish for the event to occur" at text "source-gloss" be text ya
 su name tlat kwon ob text "psik" at text "entry" be text ya
 su name tlat kwon ob text "psik" as text "en" from text "speaker" to text "speaker" at text "lexical-form" be text ya
 su name tlat kwon ob text "psik crak" at text "entry" be text ya
@@ -543290,6 +543534,8 @@ su name tlat kwon ob text "psuf" as text "en" from text "wordnet" to text "Open 
 su name tlat kwon ob text "psuf" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:09371357-n" with text "a block of the earth's crust bounded by faults and shifted to form peaks of a mountain range" at text "source-gloss" be text ya
 su name tlat kwon ob text "psuh" at text "entry" be text ya
 su name tlat kwon ob text "psuh" as text "en" from text "superessive_case_" to text "superessive_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "psuh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "superessive_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "psuh" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "superessive_case" with text "Noun case used to indicate location on an object. In English, it roughly corresponds to the prepositions \"on\" or \"on top of\", as in \"on top of the house\". Hungarian is a language that uses the superessive case." at text "source-gloss" be text ya
 su name tlat kwon ob text "psuk" at text "entry" be text ya
 su name tlat kwon ob text "psuk" as text "en" from text "broken" to text "broken" at text "lexical-form" be text ya
 su name tlat kwon ob text "psuk" as text "zh" from text "坏" to text "坏" at text "lexical-form" be text ya
@@ -544528,6 +544774,9 @@ su name tlat kwon ob text "pu" at text "entry" be text ya
 su name tlat kwon ob text "pu" as text "en" from text "plural_number_" to text "plural_number_" at text "lexical-form" be text ya
 su name tlat kwon ob text "pu" as text "zh" from text "们" to text "们" at text "lexical-form" be text ya
 su name tlat kwon ob text "pu" as text "zh-Latn-pinyin" from text "men" to text "men" at text "lexical-form" be text ya
+su name tlat kwon ob text "pu" as text "pyash-curated" from text "pyash authored" to text "pu" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "pu" as text "wiktionary" from text "en_all_nopic_2026-08" to text "plural_number" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "pu" as text "en" from text "pyash-curated" to text "pyash authored" by text "pu" with text "a number marking more than one referent" at text "source-gloss" be text ya
 su name tlat kwon ob text "pw6n" at text "entry" be text ya
 su name tlat kwon ob text "pw6n" as text "ar" from text "العوالق" to text "العوالق" at text "lexical-form" be text ya
 su name tlat kwon ob text "pw6n" as text "en" from text "plankton" to text "plankton" at text "lexical-form" be text ya
@@ -546015,6 +546264,10 @@ su name tlat kwon ob text "pwah" as text "en" from text "benefactive_case_" to t
 su name tlat kwon ob text "pwah" as text "zh" from text "为" to text "为" at text "lexical-form" be text ya
 su name tlat kwon ob text "pwah" as text "zh-Latn-pinyin" from text "wéi" to text "wéi" at text "lexical-form" be text ya
 su name tlat kwon ob text "pwah" as text "zh-Latn-pinyin" from text "wèi" to text "wèi" at text "lexical-form" be text ya
+su name tlat kwon ob text "pwah" as text "pyash-curated" from text "pyash authored" to text "pwah" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "pwah" as text "wiktionary" from text "en_all_nopic_2026-08" to text "benefactive_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "pwah" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "benefactive_case" with text "A case used to indicate beneficiary, or the receiver of the benefit, roughly corresponding to English prepositions such as for, for the benefit of, in the interests of, intended for, or on behalf of." at text "source-gloss" be text ya
+su name tlat kwon ob text "pwah" as text "en" from text "pyash-curated" to text "pyash authored" by text "pwah" with text "a case marking the participant for whose benefit the action occurs" at text "source-gloss" be text ya
 su name tlat kwon ob text "pwak" at text "entry" be text ya
 su name tlat kwon ob text "pwak" as text "en" from text "box" to text "box" at text "lexical-form" be text ya
 su name tlat kwon ob text "pwak" as text "yue-Latn-jyutping" from text "kwaang1" to text "kwaang1" at text "lexical-form" be text ya
@@ -549338,6 +549591,8 @@ su name tlat kwon ob text "pwif" at text "entry" be text ya
 su name tlat kwon ob text "pwif" as text "en" from text "preview" to text "preview" at text "lexical-form" be text ya
 su name tlat kwon ob text "pwih" at text "entry" be text ya
 su name tlat kwon ob text "pwih" as text "en" from text "ablative_case_" to text "ablative_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "pwih" as text "wiktionary" from text "en_all_nopic_2026-08" to text "ablative_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "pwih" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "ablative_case" with text "A noun case used in some languages to indicate movement away from something, removal, separation. In English grammar, it corresponds roughly to the use in English of prepositions \"of\", \"from\", \"away from\", and \"concerning\". In Latin grammar, the ablative case (cāsus ablātīvus) includes functions derived from the Indo-European ablative, instrumental, comitative, associative and locative cases; these cases express concepts similar to those of the English prepositions \"of\"/\"from\", \"by\", \"with\", \"to\"/\"with\", and \"at\"/\"in\", respectively. Here/hence/hither, there/thence/thither, and where/whence/whither are the only English words with separate forms for the ablative (motion away from) and lative (motion towards) cases." at text "source-gloss" be text ya
 su name tlat kwon ob text "pwik" at text "entry" be text ya
 su name tlat kwon ob text "pwik" as text "en" from text "perspective" to text "perspective" at text "lexical-form" be text ya
 su name tlat kwon ob text "pwik" as text "en" from text "position" to text "position" at text "lexical-form" be text ya
@@ -552148,6 +552403,8 @@ su name tlat kwon ob text "pxef myic" from text "pxef" at text "component" be te
 su name tlat kwon ob text "pxef myic" from text "myic" at text "component" be text ya
 su name tlat kwon ob text "pxeh" at text "entry" be text ya
 su name tlat kwon ob text "pxeh" as text "en" from text "partitive_case_" to text "partitive_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "pxeh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "partitive_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "pxeh" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "partitive_case" with text "A noun case used to indicate that an object is affected only partially by the verb, or that the effect is not real. It often corresponds roughly to the English words \"some\" or \"any.\" It is similar in many ways to the genitive case. Some languages that make use of the partitive case include Finnish and Estonian." at text "source-gloss" be text ya
 su name tlat kwon ob text "pxek" at text "entry" be text ya
 su name tlat kwon ob text "pxek" as text "en" from text "prehistoric" to text "prehistoric" at text "lexical-form" be text ya
 su name tlat kwon ob text "pxek gyac" at text "entry" be text ya
@@ -553877,6 +554134,8 @@ su name tlat kwon ob text "pxof kyip" from text "pxof" at text "component" be te
 su name tlat kwon ob text "pxof kyip" from text "kyip" at text "component" be text ya
 su name tlat kwon ob text "pxoh" at text "entry" be text ya
 su name tlat kwon ob text "pxoh" as text "en" from text "prolative_case_" to text "prolative_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "pxoh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "prolative_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "pxoh" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "prolative_case" with text "A declension, in some languages, of a noun or pronoun that has the basic meaning of \"by way of\"." at text "source-gloss" be text ya
 su name tlat kwon ob text "pxok" at text "entry" be text ya
 su name tlat kwon ob text "pxok" as text "en" from text "pastoral" to text "pastoral" at text "lexical-form" be text ya
 su name tlat kwon ob text "pxok hmik" at text "entry" be text ya
@@ -557910,6 +558169,8 @@ su name tlat kwon ob text "pyaf zwit" from text "zwit" at text "component" be te
 su name tlat kwon ob text "pyah" at text "entry" be text ya
 su name tlat kwon ob text "pyah" as text "en" from text "love_gender_" to text "love_gender_" at text "lexical-form" be text ya
 su name tlat kwon ob text "pyah" as text "isv" from text "лјубпол" to text "лјубпол" at text "lexical-form" be text ya
+su name tlat kwon ob text "pyah" as text "pyash-curated" from text "pyash authored" to text "pyah" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "pyah" as text "en" from text "pyash-curated" to text "pyash authored" by text "pyah" with text "a noun class whose members are affections and bonds of attachment" at text "source-gloss" be text ya
 su name tlat kwon ob text "pyak" at text "entry" be text ya
 su name tlat kwon ob text "pyak" as text "en" from text "brother" to text "brother" at text "lexical-form" be text ya
 su name tlat kwon ob text "pyak" as text "zh" from text "哥" to text "哥" at text "lexical-form" be text ya
@@ -560722,6 +560983,9 @@ su name tlat kwon ob text "pyi7f" as text "uk" from text "пирогів очи�
 su name tlat kwon ob text "pyi7f" as text "zh" from text "馅饼眼" to text "馅饼眼" at text "lexical-form" be text ya
 su name tlat kwon ob text "pyi7h" at text "entry" be text ya
 su name tlat kwon ob text "pyi7h" as text "en" from text "applicative_voice_" to text "applicative_voice_" at text "lexical-form" be text ya
+su name tlat kwon ob text "pyi7h" as text "pyash-curated" from text "pyash authored" to text "pyi7h" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "pyi7h" as text "wiktionary" from text "en_all_nopic_2026-08" to text "applicative_voice" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "pyi7h" as text "en" from text "pyash-curated" to text "pyash authored" by text "pyi7h" with text "a voice promoting an oblique participant to a core argument role" at text "source-gloss" be text ya
 su name tlat kwon ob text "pyi7k" at text "entry" be text ya
 su name tlat kwon ob text "pyi7k" as text "ar" from text "البيريدين" to text "البيريدين" at text "lexical-form" be text ya
 su name tlat kwon ob text "pyi7k" as text "en" from text "pyridine" to text "pyridine" at text "lexical-form" be text ya
@@ -563031,6 +563295,8 @@ su name tlat kwon ob text "pyoc" as text "zh-Latn-pinyin" from text "bō lì ní
 su name tlat kwon ob text "pyoc" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "FrenchPolynesia" by text "superclass-of" at text "source-link" be text ya
 su name tlat kwon ob text "pyoh" at text "entry" be text ya
 su name tlat kwon ob text "pyoh" as text "en" from text "passive_voice_" to text "passive_voice_" at text "lexical-form" be text ya
+su name tlat kwon ob text "pyoh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "passive_voice" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "pyoh" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "passive_voice" with text "The form of a transitive verb in which its subject receives the action." at text "source-gloss" be text ya
 su name tlat kwon ob text "pyok" at text "entry" be text ya
 su name tlat kwon ob text "pyok" as text "ar" from text "قذيفة" to text "قذيفة" at text "lexical-form" be text ya
 su name tlat kwon ob text "pyok" as text "en" from text "missile" to text "missile" at text "lexical-form" be text ya
@@ -564808,8 +565074,13 @@ su name tlat kwon ob text "pyut zwin" from text "pyut" at text "component" be te
 su name tlat kwon ob text "pyut zwin" from text "zwin" at text "component" be text ya
 su name tlat kwon ob text "qa" at text "entry" be text ya
 su name tlat kwon ob text "qa" as text "en" from text "cessative_aspect_" to text "cessative_aspect_" at text "lexical-form" be text ya
+su name tlat kwon ob text "qa" as text "pyash-curated" from text "pyash authored" to text "qa" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "qa" as text "wiktionary" from text "en_all_nopic_2026-08" to text "cessative_aspect" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "qa" as text "en" from text "pyash-curated" to text "pyash authored" by text "qa" with text "an aspect marking the cessation of an action" at text "source-gloss" be text ya
 su name tlat kwon ob text "qe" at text "entry" be text ya
 su name tlat kwon ob text "qe" as text "en" from text "star_gender_" to text "star_gender_" at text "lexical-form" be text ya
+su name tlat kwon ob text "qe" as text "pyash-curated" from text "pyash authored" to text "qe" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "qe" as text "en" from text "pyash-curated" to text "pyash authored" by text "qe" with text "a noun class whose members are stars" at text "source-gloss" be text ya
 su name tlat kwon ob text "qi" at text "entry" be text ya
 su name tlat kwon ob text "qi" as text "en" from text "transitive_" to text "transitive_" at text "lexical-form" be text ya
 su name tlat kwon ob text "qo" at text "entry" be text ya
@@ -568782,6 +569053,8 @@ su name tlat kwon ob text "qyic" as text "wordnet" from text "Open English WordN
 su name tlat kwon ob text "qyic" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:06065477-n" with text "the branch of medicine dealing with the diagnosis and treatment of mental disorders" at text "source-gloss" be text ya
 su name tlat kwon ob text "qyih" at text "entry" be text ya
 su name tlat kwon ob text "qyih" as text "en" from text "animate_gender_" to text "animate_gender_" at text "lexical-form" be text ya
+su name tlat kwon ob text "qyih" as text "pyash-curated" from text "pyash authored" to text "qyih" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "qyih" as text "en" from text "pyash-curated" to text "pyash authored" by text "qyih" with text "a noun class whose members are living beings" at text "source-gloss" be text ya
 su name tlat kwon ob text "qyik" at text "entry" be text ya
 su name tlat kwon ob text "qyik" as text "en" from text "connective_particle" to text "connective_particle" at text "lexical-form" be text ya
 su name tlat kwon ob text "qyik" as text "zh" from text "联" to text "联" at text "lexical-form" be text ya
@@ -569023,18 +569296,29 @@ su name tlat kwon ob text "r6" at text "entry" be text ya
 su name tlat kwon ob text "r6" as text "en" from text "participle_" to text "participle_" at text "lexical-form" be text ya
 su name tlat kwon ob text "ra" at text "entry" be text ya
 su name tlat kwon ob text "ra" as text "en" from text "present_tense_" to text "present_tense_" at text "lexical-form" be text ya
+su name tlat kwon ob text "ra" as text "wiktionary" from text "en_all_nopic_2026-08" to text "present_tense" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "ra" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "present_tense" with text "A grammatical tense whose principal function is to locate a situation or event in the present time." at text "source-gloss" be text ya
 su name tlat kwon ob text "ra2" at text "entry" be text ya
 su name tlat kwon ob text "ra2" as text "en" from text "frequentative_aspect_" to text "frequentative_aspect_" at text "lexical-form" be text ya
 su name tlat kwon ob text "ra2" as text "zh" from text "常" to text "常" at text "lexical-form" be text ya
 su name tlat kwon ob text "ra2" as text "zh-Latn-pinyin" from text "cháng" to text "cháng" at text "lexical-form" be text ya
+su name tlat kwon ob text "ra2" as text "wiktionary" from text "en_all_nopic_2026-08" to text "frequentative_aspect" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "ra2" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "frequentative_aspect" with text "A subclass of imperfective verbs that denotes a continuously repeated action. An example in English would be the frequentative verb to crackle, as opposed to the nonfrequentative to crack." at text "source-gloss" be text ya
 su name tlat kwon ob text "re" at text "entry" be text ya
 su name tlat kwon ob text "re" as text "en" from text "different_subject_" to text "different_subject_" at text "lexical-form" be text ya
 su name tlat kwon ob text "ri" at text "entry" be text ya
 su name tlat kwon ob text "ri" as text "en" from text "interrogative_mood_" to text "interrogative_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "ri" as text "pyash-curated" from text "pyash authored" to text "ri" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "ri" as text "wiktionary" from text "en_all_nopic_2026-08" to text "interrogative_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "ri" as text "en" from text "pyash-curated" to text "pyash authored" by text "ri" with text "a mood marking the clause as a question" at text "source-gloss" be text ya
 su name tlat kwon ob text "ro" at text "entry" be text ya
 su name tlat kwon ob text "ro" as text "en" from text "state_context_" to text "state_context_" at text "lexical-form" be text ya
 su name tlat kwon ob text "ru" at text "entry" be text ya
 su name tlat kwon ob text "ru" as text "en" from text "prohibitive_mood_" to text "prohibitive_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "ru" as text "pyash-curated" from text "pyash authored" to text "ru" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "ru" as text "wiktionary" from text "en_all_nopic_2026-08" to text "prohibitive_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "ru" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "prohibitive_mood" with text "The negative imperative mood." at text "source-gloss" be text ya
+su name tlat kwon ob text "ru" as text "en" from text "pyash-curated" to text "pyash authored" by text "ru" with text "a mood forbidding the event, the negative counterpart of the imperative" at text "source-gloss" be text ya
 su name tlat kwon ob text "rw6k" at text "entry" be text ya
 su name tlat kwon ob text "rw6k" as text "en" from text "periwinkle" to text "periwinkle" at text "lexical-form" be text ya
 su name tlat kwon ob text "rw6k kla7c" at text "entry" be text ya
@@ -569580,6 +569864,9 @@ su name tlat kwon ob text "rwaf ry6t" from text "rwaf" at text "component" be te
 su name tlat kwon ob text "rwaf ry6t" from text "ry6t" at text "component" be text ya
 su name tlat kwon ob text "rwah" at text "entry" be text ya
 su name tlat kwon ob text "rwah" as text "en" from text "prospective_aspect_" to text "prospective_aspect_" at text "lexical-form" be text ya
+su name tlat kwon ob text "rwah" as text "pyash-curated" from text "pyash authored" to text "rwah" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "rwah" as text "wiktionary" from text "en_all_nopic_2026-08" to text "prospective_aspect" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "rwah" as text "en" from text "pyash-curated" to text "pyash authored" by text "rwah" with text "an aspect presenting the event as about to happen" at text "source-gloss" be text ya
 su name tlat kwon ob text "rwak" at text "entry" be text ya
 su name tlat kwon ob text "rwak" as text "en" from text "crack" to text "crack" at text "lexical-form" be text ya
 su name tlat kwon ob text "rwak" as text "zh" from text "爆" to text "爆" at text "lexical-form" be text ya
@@ -571145,6 +571432,8 @@ su name tlat kwon ob text "rwef" as text "wordnet" from text "Open English WordN
 su name tlat kwon ob text "rwef" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:09526253-n" with text "a monster able to change appearance from human to wolf and back again" at text "source-gloss" be text ya
 su name tlat kwon ob text "rweh" at text "entry" be text ya
 su name tlat kwon ob text "rweh" as text "en" from text "oblique_case_" to text "oblique_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "rweh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "oblique_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "rweh" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "oblique_case" with text "Any noun case except the nominative case (and sometimes the vocative case), where the noun is the object of a verb or the object of a preposition." at text "source-gloss" be text ya
 su name tlat kwon ob text "rwek" at text "entry" be text ya
 su name tlat kwon ob text "rwek" as text "en" from text "retrospective" to text "retrospective" at text "lexical-form" be text ya
 su name tlat kwon ob text "rwek" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "Disseminating" by text "subsumed-by" at text "source-link" be text ya
@@ -572179,6 +572468,9 @@ su name tlat kwon ob text "rwif" as text "wordnet" from text "Open English WordN
 su name tlat kwon ob text "rwif" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "s:02198299-s" with text "being four more than forty" at text "source-gloss" be text ya
 su name tlat kwon ob text "rwih" at text "entry" be text ya
 su name tlat kwon ob text "rwih" as text "en" from text "precative_mood_" to text "precative_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "rwih" as text "pyash-curated" from text "pyash authored" to text "rwih" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "rwih" as text "wiktionary" from text "en_all_nopic_2026-08" to text "precative_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "rwih" as text "en" from text "pyash-curated" to text "pyash authored" by text "rwih" with text "a mood expressing a request or entreaty" at text "source-gloss" be text ya
 su name tlat kwon ob text "rwik" at text "entry" be text ya
 su name tlat kwon ob text "rwik" as text "en" from text "vertical" to text "vertical" at text "lexical-form" be text ya
 su name tlat kwon ob text "rwik" as text "zh" from text "纵" to text "纵" at text "lexical-form" be text ya
@@ -581168,6 +581460,8 @@ su name tlat kwon ob text "ryof hwac" from text "ryof" at text "component" be te
 su name tlat kwon ob text "ryof hwac" from text "hwac" at text "component" be text ya
 su name tlat kwon ob text "ryoh" at text "entry" be text ya
 su name tlat kwon ob text "ryoh" as text "en" from text "prosecutive_case_" to text "prosecutive_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "ryoh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "prosecutive_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "ryoh" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "prosecutive_case" with text "A special form of the prolative case used to describe movement along a surface or way." at text "source-gloss" be text ya
 su name tlat kwon ob text "ryok" at text "entry" be text ya
 su name tlat kwon ob text "ryok" as text "en" from text "protocol" to text "protocol" at text "lexical-form" be text ya
 su name tlat kwon ob text "ryok" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "AirPollution_Sulphur85Protocol" by text "superclass-of" at text "source-link" be text ya
@@ -582675,6 +582969,9 @@ su name tlat kwon ob text "ryut twin" from text "ryut" at text "component" be te
 su name tlat kwon ob text "ryut twin" from text "twin" at text "component" be text ya
 su name tlat kwon ob text "s6" at text "entry" be text ya
 su name tlat kwon ob text "s6" as text "en" from text "crastinal_tense_" to text "crastinal_tense_" at text "lexical-form" be text ya
+su name tlat kwon ob text "s6" as text "pyash-curated" from text "pyash authored" to text "s6" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "s6" as text "wiktionary" from text "en_all_nopic_2026-08" to text "crastinal_tense" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "s6" as text "en" from text "pyash-curated" to text "pyash authored" by text "s6" with text "a tense placing the event on the day after the day of speaking" at text "source-gloss" be text ya
 su name tlat kwon ob text "sa" at text "entry" be text ya
 su name tlat kwon ob text "sa" as text "en" from text "you_" to text "you_" at text "lexical-form" be text ya
 su name tlat kwon ob text "sa7" at text "entry" be text ya
@@ -582682,14 +582979,24 @@ su name tlat kwon ob text "sa7" as text "en" from text "associative_case_" to te
 su name tlat kwon ob text "sa7" as text "zh" from text "中" to text "中" at text "lexical-form" be text ya
 su name tlat kwon ob text "sa7" as text "zh-Latn-pinyin" from text "zhòng" to text "zhòng" at text "lexical-form" be text ya
 su name tlat kwon ob text "sa7" as text "zh-Latn-pinyin" from text "zhōng" to text "zhōng" at text "lexical-form" be text ya
+su name tlat kwon ob text "sa7" as text "wiktionary" from text "en_all_nopic_2026-08" to text "associative_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "sa7" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "associative_case" with text "The grammatical case that is associative." at text "source-gloss" be text ya
 su name tlat kwon ob text "se" at text "entry" be text ya
 su name tlat kwon ob text "se" as text "en" from text "time_context_" to text "time_context_" at text "lexical-form" be text ya
 su name tlat kwon ob text "si" at text "entry" be text ya
 su name tlat kwon ob text "si" as text "en" from text "epistemic_mood_" to text "epistemic_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "si" as text "pyash-curated" from text "pyash authored" to text "si" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "si" as text "en" from text "pyash-curated" to text "pyash authored" by text "si" with text "a mood marking the speaker's degree of confidence in the statement's truth" at text "source-gloss" be text ya
 su name tlat kwon ob text "si2" at text "entry" be text ya
 su name tlat kwon ob text "si2" as text "en" from text "necessitative_mood_" to text "necessitative_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "si2" as text "pyash-curated" from text "pyash authored" to text "si2" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "si2" as text "wiktionary" from text "en_all_nopic_2026-08" to text "necessitative_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "si2" as text "en" from text "pyash-curated" to text "pyash authored" by text "si2" with text "a mood expressing that the event must occur" at text "source-gloss" be text ya
 su name tlat kwon ob text "si7" at text "entry" be text ya
 su name tlat kwon ob text "si7" as text "en" from text "superlative_case_" to text "superlative_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "si7" as text "pyash-curated" from text "pyash authored" to text "si7" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "si7" as text "wiktionary" from text "en_all_nopic_2026-08" to text "superlative_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "si7" as text "en" from text "pyash-curated" to text "pyash authored" by text "si7" with text "a case marking the thing compared against in a superlative construction" at text "source-gloss" be text ya
 su name tlat kwon ob text "sl62n" at text "entry" be text ya
 su name tlat kwon ob text "sl62n" as text "ar" from text "احتكاكي" to text "احتكاكي" at text "lexical-form" be text ya
 su name tlat kwon ob text "sl62n" as text "ar" from text "ذو صفير" to text "ذو صفير" at text "lexical-form" be text ya
@@ -587095,6 +587402,8 @@ su name tlat kwon ob text "slef pcip" from text "slef" at text "component" be te
 su name tlat kwon ob text "slef pcip" from text "pcip" at text "component" be text ya
 su name tlat kwon ob text "sleh" at text "entry" be text ya
 su name tlat kwon ob text "sleh" as text "en" from text "vegetal_gender_" to text "vegetal_gender_" at text "lexical-form" be text ya
+su name tlat kwon ob text "sleh" as text "pyash-curated" from text "pyash authored" to text "sleh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "sleh" as text "en" from text "pyash-curated" to text "pyash authored" by text "sleh" with text "a noun class whose members are plants" at text "source-gloss" be text ya
 su name tlat kwon ob text "slek" at text "entry" be text ya
 su name tlat kwon ob text "slek" as text "ar" from text "ﺔﺟﺍﺭﺩ" to text "ﺔﺟﺍﺭﺩ" at text "lexical-form" be text ya
 su name tlat kwon ob text "slek" as text "ar" from text "ﺔﻴﺋﺍﻮﻫ ﺔﺟﺍﺭﺩ" to text "ﺔﻴﺋﺍﻮﻫ ﺔﺟﺍﺭﺩ" at text "lexical-form" be text ya
@@ -592784,6 +593093,8 @@ su name tlat kwon ob text "so" at text "entry" be text ya
 su name tlat kwon ob text "so" as text "en" from text "source_case_" to text "source_case_" at text "lexical-form" be text ya
 su name tlat kwon ob text "so" as text "zh" from text "从" to text "从" at text "lexical-form" be text ya
 su name tlat kwon ob text "so" as text "zh-Latn-pinyin" from text "cóng" to text "cóng" at text "lexical-form" be text ya
+su name tlat kwon ob text "so" as text "pyash-curated" from text "pyash authored" to text "so" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "so" as text "en" from text "pyash-curated" to text "pyash authored" by text "so" with text "a case marking the place or thing from which motion proceeds" at text "source-gloss" be text ya
 su name tlat kwon ob text "sr67n" at text "entry" be text ya
 su name tlat kwon ob text "sr67n" as text "ar" from text "ما بعد الأكل" to text "ما بعد الأكل" at text "lexical-form" be text ya
 su name tlat kwon ob text "sr67n" as text "en" from text "postprandial" to text "postprandial" at text "lexical-form" be text ya
@@ -592855,6 +593166,8 @@ su name tlat kwon ob text "sr6f" as text "uk" from text "виживаність"
 su name tlat kwon ob text "sr6f" as text "zh" from text "生存" to text "生存" at text "lexical-form" be text ya
 su name tlat kwon ob text "sr6h" at text "entry" be text ya
 su name tlat kwon ob text "sr6h" as text "en" from text "abstract_gender_" to text "abstract_gender_" at text "lexical-form" be text ya
+su name tlat kwon ob text "sr6h" as text "pyash-curated" from text "pyash authored" to text "sr6h" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "sr6h" as text "en" from text "pyash-curated" to text "pyash authored" by text "sr6h" with text "a noun class whose members are abstract concepts rather than physical things" at text "source-gloss" be text ya
 su name tlat kwon ob text "sr6k" at text "entry" be text ya
 su name tlat kwon ob text "sr6k" as text "ar" from text "هرمون الاستروجين" to text "هرمون الاستروجين" at text "lexical-form" be text ya
 su name tlat kwon ob text "sr6k" as text "en" from text "estrogen" to text "estrogen" at text "lexical-form" be text ya
@@ -596768,6 +597081,9 @@ su name tlat kwon ob text "sri7f myik" from text "sri7f" at text "component" be 
 su name tlat kwon ob text "sri7f myik" from text "myik" at text "component" be text ya
 su name tlat kwon ob text "sri7h" at text "entry" be text ya
 su name tlat kwon ob text "sri7h" as text "en" from text "reciprocal_voice_" to text "reciprocal_voice_" at text "lexical-form" be text ya
+su name tlat kwon ob text "sri7h" as text "pyash-curated" from text "pyash authored" to text "sri7h" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "sri7h" as text "wiktionary" from text "en_all_nopic_2026-08" to text "reciprocal_voice" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "sri7h" as text "en" from text "pyash-curated" to text "pyash authored" by text "sri7h" with text "a voice marking that two participants act on each other" at text "source-gloss" be text ya
 su name tlat kwon ob text "sri7k" at text "entry" be text ya
 su name tlat kwon ob text "sri7k" as text "ar" from text "العجز" to text "العجز" at text "lexical-form" be text ya
 su name tlat kwon ob text "sri7k" as text "en" from text "sacrum" to text "sacrum" at text "lexical-form" be text ya
@@ -598187,6 +598503,8 @@ su name tlat kwon ob text "srim" at text "entry" be text ya
 su name tlat kwon ob text "srim" as text "en" from text "signature" to text "signature" at text "lexical-form" be text ya
 su name tlat kwon ob text "srim" as text "zh" from text "标" to text "标" at text "lexical-form" be text ya
 su name tlat kwon ob text "srim" as text "zh-Latn-pinyin" from text "biāo" to text "biāo" at text "lexical-form" be text ya
+su name tlat kwon ob text "srim" as text "wiktionary" from text "en_all_nopic_2026-08" to text "signature" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "srim" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "signature" with text "A pattern used for matching the identity of a virus, the parameter types of a method, etc." at text "source-gloss" be text ya
 su name tlat kwon ob text "srim hdif" at text "entry" be text ya
 su name tlat kwon ob text "srim hdif" as text "en" from text "signature recognition" to text "signature recognition" at text "lexical-form" be text ya
 su name tlat kwon ob text "srim hdif" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "ComputerProgram" by text "subsumed-by" at text "source-link" be text ya
@@ -602700,6 +603018,8 @@ su name tlat kwon ob text "swaf" at text "entry" be text ya
 su name tlat kwon ob text "swaf" as text "en" from text "associative_case" to text "associative_case" at text "lexical-form" be text ya
 su name tlat kwon ob text "swah" at text "entry" be text ya
 su name tlat kwon ob text "swah" as text "en" from text "semelfactive_aspect_" to text "semelfactive_aspect_" at text "lexical-form" be text ya
+su name tlat kwon ob text "swah" as text "wiktionary" from text "en_all_nopic_2026-08" to text "semelfactive_aspect" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "swah" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "semelfactive_aspect" with text "A subclass of perfective verbs that denotes a momentary or punctiliar action (e.g., to sneeze, to blink)." at text "source-gloss" be text ya
 su name tlat kwon ob text "swak" at text "entry" be text ya
 su name tlat kwon ob text "swak" as text "en" from text "sink" to text "sink" at text "lexical-form" be text ya
 su name tlat kwon ob text "swak" as text "zh" from text "没" to text "没" at text "lexical-form" be text ya
@@ -604354,6 +604674,8 @@ su name tlat kwon ob text "sweh" as text "en" from text "sublative_case_" to tex
 su name tlat kwon ob text "sweh" as text "zh" from text "上" to text "上" at text "lexical-form" be text ya
 su name tlat kwon ob text "sweh" as text "zh-Latn-pinyin" from text "shàng" to text "shàng" at text "lexical-form" be text ya
 su name tlat kwon ob text "sweh" as text "zh-Latn-pinyin" from text "shǎng" to text "shǎng" at text "lexical-form" be text ya
+su name tlat kwon ob text "sweh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "sublative_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "sweh" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "sublative_case" with text "The sublative." at text "source-gloss" be text ya
 su name tlat kwon ob text "swek" at text "entry" be text ya
 su name tlat kwon ob text "swek" as text "ar" from text "فرط" to text "فرط" at text "lexical-form" be text ya
 su name tlat kwon ob text "swek" as text "en" from text "overexertion" to text "overexertion" at text "lexical-form" be text ya
@@ -605569,6 +605891,8 @@ su name tlat kwon ob text "swih" at text "entry" be text ya
 su name tlat kwon ob text "swih" as text "en" from text "essive_case_" to text "essive_case_" at text "lexical-form" be text ya
 su name tlat kwon ob text "swih" as text "zh" from text "如" to text "如" at text "lexical-form" be text ya
 su name tlat kwon ob text "swih" as text "zh-Latn-pinyin" from text "rú" to text "rú" at text "lexical-form" be text ya
+su name tlat kwon ob text "swih" as text "wiktionary" from text "en_all_nopic_2026-08" to text "essive_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "swih" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "essive_case" with text "Noun case used to indicate a temporary state of being, such as the site of an action or the time at which it took place." at text "source-gloss" be text ya
 su name tlat kwon ob text "swik" at text "entry" be text ya
 su name tlat kwon ob text "swik" as text "en" from text "essive_case" to text "essive_case" at text "lexical-form" be text ya
 su name tlat kwon ob text "swim" at text "entry" be text ya
@@ -606835,6 +607159,8 @@ su name tlat kwon ob text "swuc kwak" from text "swuc" at text "component" be te
 su name tlat kwon ob text "swuc kwak" from text "kwak" at text "component" be text ya
 su name tlat kwon ob text "swuh" at text "entry" be text ya
 su name tlat kwon ob text "swuh" as text "en" from text "assumptive_mood_" to text "assumptive_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "swuh" as text "pyash-curated" from text "pyash authored" to text "swuh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "swuh" as text "en" from text "pyash-curated" to text "pyash authored" by text "swuh" with text "a mood presenting the statement as an assumption the speaker takes for granted" at text "source-gloss" be text ya
 su name tlat kwon ob text "swuk" at text "entry" be text ya
 su name tlat kwon ob text "swuk" as text "en" from text "superlative_case" to text "superlative_case" at text "lexical-form" be text ya
 su name tlat kwon ob text "swum" at text "entry" be text ya
@@ -620130,12 +620456,21 @@ su name tlat kwon ob text "syut zyac" from text "syut" at text "component" be te
 su name tlat kwon ob text "syut zyac" from text "zyac" at text "component" be text ya
 su name tlat kwon ob text "t6" at text "entry" be text ya
 su name tlat kwon ob text "t6" as text "en" from text "affirmative_mood_" to text "affirmative_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "t6" as text "pyash-curated" from text "pyash authored" to text "t6" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "t6" as text "wiktionary" from text "en_all_nopic_2026-08" to text "affirmative_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "t6" as text "en" from text "pyash-curated" to text "pyash authored" by text "t6" with text "a mood affirming that the proposition holds, as opposed to negating it" at text "source-gloss" be text ya
 su name tlat kwon ob text "ta" at text "entry" be text ya
 su name tlat kwon ob text "ta" as text "en" from text "topic_case_" to text "topic_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "ta" as text "pyash-curated" from text "pyash authored" to text "ta" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "ta" as text "en" from text "pyash-curated" to text "pyash authored" by text "ta" with text "a case marking the clause's topic, the thing the statement is about" at text "source-gloss" be text ya
 su name tlat kwon ob text "ta2" at text "entry" be text ya
 su name tlat kwon ob text "ta2" as text "en" from text "continutive_aspect_" to text "continutive_aspect_" at text "lexical-form" be text ya
+su name tlat kwon ob text "ta2" as text "pyash-curated" from text "pyash authored" to text "ta2" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "ta2" as text "en" from text "pyash-curated" to text "pyash authored" by text "ta2" with text "an aspect continuing an action already under way from a prior situation" at text "source-gloss" be text ya
 su name tlat kwon ob text "ta7" at text "entry" be text ya
 su name tlat kwon ob text "ta7" as text "en" from text "locative_directional_case_" to text "locative_directional_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "ta7" as text "pyash-curated" from text "pyash authored" to text "ta7" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "ta7" as text "en" from text "pyash-curated" to text "pyash authored" by text "ta7" with text "a case marking motion with respect to a place, combining location with direction" at text "source-gloss" be text ya
 su name tlat kwon ob text "tc67t" at text "entry" be text ya
 su name tlat kwon ob text "tc67t" as text "ar" from text "توم حلمة الثدي" to text "توم حلمة الثدي" at text "lexical-form" be text ya
 su name tlat kwon ob text "tc67t" as text "en" from text "tom_tit" to text "tom_tit" at text "lexical-form" be text ya
@@ -626335,6 +626670,9 @@ su name tlat kwon ob text "tcif xyop" from text "tcif" at text "component" be te
 su name tlat kwon ob text "tcif xyop" from text "xyop" at text "component" be text ya
 su name tlat kwon ob text "tcih" at text "entry" be text ya
 su name tlat kwon ob text "tcih" as text "en" from text "hortative_mood_" to text "hortative_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "tcih" as text "pyash-curated" from text "pyash authored" to text "tcih" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "tcih" as text "wiktionary" from text "en_all_nopic_2026-08" to text "hortative_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "tcih" as text "en" from text "pyash-curated" to text "pyash authored" by text "tcih" with text "a mood encouraging the hearer to act, weaker than a command" at text "source-gloss" be text ya
 su name tlat kwon ob text "tcik" at text "entry" be text ya
 su name tlat kwon ob text "tcik" as text "en" from text "evidential_case" to text "evidential_case" at text "lexical-form" be text ya
 su name tlat kwon ob text "tcim" at text "entry" be text ya
@@ -630343,6 +630681,8 @@ su name tlat kwon ob text "tcut xyic" from text "tcut" at text "component" be te
 su name tlat kwon ob text "tcut xyic" from text "xyic" at text "component" be text ya
 su name tlat kwon ob text "te" at text "entry" be text ya
 su name tlat kwon ob text "te" as text "en" from text "location_case_" to text "location_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "te" as text "pyash-curated" from text "pyash authored" to text "te" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "te" as text "en" from text "pyash-curated" to text "pyash authored" by text "te" with text "a case marking the place where the action occurs" at text "source-gloss" be text ya
 su name tlat kwon ob text "tf6k" at text "entry" be text ya
 su name tlat kwon ob text "tf6k" as text "en" from text "stratification" to text "stratification" at text "lexical-form" be text ya
 su name tlat kwon ob text "tf6k djot" at text "entry" be text ya
@@ -632993,6 +633333,9 @@ su name tlat kwon ob text "tfef" as text "wordnet" from text "Open English WordN
 su name tlat kwon ob text "tfef" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:00149656-n" with text "fastening electrical equipment to earth" at text "source-gloss" be text ya
 su name tlat kwon ob text "tfeh" at text "entry" be text ya
 su name tlat kwon ob text "tfeh" as text "en" from text "telic_aspect_" to text "telic_aspect_" at text "lexical-form" be text ya
+su name tlat kwon ob text "tfeh" as text "pyash-curated" from text "pyash authored" to text "tfeh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "tfeh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "telic_aspect" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "tfeh" as text "en" from text "pyash-curated" to text "pyash authored" by text "tfeh" with text "an aspect presenting the action as directed toward a goal or endpoint" at text "source-gloss" be text ya
 su name tlat kwon ob text "tfek" at text "entry" be text ya
 su name tlat kwon ob text "tfek" as text "en" from text "locative_directional_case" to text "locative_directional_case" at text "lexical-form" be text ya
 su name tlat kwon ob text "tfem" at text "entry" be text ya
@@ -636128,6 +636471,8 @@ su name tlat kwon ob text "ti" as text "zh-Latn-pinyin" from text "de" to text "
 su name tlat kwon ob text "ti" as text "zh-Latn-pinyin" from text "dí" to text "dí" at text "lexical-form" be text ya
 su name tlat kwon ob text "ti" as text "zh-Latn-pinyin" from text "dì" to text "dì" at text "lexical-form" be text ya
 su name tlat kwon ob text "ti" as text "zh-Latn-pinyin" from text "dī" to text "dī" at text "lexical-form" be text ya
+su name tlat kwon ob text "ti" as text "wiktionary" from text "en_all_nopic_2026-08" to text "genitive_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "ti" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "genitive_case" with text "The grammatical case, chiefly applicable to nouns, used to express a relationship of origin or possession. It corresponds roughly to the English preposition of and the suffix -'s." at text "source-gloss" be text ya
 su name tlat kwon ob text "ti2" at text "entry" be text ya
 su name tlat kwon ob text "ti2" as text "en" from text "electric_current_" to text "electric_current_" at text "lexical-form" be text ya
 su name tlat kwon ob text "ti7" at text "entry" be text ya
@@ -636289,6 +636634,9 @@ su name tlat kwon ob text "tl6h" at text "entry" be text ya
 su name tlat kwon ob text "tl6h" as text "en" from text "multal_number_" to text "multal_number_" at text "lexical-form" be text ya
 su name tlat kwon ob text "tl6h" as text "zh" from text "多" to text "多" at text "lexical-form" be text ya
 su name tlat kwon ob text "tl6h" as text "zh-Latn-pinyin" from text "duō" to text "duō" at text "lexical-form" be text ya
+su name tlat kwon ob text "tl6h" as text "pyash-curated" from text "pyash authored" to text "tl6h" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "tl6h" as text "wiktionary" from text "en_all_nopic_2026-08" to text "multal_number" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "tl6h" as text "en" from text "pyash-curated" to text "pyash authored" by text "tl6h" with text "a number marking a large quantity, contrasted with the paucal" at text "source-gloss" be text ya
 su name tlat kwon ob text "tl6k" at text "entry" be text ya
 su name tlat kwon ob text "tl6k" as text "en" from text "tractor" to text "tractor" at text "lexical-form" be text ya
 su name tlat kwon ob text "tl6m" at text "entry" be text ya
@@ -639319,6 +639667,12 @@ su name tlat kwon ob text "tlas kse2p" as text "wordnet" from text "Open English
 su name tlat kwon ob text "tlas kse2p" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:13337744-n" with text "a tax levied on the difference between a commodity's price before taxes and its cost of production" at text "source-gloss" be text ya
 su name tlat kwon ob text "tlas kse2p" from text "tlas" at text "component" be text ya
 su name tlat kwon ob text "tlas kse2p" from text "kse2p" at text "component" be text ya
+su name tlat kwon ob text "tlas kwin" at text "entry" be text ya
+su name tlat kwon ob text "tlas kwin" as text "en" from text "return value" to text "return value" at text "lexical-form" be text ya
+su name tlat kwon ob text "tlas kwin" as text "wiktionary" from text "en_all_nopic_2026-08" to text "return_value" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "tlas kwin" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "return_value" with text "The output of a program or subroutine, passed back to the context where it was called; a retval." at text "source-gloss" be text ya
+su name tlat kwon ob text "tlas kwin" from text "tlas" at text "component" be text ya
+su name tlat kwon ob text "tlas kwin" from text "kwin" at text "component" be text ya
 su name tlat kwon ob text "tlas kyit" at text "entry" be text ya
 su name tlat kwon ob text "tlas kyit" as text "en" from text "quote" to text "quote" at text "lexical-form" be text ya
 su name tlat kwon ob text "tlas kyit" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "Committing" by text "subsumed-by" at text "source-link" be text ya
@@ -640578,6 +640932,8 @@ su name tlat kwon ob text "tlef tyok" from text "tlef" at text "component" be te
 su name tlat kwon ob text "tlef tyok" from text "tyok" at text "component" be text ya
 su name tlat kwon ob text "tleh" at text "entry" be text ya
 su name tlat kwon ob text "tleh" as text "en" from text "hesternal_tense_" to text "hesternal_tense_" at text "lexical-form" be text ya
+su name tlat kwon ob text "tleh" as text "pyash-curated" from text "pyash authored" to text "tleh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "tleh" as text "en" from text "pyash-curated" to text "pyash authored" by text "tleh" with text "a tense placing the event on the day before the day of speaking" at text "source-gloss" be text ya
 su name tlat kwon ob text "tlek" at text "entry" be text ya
 su name tlat kwon ob text "tlek" as text "en" from text "plug" to text "plug" at text "lexical-form" be text ya
 su name tlat kwon ob text "tlek" as text "zh" from text "栓" to text "栓" at text "lexical-form" be text ya
@@ -641500,6 +641856,8 @@ su name tlat kwon ob text "tli7c kci7n" from text "tli7c" at text "component" be
 su name tlat kwon ob text "tli7c kci7n" from text "kci7n" at text "component" be text ya
 su name tlat kwon ob text "tli7h" at text "entry" be text ya
 su name tlat kwon ob text "tli7h" as text "en" from text "remote_future_tense_" to text "remote_future_tense_" at text "lexical-form" be text ya
+su name tlat kwon ob text "tli7h" as text "pyash-curated" from text "pyash authored" to text "tli7h" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "tli7h" as text "en" from text "pyash-curated" to text "pyash authored" by text "tli7h" with text "a tense placing the event in the distant future, beyond the near future" at text "source-gloss" be text ya
 su name tlat kwon ob text "tli7k" at text "entry" be text ya
 su name tlat kwon ob text "tli7k" as text "ar" from text "خشب الساج" to text "خشب الساج" at text "lexical-form" be text ya
 su name tlat kwon ob text "tli7k" as text "en" from text "teak" to text "teak" at text "lexical-form" be text ya
@@ -650893,6 +651251,8 @@ su name tlat kwon ob text "traf zrak" from text "traf" at text "component" be te
 su name tlat kwon ob text "traf zrak" from text "zrak" at text "component" be text ya
 su name tlat kwon ob text "trah" at text "entry" be text ya
 su name tlat kwon ob text "trah" as text "en" from text "comparative_degree_" to text "comparative_degree_" at text "lexical-form" be text ya
+su name tlat kwon ob text "trah" as text "wiktionary" from text "en_all_nopic_2026-08" to text "comparative_degree" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "trah" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "comparative_degree" with text "The degree of comparison of an adjective or adverb used when comparing two entities in terms of a certain property or a certain way of doing something. In English, the comparative of superiority is formed by adding the suffix -er or the word more (e.g. bigger, more fully); the comparative of equality, by adding the word as (e.g. as big, as fully); the comparative of inferiority, by adding the word less (e.g. less big, less fully)." at text "source-gloss" be text ya
 su name tlat kwon ob text "trak" at text "entry" be text ya
 su name tlat kwon ob text "trak" as text "en" from text "annual" to text "annual" at text "lexical-form" be text ya
 su name tlat kwon ob text "trak clic" at text "entry" be text ya
@@ -664008,6 +664368,8 @@ su name tlat kwon ob text "tsa7f" as text "uk" from text "Автореферен
 su name tlat kwon ob text "tsa7f" as text "zh" from text "自参考" to text "自参考" at text "lexical-form" be text ya
 su name tlat kwon ob text "tsa7h" at text "entry" be text ya
 su name tlat kwon ob text "tsa7h" as text "en" from text "antipassive_voice_" to text "antipassive_voice_" at text "lexical-form" be text ya
+su name tlat kwon ob text "tsa7h" as text "wiktionary" from text "en_all_nopic_2026-08" to text "antipassive_voice" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "tsa7h" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "antipassive_voice" with text "A verb voice found in some languages that omits or demotes the direct object of a transitive verb." at text "source-gloss" be text ya
 su name tlat kwon ob text "tsa7k" at text "entry" be text ya
 su name tlat kwon ob text "tsa7k" as text "ar" from text "علق" to text "علق" at text "lexical-form" be text ya
 su name tlat kwon ob text "tsa7k" as text "en" from text "saddlery" to text "saddlery" at text "lexical-form" be text ya
@@ -667745,6 +668107,8 @@ su name tlat kwon ob text "tseh" as text "en" from text "potential_mood_" to tex
 su name tlat kwon ob text "tseh" as text "zh" from text "会" to text "会" at text "lexical-form" be text ya
 su name tlat kwon ob text "tseh" as text "zh-Latn-pinyin" from text "huì" to text "huì" at text "lexical-form" be text ya
 su name tlat kwon ob text "tseh" as text "zh-Latn-pinyin" from text "kuài" to text "kuài" at text "lexical-form" be text ya
+su name tlat kwon ob text "tseh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "potential_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "tseh" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "potential_mood" with text "The grammatical mood expressing possibility and potential." at text "source-gloss" be text ya
 su name tlat kwon ob text "tsek" at text "entry" be text ya
 su name tlat kwon ob text "tsek" as text "ar" from text "ﻢﺤﻟ ﺔﺤﻳﺮﺷ" to text "ﻢﺤﻟ ﺔﺤﻳﺮﺷ" at text "lexical-form" be text ya
 su name tlat kwon ob text "tsek" as text "en" from text "steak" to text "steak" at text "lexical-form" be text ya
@@ -668971,6 +669335,9 @@ su name tlat kwon ob text "tsi2f syop" from text "tsi2f" at text "component" be 
 su name tlat kwon ob text "tsi2f syop" from text "syop" at text "component" be text ya
 su name tlat kwon ob text "tsi2h" at text "entry" be text ya
 su name tlat kwon ob text "tsi2h" as text "en" from text "postpositional_case_" to text "postpositional_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "tsi2h" as text "pyash-curated" from text "pyash authored" to text "tsi2h" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "tsi2h" as text "wiktionary" from text "en_all_nopic_2026-08" to text "postpositional_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "tsi2h" as text "en" from text "pyash-curated" to text "pyash authored" by text "tsi2h" with text "a case expressed by a postposition rather than by inflection" at text "source-gloss" be text ya
 su name tlat kwon ob text "tsi2k" at text "entry" be text ya
 su name tlat kwon ob text "tsi2k" as text "en" from text "bracken" to text "bracken" at text "lexical-form" be text ya
 su name tlat kwon ob text "tsi2k" as text "zh" from text "蕨" to text "蕨" at text "lexical-form" be text ya
@@ -669168,6 +669535,8 @@ su name tlat kwon ob text "tsi7h" at text "entry" be text ya
 su name tlat kwon ob text "tsi7h" as text "en" from text "antessive_case_" to text "antessive_case_" at text "lexical-form" be text ya
 su name tlat kwon ob text "tsi7h" as text "zh" from text "自" to text "自" at text "lexical-form" be text ya
 su name tlat kwon ob text "tsi7h" as text "zh-Latn-pinyin" from text "zì" to text "zì" at text "lexical-form" be text ya
+su name tlat kwon ob text "tsi7h" as text "wiktionary" from text "en_all_nopic_2026-08" to text "antessive_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "tsi7h" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "antessive_case" with text "The grammatical case that indicates the spatial relation of preceding or being before something." at text "source-gloss" be text ya
 su name tlat kwon ob text "tsi7k" at text "entry" be text ya
 su name tlat kwon ob text "tsi7k" as text "ar" from text "تقطر" to text "تقطر" at text "lexical-form" be text ya
 su name tlat kwon ob text "tsi7k" as text "en" from text "drip" to text "drip" at text "lexical-form" be text ya
@@ -676178,6 +676547,8 @@ su name tlat kwon ob text "tsut zwas" from text "tsut" at text "component" be te
 su name tlat kwon ob text "tsut zwas" from text "zwas" at text "component" be text ya
 su name tlat kwon ob text "tu" at text "entry" be text ya
 su name tlat kwon ob text "tu" as text "en" from text "deontic_mood_" to text "deontic_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "tu" as text "pyash-curated" from text "pyash authored" to text "tu" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "tu" as text "en" from text "pyash-curated" to text "pyash authored" by text "tu" with text "a mood expressing obligation or permission rather than fact" at text "source-gloss" be text ya
 su name tlat kwon ob text "tw6k" at text "entry" be text ya
 su name tlat kwon ob text "tw6k" as text "en" from text "translocation" to text "translocation" at text "lexical-form" be text ya
 su name tlat kwon ob text "tw6n" at text "entry" be text ya
@@ -677321,6 +677692,8 @@ su name tlat kwon ob text "twaf txet" from text "twaf" at text "component" be te
 su name tlat kwon ob text "twaf txet" from text "txet" at text "component" be text ya
 su name tlat kwon ob text "twah" at text "entry" be text ya
 su name tlat kwon ob text "twah" as text "en" from text "elative_case_" to text "elative_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "twah" as text "wiktionary" from text "en_all_nopic_2026-08" to text "elative_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "twah" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "elative_case" with text "The case used to indicate movement out of something; for example, out of the house. Some languages that make use of the elative are Finnish, Hungarian, and Estonian." at text "source-gloss" be text ya
 su name tlat kwon ob text "twak" at text "entry" be text ya
 su name tlat kwon ob text "twak" as text "en" from text "delative_case" to text "delative_case" at text "lexical-form" be text ya
 su name tlat kwon ob text "twam" at text "entry" be text ya
@@ -679342,6 +679715,8 @@ su name tlat kwon ob text "tweh" at text "entry" be text ya
 su name tlat kwon ob text "tweh" as text "en" from text "terminative_case_" to text "terminative_case_" at text "lexical-form" be text ya
 su name tlat kwon ob text "tweh" as text "zh" from text "到" to text "到" at text "lexical-form" be text ya
 su name tlat kwon ob text "tweh" as text "zh-Latn-pinyin" from text "dào" to text "dào" at text "lexical-form" be text ya
+su name tlat kwon ob text "tweh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "terminative_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "tweh" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "terminative_case" with text "A form of declension that indicates at what point something ends." at text "source-gloss" be text ya
 su name tlat kwon ob text "twek" at text "entry" be text ya
 su name tlat kwon ob text "twek" as text "en" from text "exessive_case" to text "exessive_case" at text "lexical-form" be text ya
 su name tlat kwon ob text "twem" at text "entry" be text ya
@@ -680499,6 +680874,8 @@ su name tlat kwon ob text "twih" at text "entry" be text ya
 su name tlat kwon ob text "twih" as text "en" from text "illative_case_" to text "illative_case_" at text "lexical-form" be text ya
 su name tlat kwon ob text "twih" as text "zh" from text "进" to text "进" at text "lexical-form" be text ya
 su name tlat kwon ob text "twih" as text "zh-Latn-pinyin" from text "jìn" to text "jìn" at text "lexical-form" be text ya
+su name tlat kwon ob text "twih" as text "wiktionary" from text "en_all_nopic_2026-08" to text "illative_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "twih" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "illative_case" with text "A case used to indicate movement into something; for example, into the house." at text "source-gloss" be text ya
 su name tlat kwon ob text "twik" at text "entry" be text ya
 su name tlat kwon ob text "twik" as text "en" from text "terminative_case" to text "terminative_case" at text "lexical-form" be text ya
 su name tlat kwon ob text "twim" at text "entry" be text ya
@@ -681897,6 +682274,9 @@ su name tlat kwon ob text "twof" as text "zh-Latn-pinyin" from text "bó cí wǎ
 su name tlat kwon ob text "twof" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "Botswana" by text "equivalent-to" at text "source-link" be text ya
 su name tlat kwon ob text "twoh" at text "entry" be text ya
 su name tlat kwon ob text "twoh" as text "en" from text "quotative_case_" to text "quotative_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "twoh" as text "pyash-curated" from text "pyash authored" to text "twoh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "twoh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "quotative_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "twoh" as text "en" from text "pyash-curated" to text "pyash authored" by text "twoh" with text "a case marking the material being quoted or reported" at text "source-gloss" be text ya
 su name tlat kwon ob text "twok" at text "entry" be text ya
 su name tlat kwon ob text "twok" as text "ar" from text "ﺔﻴﺋﺎﺼﺣﺇ" to text "ﺔﻴﺋﺎﺼﺣﺇ" at text "lexical-form" be text ya
 su name tlat kwon ob text "twok" as text "ar" from text "ﻲﺋﺎﺼﺣﺇ" to text "ﻲﺋﺎﺼﺣﺇ" at text "lexical-form" be text ya
@@ -684215,6 +684595,8 @@ su name tlat kwon ob text "twuc tsuc" from text "twuc" at text "component" be te
 su name tlat kwon ob text "twuc tsuc" from text "tsuc" at text "component" be text ya
 su name tlat kwon ob text "twuh" at text "entry" be text ya
 su name tlat kwon ob text "twuh" as text "en" from text "dubitative_mood_" to text "dubitative_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "twuh" as text "pyash-curated" from text "pyash authored" to text "twuh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "twuh" as text "en" from text "pyash-curated" to text "pyash authored" by text "twuh" with text "a mood presenting the statement as uncertain or doubted" at text "source-gloss" be text ya
 su name tlat kwon ob text "twuk" at text "entry" be text ya
 su name tlat kwon ob text "twuk" as text "ar" from text "تجوب" to text "تجوب" at text "lexical-form" be text ya
 su name tlat kwon ob text "twuk" as text "en" from text "scour" to text "scour" at text "lexical-form" be text ya
@@ -689200,6 +689582,8 @@ su name tlat kwon ob text "txif tlat" from text "txif" at text "component" be te
 su name tlat kwon ob text "txif tlat" from text "tlat" at text "component" be text ya
 su name tlat kwon ob text "txih" at text "entry" be text ya
 su name tlat kwon ob text "txih" as text "en" from text "exessive_case_" to text "exessive_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "txih" as text "wiktionary" from text "en_all_nopic_2026-08" to text "exessive_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "txih" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "exessive_case" with text "a form of declension that indicates a change away from a state; the Estonian language and some dialects of Finnish have such a case" at text "source-gloss" be text ya
 su name tlat kwon ob text "txik" at text "entry" be text ya
 su name tlat kwon ob text "txik" as text "ar" from text "ﺔﺑﺎﺒﺴﻟﺍ" to text "ﺔﺑﺎﺒﺴﻟﺍ" at text "lexical-form" be text ya
 su name tlat kwon ob text "txik" as text "ar" from text "سبابة" to text "سبابة" at text "lexical-form" be text ya
@@ -691870,22 +692254,9 @@ su name tlat kwon ob text "tyac tyas" as text "en" from text "wordnet" to text "
 su name tlat kwon ob text "tyac tyas" from text "tyac" at text "component" be text ya
 su name tlat kwon ob text "tyac tyas" from text "tyas" at text "component" be text ya
 su name tlat kwon ob text "tyac tyif" at text "entry" be text ya
-su name tlat kwon ob text "tyac tyif" as text "ar" from text "حل الشفرة" to text "حل الشفرة" at text "lexical-form" be text ya
 su name tlat kwon ob text "tyac tyif" as text "en" from text "decipher" to text "decipher" at text "lexical-form" be text ya
 su name tlat kwon ob text "tyac tyif" as text "en" from text "reading" to text "reading" at text "lexical-form" be text ya
 su name tlat kwon ob text "tyac tyif" as text "en" from text "trace" to text "trace" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "es" from text "descifrar" to text "descifrar" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "fi" from text "tulkita" to text "tulkita" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "fr" from text "déchiffrer" to text "déchiffrer" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "he" from text "לְפַעֲנֵחַ" to text "לְפַעֲנֵחַ" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "hi" from text "पढ़ना" to text "पढ़ना" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "ia" from text "decifrar" to text "decifrar" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "id" from text "menguraikan" to text "menguraikan" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "nl" from text "ontcijferen" to text "ontcijferen" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "ru" from text "расшифровывать" to text "расшифровывать" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "tr" from text "çözmek" to text "çözmek" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "uk" from text "розшифровувати" to text "розшифровувати" at text "lexical-form" be text ya
-su name tlat kwon ob text "tyac tyif" as text "zh" from text "解码" to text "解码" at text "lexical-form" be text ya
 su name tlat kwon ob text "tyac tyif" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "Decoding" by text "subsumed-by" at text "source-link" be text ya
 su name tlat kwon ob text "tyac tyif" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "Stating" by text "subsumed-by" at text "source-link" be text ya
 su name tlat kwon ob text "tyac tyif" as text "wordnet" from text "Open English WordNet 2025" to text "n:07188417-n" by text "exact-sense" at text "source-link" be text ya
@@ -696649,6 +697020,8 @@ su name tlat kwon ob text "tyif tyip" from text "tyif" at text "component" be te
 su name tlat kwon ob text "tyif tyip" from text "tyip" at text "component" be text ya
 su name tlat kwon ob text "tyih" at text "entry" be text ya
 su name tlat kwon ob text "tyih" as text "en" from text "retrospective_aspect_" to text "retrospective_aspect_" at text "lexical-form" be text ya
+su name tlat kwon ob text "tyih" as text "pyash-curated" from text "pyash authored" to text "tyih" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "tyih" as text "en" from text "pyash-curated" to text "pyash authored" by text "tyih" with text "an aspect viewing a situation from the standpoint of its aftermath" at text "source-gloss" be text ya
 su name tlat kwon ob text "tyik" at text "entry" be text ya
 su name tlat kwon ob text "tyik" as text "en" from text "agree" to text "agree" at text "lexical-form" be text ya
 su name tlat kwon ob text "tyik" as text "zh" from text "应" to text "应" at text "lexical-form" be text ya
@@ -704277,6 +704650,8 @@ su name tlat kwon ob text "vlif ryak" from text "vlif" at text "component" be te
 su name tlat kwon ob text "vlif ryak" from text "ryak" at text "component" be text ya
 su name tlat kwon ob text "vlih" at text "entry" be text ya
 su name tlat kwon ob text "vlih" as text "en" from text "mineral_gender_" to text "mineral_gender_" at text "lexical-form" be text ya
+su name tlat kwon ob text "vlih" as text "pyash-curated" from text "pyash authored" to text "vlih" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "vlih" as text "en" from text "pyash-curated" to text "pyash authored" by text "vlih" with text "a noun class whose members are minerals and stone" at text "source-gloss" be text ya
 su name tlat kwon ob text "vlik" at text "entry" be text ya
 su name tlat kwon ob text "vlik" as text "en" from text "physiology" to text "physiology" at text "lexical-form" be text ya
 su name tlat kwon ob text "vlik gyac" at text "entry" be text ya
@@ -707043,6 +707418,9 @@ su name tlat kwon ob text "vrif" as text "zh" from text "后视镜" to text "后
 su name tlat kwon ob text "vrif" as text "zh-Latn-pinyin" from text "hòu shì jìng" to text "hòu shì jìng" at text "lexical-form" be text ya
 su name tlat kwon ob text "vrih" at text "entry" be text ya
 su name tlat kwon ob text "vrih" as text "en" from text "historic_tense_" to text "historic_tense_" at text "lexical-form" be text ya
+su name tlat kwon ob text "vrih" as text "pyash-curated" from text "pyash authored" to text "vrih" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "vrih" as text "wiktionary" from text "en_all_nopic_2026-08" to text "historic_tense" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "vrih" as text "en" from text "pyash-curated" to text "pyash authored" by text "vrih" with text "a tense used for narrating past events, typical of chronicle style" at text "source-gloss" be text ya
 su name tlat kwon ob text "vrik" at text "entry" be text ya
 su name tlat kwon ob text "vrik" as text "en" from text "final_particle" to text "final_particle" at text "lexical-form" be text ya
 su name tlat kwon ob text "vrik" as text "zh" from text "了" to text "了" at text "lexical-form" be text ya
@@ -707893,6 +708271,8 @@ su name tlat kwon ob text "vwet frim" from text "vwet" at text "component" be te
 su name tlat kwon ob text "vwet frim" from text "frim" at text "component" be text ya
 su name tlat kwon ob text "vwih" at text "entry" be text ya
 su name tlat kwon ob text "vwih" as text "en" from text "evitative_case_" to text "evitative_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "vwih" as text "wiktionary" from text "en_all_nopic_2026-08" to text "evitative_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "vwih" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "evitative_case" with text "The grammatical case that is evitative." at text "source-gloss" be text ya
 su name tlat kwon ob text "vwik" at text "entry" be text ya
 su name tlat kwon ob text "vwik" as text "ar" from text "حاول التأثير على شخص" to text "حاول التأثير على شخص" at text "lexical-form" be text ya
 su name tlat kwon ob text "vwik" as text "en" from text "earwig" to text "earwig" at text "lexical-form" be text ya
@@ -708509,6 +708889,8 @@ su name tlat kwon ob text "vyac kwan" from text "vyac" at text "component" be te
 su name tlat kwon ob text "vyac kwan" from text "kwan" at text "component" be text ya
 su name tlat kwon ob text "vyah" at text "entry" be text ya
 su name tlat kwon ob text "vyah" as text "en" from text "adverbial_case_" to text "adverbial_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "vyah" as text "wiktionary" from text "en_all_nopic_2026-08" to text "adverbial_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "vyah" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "adverbial_case" with text "a noun case in the Abkhaz, Georgian, and Udmurt languages" at text "source-gloss" be text ya
 su name tlat kwon ob text "vyak" at text "entry" be text ya
 su name tlat kwon ob text "vyak" as text "en" from text "adverbial_case" to text "adverbial_case" at text "lexical-form" be text ya
 su name tlat kwon ob text "vyam" at text "entry" be text ya
@@ -709332,6 +709714,8 @@ su name tlat kwon ob text "wa" as text "pyash-curated" from text "pyash authored
 su name tlat kwon ob text "wa" as text "en" from text "pyash-curated" to text "pyash authored" by text "wa" with text "logical conjunction: the result is true only when both operands are true" at text "source-gloss" be text ya
 su name tlat kwon ob text "we" at text "entry" be text ya
 su name tlat kwon ob text "we" as text "en" from text "vialis_case_" to text "vialis_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "we" as text "pyash-curated" from text "pyash authored" to text "we" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "we" as text "en" from text "pyash-curated" to text "pyash authored" by text "we" with text "a case marking the route along which motion proceeds" at text "source-gloss" be text ya
 su name tlat kwon ob text "wi" at text "entry" be text ya
 su name tlat kwon ob text "wi" as text "en" from text "universal_quantifier_" to text "universal_quantifier_" at text "lexical-form" be text ya
 su name tlat kwon ob text "wi7" at text "entry" be text ya
@@ -709340,6 +709724,8 @@ su name tlat kwon ob text "wo" at text "entry" be text ya
 su name tlat kwon ob text "wo" as text "en" from text "word_" to text "word_" at text "lexical-form" be text ya
 su name tlat kwon ob text "wu" at text "entry" be text ya
 su name tlat kwon ob text "wu" as text "en" from text "vocative_case_" to text "vocative_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "wu" as text "wiktionary" from text "en_all_nopic_2026-08" to text "vocative_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "wu" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "vocative_case" with text "case of address, case used for a noun identifying the person or thing being addressed. It corresponds to the archaic English particle \"O\" as used in solemn or poetic address e.g.: Hear me, O Albion! Languages that regularly employ the vocative include Arabic, Bengali, Bulgarian, Czech, Georgian, Greek, Hawaiian, Hindi-Urdu, Irish, Latin, Latvian, Lithuanian, Ojibwe, Polish, Romanian, Russian, Ruthenian/Rusyn, Sanskrit, Scottish Gaelic, Serbo-Croatian, Slovak, Tamil and Ukrainian." at text "source-gloss" be text ya
 su name tlat kwon ob text "xa" at text "entry" be text ya
 su name tlat kwon ob text "xa" as text "en" from text "discourse_context_" to text "discourse_context_" at text "lexical-form" be text ya
 su name tlat kwon ob text "xe" at text "entry" be text ya
@@ -709348,6 +709734,8 @@ su name tlat kwon ob text "xe7" at text "entry" be text ya
 su name tlat kwon ob text "xe7" as text "en" from text "em__" to text "em__" at text "lexical-form" be text ya
 su name tlat kwon ob text "xi" at text "entry" be text ya
 su name tlat kwon ob text "xi" as text "en" from text "habitual_aspect_" to text "habitual_aspect_" at text "lexical-form" be text ya
+su name tlat kwon ob text "xi" as text "wiktionary" from text "en_all_nopic_2026-08" to text "habitual_aspect" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "xi" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "habitual_aspect" with text "A feature of the verb which specifies an action as occurring habitually, usually, ordinarily, or customarily" at text "source-gloss" be text ya
 su name tlat kwon ob text "xl67n" at text "entry" be text ya
 su name tlat kwon ob text "xl67n" as text "ar" from text "تالين" to text "تالين" at text "lexical-form" be text ya
 su name tlat kwon ob text "xl67n" as text "en" from text "tallinn" to text "tallinn" at text "lexical-form" be text ya
@@ -711121,6 +711509,8 @@ su name tlat kwon ob text "xlef" as text "wordnet" from text "Open English WordN
 su name tlat kwon ob text "xlef" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:03505701-n" with text "a loft in a barn where hay is stored" at text "source-gloss" be text ya
 su name tlat kwon ob text "xleh" at text "entry" be text ya
 su name tlat kwon ob text "xleh" as text "en" from text "vehicle_gender_" to text "vehicle_gender_" at text "lexical-form" be text ya
+su name tlat kwon ob text "xleh" as text "pyash-curated" from text "pyash authored" to text "xleh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "xleh" as text "en" from text "pyash-curated" to text "pyash authored" by text "xleh" with text "a noun class whose members are vehicles" at text "source-gloss" be text ya
 su name tlat kwon ob text "xlek" at text "entry" be text ya
 su name tlat kwon ob text "xlek" as text "en" from text "sneak" to text "sneak" at text "lexical-form" be text ya
 su name tlat kwon ob text "xlek clas" at text "entry" be text ya
@@ -717595,6 +717985,9 @@ su name tlat kwon ob text "xwif hle2n" from text "xwif" at text "component" be t
 su name tlat kwon ob text "xwif hle2n" from text "hle2n" at text "component" be text ya
 su name tlat kwon ob text "xwih" at text "entry" be text ya
 su name tlat kwon ob text "xwih" as text "en" from text "patient_case_" to text "patient_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "xwih" as text "pyash-curated" from text "pyash authored" to text "xwih" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "xwih" as text "wiktionary" from text "en_all_nopic_2026-08" to text "patient_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "xwih" as text "en" from text "pyash-curated" to text "pyash authored" by text "xwih" with text "a case marking the participant affected by the action" at text "source-gloss" be text ya
 su name tlat kwon ob text "xwik" at text "entry" be text ya
 su name tlat kwon ob text "xwik" as text "en" from text "hydraulic" to text "hydraulic" at text "lexical-form" be text ya
 su name tlat kwon ob text "xwik" as text "yue-Latn-jyutping" from text "jik6" to text "jik6" at text "lexical-form" be text ya
@@ -722234,6 +722627,8 @@ su name tlat kwon ob text "xyut hdef" from text "xyut" at text "component" be te
 su name tlat kwon ob text "xyut hdef" from text "hdef" at text "component" be text ya
 su name tlat kwon ob text "y6" at text "entry" be text ya
 su name tlat kwon ob text "y6" as text "en" from text "artistic_gender_" to text "artistic_gender_" at text "lexical-form" be text ya
+su name tlat kwon ob text "y6" as text "pyash-curated" from text "pyash authored" to text "y6" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "y6" as text "en" from text "pyash-curated" to text "pyash authored" by text "y6" with text "a noun class whose members are works of art and creative products" at text "source-gloss" be text ya
 su name tlat kwon ob text "ya" at text "entry" be text ya
 su name tlat kwon ob text "ya" as text "en" from text "it_" to text "it_" at text "lexical-form" be text ya
 su name tlat kwon ob text "ye" at text "entry" be text ya
@@ -722242,14 +722637,21 @@ su name tlat kwon ob text "ye" as text "zh" from text "之" to text "之" at tex
 su name tlat kwon ob text "ye" as text "zh-Latn-pinyin" from text "zhī" to text "zhī" at text "lexical-form" be text ya
 su name tlat kwon ob text "yi" at text "entry" be text ya
 su name tlat kwon ob text "yi" as text "en" from text "dative_case_" to text "dative_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "yi" as text "wiktionary" from text "en_all_nopic_2026-08" to text "dative_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "yi" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "dative_case" with text "Case used to express direction towards an indirect object, the recipient or beneficiary of an action, and is generally indicated in English by to (when a recipient) or for (when a beneficiary) with the objective case. The direct object may be either stated or unstated where the indirect object is the beneficiary of the verbal action, but is stated where the indirect object is a recipient. If there is emphasis on the indirect object, the indirect object usually precedes the direct object and is not usually indicated with to or for; said structure is also used when neither object is being emphasized." at text "source-gloss" be text ya
 su name tlat kwon ob text "yi7" at text "entry" be text ya
 su name tlat kwon ob text "yi7" as text "en" from text "_ide_" to text "_ide_" at text "lexical-form" be text ya
 su name tlat kwon ob text "yo" at text "entry" be text ya
 su name tlat kwon ob text "yo" as text "en" from text "union_" to text "union_" at text "lexical-form" be text ya
 su name tlat kwon ob text "yu" at text "entry" be text ya
 su name tlat kwon ob text "yu" as text "en" from text "instrumental_case_" to text "instrumental_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "yu" as text "wiktionary" from text "en_all_nopic_2026-08" to text "instrumental_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "yu" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "instrumental_case" with text "A noun case used to express means or agency—and is generally indicated in English by by or with with the objective. Languages that use the instrumental case include Armenian, Serbo-Croatian, Czech, Dyirbal, Georgian, Latvian, Slovene, Polish, Ukrainian, Quechua, Russian, Assamese, Tamil, Turkish and Sanskrit. Extinct languages that used the instrumental case include Old English, Old Saxon and Old High German." at text "source-gloss" be text ya
 su name tlat kwon ob text "za" at text "entry" be text ya
 su name tlat kwon ob text "za" as text "en" from text "inchoative_aspect_" to text "inchoative_aspect_" at text "lexical-form" be text ya
+su name tlat kwon ob text "za" as text "pyash-curated" from text "pyash authored" to text "za" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "za" as text "wiktionary" from text "en_all_nopic_2026-08" to text "inchoative_aspect" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "za" as text "en" from text "pyash-curated" to text "pyash authored" by text "za" with text "an aspect marking the beginning of an action or state" at text "source-gloss" be text ya
 su name tlat kwon ob text "ze" at text "entry" be text ya
 su name tlat kwon ob text "ze" as text "en" from text "_z_" to text "_z_" at text "lexical-form" be text ya
 su name tlat kwon ob text "zi" at text "entry" be text ya
@@ -723417,6 +723819,8 @@ su name tlat kwon ob text "zlif" as text "wordnet" from text "Open English WordN
 su name tlat kwon ob text "zlif" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:03726875-n" with text "a percussion instrument with wooden bars tuned to produce a chromatic scale and with resonators" at text "source-gloss" be text ya
 su name tlat kwon ob text "zlih" at text "entry" be text ya
 su name tlat kwon ob text "zlih" as text "en" from text "irrealis_mood_" to text "irrealis_mood_" at text "lexical-form" be text ya
+su name tlat kwon ob text "zlih" as text "wiktionary" from text "en_all_nopic_2026-08" to text "irrealis_mood" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "zlih" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "irrealis_mood" with text "A category of grammatical moods that indicate that a certain situation or action is not known to happen, or have happened, as the speaker is talking." at text "source-gloss" be text ya
 su name tlat kwon ob text "zlik" at text "entry" be text ya
 su name tlat kwon ob text "zlik" as text "ar" from text "ﻥﻮﻜﻴﻠﻴﺴﻟﺍ" to text "ﻥﻮﻜﻴﻠﻴﺴﻟﺍ" at text "lexical-form" be text ya
 su name tlat kwon ob text "zlik" as text "en" from text "atomic number 14" to text "atomic number 14" at text "lexical-form" be text ya
@@ -724083,6 +724487,8 @@ su name tlat kwon ob text "zlut ryun" from text "zlut" at text "component" be te
 su name tlat kwon ob text "zlut ryun" from text "ryun" at text "component" be text ya
 su name tlat kwon ob text "zo" at text "entry" be text ya
 su name tlat kwon ob text "zo" as text "en" from text "zoic_gender_" to text "zoic_gender_" at text "lexical-form" be text ya
+su name tlat kwon ob text "zo" as text "pyash-curated" from text "pyash authored" to text "zo" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "zo" as text "en" from text "pyash-curated" to text "pyash authored" by text "zo" with text "a noun class whose members are animals" at text "source-gloss" be text ya
 su name tlat kwon ob text "zr6n" at text "entry" be text ya
 su name tlat kwon ob text "zr6n" as text "ar" from text "ﻥﺎﺠﻴﺑﺭﺫﺃ" to text "ﻥﺎﺠﻴﺑﺭﺫﺃ" at text "lexical-form" be text ya
 su name tlat kwon ob text "zr6n" as text "en" from text "azerbaijan" to text "azerbaijan" at text "lexical-form" be text ya
@@ -724881,6 +725287,9 @@ su name tlat kwon ob text "zrec psip" from text "zrec" at text "component" be te
 su name tlat kwon ob text "zrec psip" from text "psip" at text "component" be text ya
 su name tlat kwon ob text "zreh" at text "entry" be text ya
 su name tlat kwon ob text "zreh" as text "en" from text "exocentric_case_" to text "exocentric_case_" at text "lexical-form" be text ya
+su name tlat kwon ob text "zreh" as text "pyash-curated" from text "pyash authored" to text "zreh" by text "authored-gloss" at text "source-link" be text ya
+su name tlat kwon ob text "zreh" as text "wiktionary" from text "en_all_nopic_2026-08" to text "exocentric_case" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "zreh" as text "en" from text "pyash-curated" to text "pyash authored" by text "zreh" with text "a case whose meaning is not derived from any single component of the construction" at text "source-gloss" be text ya
 su name tlat kwon ob text "zrek" at text "entry" be text ya
 su name tlat kwon ob text "zrek" as text "en" from text "exocentric_case" to text "exocentric_case" at text "lexical-form" be text ya
 su name tlat kwon ob text "zren" at text "entry" be text ya

@@ -162,27 +162,127 @@ test("`from pyac` prefers a catalogued compound over its atoms", async () => {
   assert.ok(pyac.entry.lexicalForms.length > 0);
 });
 
-test("`from pyac` reports the reading for a grammar-only atom", async () => {
-  // `sa` is a pronoun with no decodable volume entry. The reading must still be
-  // reported rather than raising the decoder's error.
+test("`from pyac` reads a grammar-only atom instead of throwing", async () => {
+  // `sa` is a bare pronoun entry: an `entry` row and a lexical form, no links
+  // and no definition. It used to raise "unrepresentable-name" because the
+  // decoder looked its name up in the deprecated pyashWords.json table, which
+  // does not carry it. The codec decodes any volume word, so the reading is
+  // reported from the volume itself.
   const pyac = await runPyacDictionary(["reference", "from", "pyac", "sa"], silent);
-  assert.deepEqual(pyac.atoms, ["sa"]);
+  assert.equal(pyac.key, "sa");
+  assert.deepEqual(
+    pyac.entry.lexicalForms.map((form) => form.surface),
+    ["you_"],
+    "the volume's own lexical form is reported"
+  );
 });
 
 test("`from en` and `from pyac` disagree where the two readings differ", async () => {
-  // `key` is English but not a Pyac atom. The English path finds entries; the
-  // Pyac path must report a miss rather than throwing the binary's key error.
+  // `key` is English but not a Pyac word: three glyphs with no valid final
+  // consonant, and it does not segment. The English path finds entries; the
+  // Pyac path must report that plainly rather than "no dictionary entry", which
+  // would imply a Pyac word exists and simply has no entry.
   const english = await runPyacDictionary(["reference", "from", "en", "key"], silent);
   const pyac = await runPyacDictionary(["reference", "from", "pyac", "key"], silent);
   assert.ok(english.matches.length > 0, "the English word resolves");
   assert.deepEqual(pyac.matches, [], "the Pyac reading is a clean miss");
 });
 
-test("`from en` resolves a word that the default path would read as Pyac", async () => {
-  // `argument` is the Pyac atom `hrut`, so the default path returns one entry.
-  // The English reading is a different, larger result set.
-  const english = await runPyacDictionary(["reference", "from", "en", "argument"], silent);
-  const plain = await runPyacDictionary(["reference", "argument"], silent);
-  assert.ok(english.matches.length > 1, `expected several English senses, saw ${english.matches.length}`);
-  assert.ok(plain.key, "the default path reads the Pyac atom");
+test("`from pyac` distinguishes a non-word from an unindexed word", async () => {
+  // `key` is not a Pyac word at all. `hnanga` segments into known atoms but is
+  // not a catalogued compound, so it is a word with no entry. The messages must
+  // differ, or a reader cannot tell "you typed nonsense" from "this exists but
+  // the volume has no record".
+  const lines = [];
+  const capture = { stdout: { write: (text) => lines.push(text) } };
+  await runPyacDictionary(["reference", "from", "pyac", "key"], capture);
+  await runPyacDictionary(["reference", "from", "pyac", "hnanga"], capture);
+  assert.match(lines[0], /not a Pyac word/u);
+  assert.doesNotMatch(lines[1], /not a Pyac word/u);
+});
+
+test("the default reading follows the configured language, not the spelling", async () => {
+  // `name` is an English word whose letters also spell the Pyac run `na me`.
+  // The default must give the English senses, because that is what a user
+  // typing an English word means — reading it as Pyac because the letters
+  // happen to spell atoms is the guess this replaces.
+  const plain = await runPyacDictionary(["reference", "name"], silent);
+  const english = await runPyacDictionary(["reference", "from", "en", "name"], silent);
+  const pyac = await runPyacDictionary(["reference", "from", "pyac", "name"], silent);
+  assert.ok(plain.matches.length > 1, `expected English senses by default, saw ${plain.matches.length}`);
+  assert.equal(plain.matches.length, english.matches.length, "the default agrees with `from en`");
+  assert.deepEqual(pyac.atoms, ["na", "me"], "`from pyac` still reads the glyphs");
+});
+
+test("a written Pyac key still resolves when the default language is English", async () => {
+  // `dvis` is not an English word. The default English reading misses, so the
+  // lookup must fall through to the Pyac key rather than reporting no entry.
+  const plain = await runPyacDictionary(["reference", "dvis"], silent);
+  assert.equal(plain.key, "divisions");
+});
+
+test("`decode` reads as English even though its letters spell Pyac atoms", async () => {
+  // `decode` segments into `de co de` — all real atoms — but it is an English
+  // word and must resolve as one. This is the case that exposed the guess.
+  assert.deepEqual(segmentPyacWords("decode"), ["de", "co", "de"], "the glyph reading is exercised");
+  const plain = await runPyacDictionary(["reference", "decode"], silent);
+  assert.ok(plain.matches.length > 0, "the English word resolves by default");
+});
+
+test("`decode` carries its WordNet sense, not just its components", async () => {
+  // The compound `hkom tyac` is only useful if it names the sense it was built
+  // for. Without the linked gloss the entry is a bare decomposition.
+  const english = await runPyacDictionary(["reference", "from", "en", "decode"], silent);
+  const entry = english.matches[0];
+  const senses = entry.interimDefinitions.map((gloss) => gloss.identifier);
+  assert.ok(senses.includes("v:00996499-v"), `expected the decode sense, saw ${senses.join(", ")}`);
+  const gloss = entry.interimDefinitions.find((item) => item.identifier === "v:00996499-v");
+  assert.match(gloss.text, /convert code into ordinary language/u);
+  assert.deepEqual(entry.entry.components, ["hkom", "tyac"], "the sense belongs to the compound");
+});
+
+test("a Wiktionary reference is cited by a URL the repository does not store", async () => {
+  // Wiktionary is the second reference dataset. `signature` has no WordNet sense
+  // for the computing meaning, so its definition comes from Wiktionary's
+  // domain-tagged entry. The archive lives on the Kiwix host, so the volume
+  // stores only the article name and the snapshot release.
+  const lines = [];
+  const capture = { stdout: { write: (text) => lines.push(text) } };
+  const result = await runPyacDictionary(["reference", "from", "pyac", "srim"], capture);
+  assert.equal(result.key, "signature", "srim is the Pyac spelling of signature");
+  const rendered = lines.join("");
+  assert.match(rendered, /Wiktionary signature:/, "the citation names its dictionary");
+  assert.match(
+    rendered,
+    /https:\/\/zim\.zvorygin\.ca\/content\/wiktionary_en_all_nopic_2026-08\/signature/,
+    "the citation URL is derived from the release and the article name"
+  );
+});
+
+test("the CLI prints the Wiktionary citation URL for a term it defines", () => {
+  // The URL must be derivable from the release and the identifier alone. If this
+  // ever needs the corpus in the repository, the dataset choice was wrong.
+  const url = `https://zim.zvorygin.ca/content/wiktionary_en_all_nopic_2026-08/signature`;
+  assert.match(url, /^https:\/\/zim\.zvorygin\.ca\/content\/wiktionary_[\w-]+\/[\w-]+$/);
+});
+
+test("a concept WordNet cannot index resolves through its compound and Wiktionary", async () => {
+  // `noun class` and `return value` have no WordNet sense at all, and neither
+  // English word is a legal Pyac spelling, so each is a compound whose
+  // definition comes from Wiktionary. This is the shape every such concept
+  // takes: compound -> entry -> cited definition.
+  const silent = { stdout: { write() {} } };
+  for (const [surface, article] of [["noun class", "noun_class"], ["return value", "return_value"]]) {
+    const lines = [];
+    const capture = { stdout: { write: (text) => lines.push(text) } };
+    const result = await runPyacDictionary(["reference", "from", "en", surface], capture);
+    assert.ok(result.matches?.length >= 1, `${surface} resolves`);
+    const rendered = lines.join("");
+    assert.match(rendered, new RegExp(`Wiktionary ${article}:`), `${surface} cites Wiktionary`);
+    assert.match(
+      rendered,
+      new RegExp(`/content/wiktionary_en_all_nopic_2026-08/${article}`),
+      `${surface} gives a resolvable citation URL`
+    );
+  }
 });

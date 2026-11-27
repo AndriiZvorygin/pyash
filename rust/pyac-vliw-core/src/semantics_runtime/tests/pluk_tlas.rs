@@ -1,10 +1,12 @@
 use super::*;
 
-const PLUK: u32 = 0x2a64;
-const TLAS: u32 = 0x896a;
+const ASSESS: u32 = 0x2a64;
+const WORTH: u32 = 0x896a;
 const PREDICTION: u32 = 0x68b1;
 const ANSWER: u32 = 0x4930;
-const CORRECT_COUNT: u32 = 0xaa90;
+/// `hgut` = count.
+const COUNT: u32 = 0xaa90;
+const CORRECT_COUNT: u32 = COUNT;
 
 fn append_group(
     words: &mut std::vec::Vec<u32>,
@@ -97,8 +99,8 @@ fn append_evaluation(words: &mut std::vec::Vec<u32>, prediction: u32, answer: u3
         NAME_TYPE,
         answer,
         INSTRUMENTAL,
-        PLUK,
-        TLAS,
+        ASSESS,
+        WORTH,
         DEONTIC,
     ];
     append_group(words, &tokens, &[2, 6, 9, 12])

@@ -1,3 +1,4 @@
+mod decode;
 mod index;
 mod model;
 mod operation;
@@ -7,11 +8,13 @@ mod reader_index;
 mod volume;
 mod volume_records;
 mod wire;
+mod words;
 
+pub use decode::decode_dictionary;
 pub use index::DictionaryIndex;
 pub use model::{DictionaryEntry, DictionaryIndexError, LexicalForm, SourceGloss, SourceLink};
 pub use operation::{
-    OperationArgument, OperationArgumentType, OperationResult, OperationSignature,
+    OperationParameter, ArgumentSlot, OperationResult, OperationSignature,
     OperationSignatureKey,
 };
 pub use reader::{DictionaryFileReader, DictionaryReadError, DictionarySection};

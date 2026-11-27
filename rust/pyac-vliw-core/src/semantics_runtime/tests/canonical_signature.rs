@@ -75,13 +75,13 @@ fn sorts_numeric_case_hnucs_and_keeps_each_type_attached() {
 
     assert_eq!(left_signature.cases[0].case, DESTINATION);
     assert_eq!(
-        left_signature.cases[0].value_type,
-        right_signature.cases[0].value_type
+        left_signature.cases[0].noun_class,
+        right_signature.cases[0].noun_class
     );
     assert_eq!(left_signature.cases[1].case, ACCUSATIVE);
     assert_eq!(
-        left_signature.cases[1].value_type,
-        right_signature.cases[1].value_type
+        left_signature.cases[1].noun_class,
+        right_signature.cases[1].noun_class
     );
     assert!(same_key(&left_signature, &left, &right_signature, &right));
 }
@@ -162,4 +162,31 @@ fn identifier_payload_is_not_part_of_the_signature_type() {
     let right_signature = parse(&right);
     assert_eq!(case_type(&left_signature, NOMINATIVE), Some(TYPE_NAME));
     assert!(same_key(&left_signature, &left, &right_signature, &right));
+}
+
+#[test]
+fn packing_a_noun_class_is_reversible() {
+    // The canonical encoder and the dictionary encoder must agree on what a
+    // slot accepts, so the packed form has to carry everything the reader needs.
+    // A lossy pack would make two different classes compare equal.
+    use super::*;
+
+    for sort in 0u32..16 {
+        for scalar_bytes in [0u32, 1, 2, 4, 8] {
+            for vector in [false, true] {
+                let packed = pack_quote_noun_class(sort, scalar_bytes, vector);
+                assert_eq!(
+                    unpack_quote_noun_class(packed),
+                    Some((sort, scalar_bytes, vector)),
+                    "quote class {sort}/{scalar_bytes}/{vector} did not survive packing"
+                );
+            }
+        }
+    }
+
+    for hnuc in [NAME_TYPE, NUMBER_TYPE, BOOLEAN_TYPE, VECTOR_TYPE, 0x0001, 0xffff] {
+        let packed = pack_word_noun_class(hnuc);
+        assert_eq!(unpack_word_noun_class(packed), Some(hnuc));
+        assert_eq!(unpack_quote_noun_class(packed), None, "a word class is not a quote");
+    }
 }

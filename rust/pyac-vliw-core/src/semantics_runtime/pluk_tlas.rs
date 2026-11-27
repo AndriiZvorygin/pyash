@@ -3,8 +3,8 @@ use super::scalar_product::{scalar_product_destination, scalar_product_group};
 use super::vector_group::{interpret_vector_group, vector_name_span};
 use super::*;
 
-pub(super) const PLUK: u32 = 0x2a64;
-pub(super) const TLAS: u32 = 0x896a;
+pub(super) const ASSESS: u32 = 0x2a64;
+pub(super) const WORTH: u32 = 0x896a;
 
 #[derive(Clone, Copy)]
 struct TokenSpan {
@@ -138,8 +138,8 @@ fn operation_suffix(words: &[impl VliwWord], start: usize, group_len: usize) -> 
         return false;
     }
     let verb_start = token_count - 3;
-    token_at(words, start, group_len, verb_start) == Some(PLUK)
-        && token_at(words, start, group_len, verb_start + 1) == Some(TLAS)
+    token_at(words, start, group_len, verb_start) == Some(ASSESS)
+        && token_at(words, start, group_len, verb_start + 1) == Some(WORTH)
         && token_at(words, start, group_len, verb_start + 2) == Some(DEONTIC)
         && !boundary_at_token(words, start, verb_start)
         && !boundary_at_token(words, start, verb_start + 1)
@@ -455,8 +455,8 @@ pub(super) fn pluk_tlas_group(
         Err(error) => return Some(CoreResult::failure(error, group_len as u32)),
     };
     if parsed.verb.length != 2
-        || token_at(words, start, group_len, parsed.verb.start) != Some(PLUK)
-        || token_at(words, start, group_len, parsed.verb.start + 1) != Some(TLAS)
+        || token_at(words, start, group_len, parsed.verb.start) != Some(ASSESS)
+        || token_at(words, start, group_len, parsed.verb.start + 1) != Some(WORTH)
         || parsed.field_count != 3
     {
         return Some(CoreResult::failure(ERROR_MALFORMED, group_len as u32));

@@ -12,7 +12,9 @@ use super::volume::{DictionaryMetadata, DictionaryVolumeError};
 use super::volume_records::{
     PROFILE_VERSION, PROFILE_VERSION_V2, PROFILE_VERSION_V3, TOC_ROLES, TOC_ROLES_V4,
 };
-use super::wire::{AS, BY, FROM, TO, WITH};
+use super::words::{
+    DESTINATION, COMITATIVE, SOURCE, ESSIVE, INSTRUMENTAL,
+};
 use crate::{HEADER_BYTES, PyacError, WORDS_PER_CODELET};
 use std::io::{Read, Seek, SeekFrom};
 use std::ops::Range;
@@ -293,7 +295,7 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
     ///
     /// A lexical-form sentence is
     /// `name <key> su, text "<language>" as, text "<surface>" from, ...`.
-    /// Values precede their case words, so the language text comes before `AS`.
+    /// Values precede their case words, so the language text comes before `ESSIVE`.
     fn english_forms(&mut self, key: &[u16]) -> Result<Vec<String>, DictionaryReadError> {
         use super::reader_codec::{take_record_subject, take_text};
         let Some(range) = self.location(key)? else {
@@ -314,7 +316,7 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
             );
             if is_ours {
                 // Accept only a record that is exactly `as L from S to N`, i.e.
-                // one whose case words are AS, FROM, TO in that order. A
+                // one whose case words are ESSIVE, SOURCE, DESTINATION in that order. A
                 // source-gloss is `as L from D to R by I with T`; matching the
                 // full case sequence is what distinguishes a surface from a
                 // dataset name, and it is insensitive to multi-codelet text.
@@ -324,12 +326,12 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
                     .iter()
                     .skip(cursor)
                     .copied()
-                    .filter(|word| [AS, FROM, TO, BY, WITH].contains(word))
+                    .filter(|word| [ESSIVE, SOURCE, DESTINATION, INSTRUMENTAL, COMITATIVE].contains(word))
                     .collect();
-                if cases == [AS, FROM, TO] {
+                if cases == [ESSIVE, SOURCE, DESTINATION] {
                     let mut probe = cursor;
                     if let Ok(language) = take_text(words, &mut probe) {
-                        if language == "en" && words.get(probe) == Some(&AS) {
+                        if language == "en" && words.get(probe) == Some(&ESSIVE) {
                             probe += 1;
                             if let Ok(surface) = take_text(words, &mut probe) {
                                 if seen.insert(surface.clone()) {
@@ -526,6 +528,51 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
         self.read_range(range)
     }
 
+    /// Every sentence an entry's codelet range holds, decoded.
+    ///
+    /// The reader already knows how to walk a range into sentences, including the
+    /// raw-text continuation codelets that long text literals spill into. The
+    /// volume decoder needs the same walk in pack coordinates, so this exposes it
+    /// rather than making the decoder re-implement the scanner.
+    pub(crate) fn entry_sentences(
+        &mut self,
+        key: &[u16],
+    ) -> Result<Vec<super::reader_codec::Sentence>, DictionaryReadError> {
+        let range = self
+            .location(key)?
+            .ok_or_else(|| DictionaryReadError::MissingEntry(key.to_vec()))?;
+        self.sentences_in(range, false)
+    }
+
+    /// Decode every sentence in a codelet range, seeking by pack ordinal.
+    ///
+    /// Index sections use the v4 quote layout (raw continuation codelets keep
+    /// their leading index word); entry bodies use the ordinary layout. The
+    /// two are not interchangeable, so the caller says which range it is.
+    pub(crate) fn sentences_in(
+        &mut self,
+        range: Range<u32>,
+        indexed: bool,
+    ) -> Result<Vec<super::reader_codec::Sentence>, DictionaryReadError> {
+        if range.start > range.end || range.end > self.codelet_count {
+            return Err(DictionaryReadError::InvalidRecord(
+                "requested codelet range is outside the pack",
+            ));
+        }
+        let mut sentences = Vec::new();
+        let mut ordinal = range.start;
+        while ordinal < range.end {
+            let sentence = if indexed {
+                read_sentence_v4(&mut self.source, ordinal, range.end)?
+            } else {
+                read_sentence(&mut self.source, ordinal, range.end)?
+            };
+            ordinal += sentence.consumed;
+            sentences.push(sentence);
+        }
+        Ok(sentences)
+    }
+
     fn read_range(
         &mut self,
         range: Range<u32>,
@@ -703,9 +750,9 @@ fn is_v4_entry_metadata(sentence: &Sentence, key: &[u16]) -> Result<bool, Dictio
         return Ok(false);
     }
     let text_shapes: [&[u16]; 3] = [
-        &[AS, FROM, TO],
-        &[AS, FROM, TO, BY],
-        &[AS, FROM, TO, BY, WITH],
+        &[ESSIVE, SOURCE, DESTINATION],
+        &[ESSIVE, SOURCE, DESTINATION, INSTRUMENTAL],
+        &[ESSIVE, SOURCE, DESTINATION, INSTRUMENTAL, COMITATIVE],
     ];
     for cases in text_shapes {
         let mut position = cursor;
@@ -717,7 +764,7 @@ fn is_v4_entry_metadata(sentence: &Sentence, key: &[u16]) -> Result<bool, Dictio
             return Ok(true);
         }
     }
-    for case in [FROM, WITH, TO, BY] {
+    for case in [SOURCE, COMITATIVE, DESTINATION, INSTRUMENTAL] {
         let mut position = cursor;
         if take_vector(words, &mut position).is_ok()
             && expect_word(words, &mut position, case).is_ok()
@@ -729,13 +776,13 @@ fn is_v4_entry_metadata(sentence: &Sentence, key: &[u16]) -> Result<bool, Dictio
     {
         let mut position = cursor;
         if take_vector(words, &mut position).is_ok()
-            && expect_word(words, &mut position, FROM).is_ok()
+            && expect_word(words, &mut position, SOURCE).is_ok()
             && expect_end(words, &mut position).is_ok()
         {
             return Ok(true);
         }
     }
-    for cases in [&[AS, FROM, TO][..], &[AS, BY, WITH][..]] {
+    for cases in [&[ESSIVE, SOURCE, DESTINATION][..], &[ESSIVE, INSTRUMENTAL, COMITATIVE][..]] {
         let mut position = cursor;
         if take_vector(words, &mut position).is_ok()
             && expect_word(words, &mut position, cases[0]).is_ok()

@@ -1,6 +1,6 @@
 import pyashWords from "../pyashWords.json" with { type: "json" };
 import { defaultVerbSpelling } from "../dictionary/verb_defaults.mjs";
-import { decodePyacWord, segmentPyacWords } from "./word_code.mjs";
+import { decodePyacWord, encodePyacWord, segmentPyacWords } from "./word_code.mjs";
 import {
   FIXED16_SCALE,
   fixed16ValueFromNumerator
@@ -637,16 +637,31 @@ export function lookupLegacyWordSequence(name) {
 export function lookupPyaWordSequence(name) {
   if (typeof name !== "string" || !name.trim()) return null;
   const tokens = name.trim().toLowerCase().split(/\s+/u).filter(Boolean);
+  // The codec is the identity, so a spelling resolves without a table: encode
+  // it, then decode it back to the canonical spelling. A word that does not
+  // round-trip is not a Pyac word.
+  const round = (candidate) => {
+    try {
+      const word = encodePyacWord(candidate);
+      if (decodePyacWord(word) !== candidate) return null;
+      return { en: null, hnuc: `0x${word.toString(16).toUpperCase().padStart(4, "0")}`, pya: candidate };
+    } catch {
+      return null;
+    }
+  };
   const entries = [];
   for (const token of tokens) {
-    const direct = lookupLegacyPyaName(token);
+    const direct = round(token);
     if (direct) {
       entries.push(direct);
       continue;
     }
+    // Not one word: try it as a run-together compound. `name` is the case that
+    // matters — it is four glyphs with no valid final consonant, so it does not
+    // encode, but it segments cleanly into `na me`.
     const segmented = segmentPyacWords(token);
     if (!segmented || segmented.length < 2) return null;
-    const parts = segmented.map((part) => lookupLegacyPyaName(part));
+    const parts = segmented.map(round);
     if (parts.some((part) => part === null)) return null;
     entries.push(...parts);
   }

@@ -6,8 +6,8 @@ use std::time::Instant;
 
 use pyac::dictionary::{
     DictionaryFileReader, DictionaryMetadata, DictionaryVolume, DictionaryVolumeEntry, LexicalForm,
-    OperationArgument, OperationArgumentType, OperationResult, OperationSignature, SourceGloss,
-    SourceLink, encode_dictionary,
+    OperationParameter, ArgumentSlot, OperationResult, OperationSignature, SourceGloss,
+    SourceLink, decode_dictionary, encode_dictionary,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -78,23 +78,34 @@ struct OperationSignatureInput {
     results: Vec<OperationResultInput>,
 }
 
+// Wire structs. The JSON keys are a published contract with the source
+// producer (`program/library/dictionary/source.mjs`), so the serde names keep
+// their old spellings while the Rust fields say what the values are:
+// `value_type` is a noun class, `name` is a tag label, `description` is a
+// descriptive specification.
 #[derive(Deserialize)]
 struct OperationArgumentInput {
     grammatical_case: Vec<u16>,
-    value_type: Vec<u16>,
-    name: String,
-    description: String,
+    #[serde(rename = "value_type")]
+    noun_class: Vec<u16>,
+    #[serde(rename = "name")]
+    tag_label: String,
+    #[serde(rename = "description")]
+    descriptive_specification: String,
 }
 
 #[derive(Deserialize)]
 struct OperationResultInput {
-    value_type: Vec<u16>,
-    name: String,
-    description: String,
+    #[serde(rename = "value_type")]
+    noun_class: Vec<u16>,
+    #[serde(rename = "name")]
+    tag_label: String,
+    #[serde(rename = "description")]
+    descriptive_specification: String,
 }
 
 fn usage() -> &'static str {
-    "usage:\n  pyac-dictionary build <volume.pyac>  # Build JSON request is read from stdin.\n  pyac-dictionary inspect <volume.pyac>\n  pyac-dictionary surface <volume.pyac> <language> <surface>\n  pyac-dictionary surface-entries <volume.pyac> <language> <surface>\n  pyac-dictionary source <volume.pyac> <dataset> <release> <identifier>\n  pyac-dictionary source-entries <volume.pyac> <dataset> <release> <identifier>\n  pyac-dictionary key <volume.pyac> <hnuc[,hnuc...]>\n  pyac-dictionary entry <volume.pyac> <hnuc[,hnuc...]>\n  pyac-dictionary verify <volume.pyac>  # every canonical key must read back.\n  pyac-dictionary export <volume.pyac>  # every key with its English forms.\n  pyac-dictionary benchmark <volume.pyac> <iterations> surface <language> <surface>"
+    "usage:\n  pyac-dictionary build <volume.pyac>  # Build JSON request is read from stdin.\n  pyac-dictionary inspect <volume.pyac>\n  pyac-dictionary surface <volume.pyac> <language> <surface>\n  pyac-dictionary surface-entries <volume.pyac> <language> <surface>\n  pyac-dictionary source <volume.pyac> <dataset> <release> <identifier>\n  pyac-dictionary source-entries <volume.pyac> <dataset> <release> <identifier>\n  pyac-dictionary key <volume.pyac> <hnuc[,hnuc...]>\n  pyac-dictionary entry <volume.pyac> <hnuc[,hnuc...]>\n  pyac-dictionary decode <volume.pyac>  # edit -> build request on stdout.\n  pyac-dictionary verify <volume.pyac>  # every canonical key must read back.\n  pyac-dictionary export <volume.pyac>  # every key with its English forms.\n  pyac-dictionary benchmark <volume.pyac> <iterations> surface <language> <surface>"
 }
 
 fn binary_bytes() -> io::Result<u64> {
@@ -177,22 +188,22 @@ fn convert_input(input: BuildInput) -> Result<DictionaryVolume, String> {
                         arguments: signature
                             .arguments
                             .into_iter()
-                            .map(|argument| OperationArgument {
-                                key: OperationArgumentType {
+                            .map(|argument| OperationParameter {
+                                case_type: ArgumentSlot {
                                     grammatical_case: argument.grammatical_case,
-                                    value_type: argument.value_type,
+                                    noun_class: argument.noun_class,
                                 },
-                                name: argument.name,
-                                description: argument.description,
+                                tag_label: argument.tag_label,
+                                descriptive_specification: argument.descriptive_specification,
                             })
                             .collect(),
                         results: signature
                             .results
                             .into_iter()
                             .map(|result| OperationResult {
-                                value_type: result.value_type,
-                                name: result.name,
-                                description: result.description,
+                                noun_class: result.noun_class,
+                                tag_label: result.tag_label,
+                                descriptive_specification: result.descriptive_specification,
                             })
                             .collect(),
                     })
@@ -210,6 +221,66 @@ fn convert_input(input: BuildInput) -> Result<DictionaryVolume, String> {
             normalization_policy: input.metadata.normalization_policy,
         },
         entries,
+    })
+}
+
+/// Turn a decoded volume back into the `build` request shape.
+///
+/// The two differ only in packaging: `build` takes plain JSON with `definition`
+/// as flat codelet arrays, and the model holds the same data with typed fields.
+/// Keeping the conversion here — rather than making the library serde-aware —
+/// keeps the on-disk format the only thing the library has to be exact about.
+fn volume_to_build_input(volume: &DictionaryVolume) -> Value {
+    json!({
+        "metadata": {
+            "kind": volume.metadata.kind,
+            "title": volume.metadata.title,
+            "revision": volume.metadata.revision,
+            "languages": volume.metadata.languages,
+            "normalization_policy": volume.metadata.normalization_policy,
+        },
+        "entries": volume.entries.iter().map(|entry| json!({
+            "key": entry.key,
+            "lexical_forms": entry.lexical_forms.iter().map(|form| json!({
+                "language": form.language,
+                "surface": form.surface,
+                "normalized": form.normalized,
+            })).collect::<Vec<_>>(),
+            "source_links": entry.source_links.iter().map(|link| json!({
+                "dataset": link.dataset,
+                "release": link.release,
+                "identifier": link.identifier,
+                "relation": link.relation,
+            })).collect::<Vec<_>>(),
+            "source_glosses": entry.source_glosses.iter().map(|gloss| json!({
+                "language": gloss.language,
+                "text": gloss.text,
+                "dataset": gloss.dataset,
+                "release": gloss.release,
+                "identifier": gloss.identifier,
+            })).collect::<Vec<_>>(),
+            "component_keys": entry.component_keys,
+            "task_keys": entry.task_keys,
+            "references": entry.references,
+            "operation_signatures": entry.operation_signatures.iter().map(|signature| json!({
+                "verb": signature.verb,
+                "mood": signature.mood,
+                "arguments": signature.arguments.iter().map(|argument| json!({
+                    "grammatical_case": argument.case_type.grammatical_case,
+                    "value_type": argument.case_type.noun_class,
+                    "name": argument.tag_label,
+                    "description": argument.descriptive_specification,
+                })).collect::<Vec<_>>(),
+                "results": signature.results.iter().map(|result| json!({
+                    "value_type": result.noun_class,
+                    "name": result.tag_label,
+                    "description": result.descriptive_specification,
+                })).collect::<Vec<_>>(),
+            })).collect::<Vec<_>>(),
+            "definition": entry.definition.as_ref().map(|codelets| {
+                codelets.iter().map(|codelet| codelet.to_vec()).collect::<Vec<_>>()
+            }),
+        })).collect::<Vec<_>>(),
     })
 }
 
@@ -416,6 +487,17 @@ fn execute(args: &[String]) -> Result<Value, Box<dyn std::error::Error>> {
                 "count": entries.len(),
                 "atoms": atoms,
                 "volumeBytes": size, "openMs": open_ms, "scanNs": scan_ns
+            })
+        }
+        "decode" if args.len() == 2 => {
+            // Emit the same JSON shape `build` consumes, so the cycle is
+            // decode -> edit -> build with no intermediate format to invent.
+            let path = Path::new(&args[1]);
+            let volume = decode_dictionary(File::open(path)?)?;
+            json!({
+                "command": "decode", "path": args[1],
+                "entries": volume.entries.len(),
+                "request": volume_to_build_input(&volume)
             })
         }
         "verify" if args.len() == 2 => {

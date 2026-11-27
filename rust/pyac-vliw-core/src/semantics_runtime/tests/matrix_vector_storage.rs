@@ -2,7 +2,10 @@ use super::*;
 
 const INPUT: u32 = 0x4123;
 const OUTPUT: u32 = 0x4567;
-const WEIGHTS: u32 = 0x4890;
+/// `psin` = weight. The fixture names a section "weights", so it uses the atom
+/// that means weight. It previously used `hgip` (0x4890), which means "cabbage"
+/// — a label that told the reader nothing and contradicted the test.
+const WEIGHTS: u32 = 0x6844;
 const NUMBER_QUOTE: u32 = 0x881d;
 const DESTINATION: u32 = 0x243e;
 const LOCATIVE: u32 = 0x615f;

@@ -49,23 +49,41 @@ async function digest(file) {
 /** Regenerate the snapshot and rebuild the volume in place. */
 async function rebuild() {
   const summary = await generateAcceptedReferenceSource();
-  const build = await runPyacDictionary([
-    "build",
-    "from",
-    SOURCE,
-    "to",
-    VOLUME
-  ], { stdout: { write() {} } });
-  return {
-    source: SOURCE,
-    sourceBytes: summary.bytes,
-    volume: VOLUME,
-    volumeBytes: build.volumeBytes,
-    entries: build.entries,
-    codelets: build.codeletCount,
-    sourceSha256: await digest(SOURCE),
-    volumeSha256: await digest(VOLUME)
-  };
+  const sourceSha256 = await digest(SOURCE);
+  // The volume is 131 MB and LFS-tracked, so every rewrite becomes a new LFS
+  // object against a 1 GB free quota. Build beside the target and move it into
+  // place only when the bytes differ, so an unchanged source leaves the tracked
+  // file untouched and no object is created. The volume records no source
+  // digest, so comparing the encoded bytes is the only honest test of "current".
+  const scratchDirectory = await mkdtemp(path.join(tmpdir(), "pyash-reference-rebuild-"));
+  const candidate = path.join(scratchDirectory, "reference.pyac");
+  try {
+    const build = await runPyacDictionary(["build", "from", SOURCE, "to", candidate], {
+      stdout: { write() {} }
+    });
+    const encoded = await readFile(candidate);
+    const current = await readFile(VOLUME).catch(() => null);
+    const unchanged = current !== null && current.equals(encoded);
+    if (!unchanged) await writeFile(VOLUME, encoded);
+    return {
+      source: SOURCE,
+      sourceBytes: summary.bytes,
+      volume: VOLUME,
+      volumeBytes: encoded.length,
+      entries: build.entries,
+      codelets: build.codeletCount,
+      // Dropped sense rows are reported, not swallowed: the build refuses to
+      // exceed its recorded ceiling, and this surfaces what it dropped below it.
+      droppedSenseRows: summary.droppedSenseRows,
+      droppedSenseExamples: summary.droppedSenseExamples,
+      sourceSha256,
+      volumeSha256: await digest(VOLUME),
+      // Reported so a caller can tell "rebuilt" from "already current".
+      volumeRewritten: !unchanged
+    };
+  } finally {
+    await rm(scratchDirectory, { recursive: true, force: true });
+  }
 }
 
 /** Rebuild into a scratch directory and compare against the committed artifacts. */
