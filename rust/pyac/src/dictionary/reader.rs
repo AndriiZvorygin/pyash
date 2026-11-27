@@ -12,9 +12,7 @@ use super::volume::{DictionaryMetadata, DictionaryVolumeError};
 use super::volume_records::{
     PROFILE_VERSION, PROFILE_VERSION_V2, PROFILE_VERSION_V3, TOC_ROLES, TOC_ROLES_V4,
 };
-use super::words::{
-    DESTINATION, COMITATIVE, SOURCE, ESSIVE, INSTRUMENTAL,
-};
+use super::words::{COMITATIVE, DESTINATION, ESSIVE, INSTRUMENTAL, SOURCE};
 use crate::{HEADER_BYTES, PyacError, WORDS_PER_CODELET};
 use std::io::{Read, Seek, SeekFrom};
 use std::ops::Range;
@@ -326,7 +324,9 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
                     .iter()
                     .skip(cursor)
                     .copied()
-                    .filter(|word| [ESSIVE, SOURCE, DESTINATION, INSTRUMENTAL, COMITATIVE].contains(word))
+                    .filter(|word| {
+                        [ESSIVE, SOURCE, DESTINATION, INSTRUMENTAL, COMITATIVE].contains(word)
+                    })
                     .collect();
                 if cases == [ESSIVE, SOURCE, DESTINATION] {
                     let mut probe = cursor;
@@ -782,7 +782,10 @@ fn is_v4_entry_metadata(sentence: &Sentence, key: &[u16]) -> Result<bool, Dictio
             return Ok(true);
         }
     }
-    for cases in [&[ESSIVE, SOURCE, DESTINATION][..], &[ESSIVE, INSTRUMENTAL, COMITATIVE][..]] {
+    for cases in [
+        &[ESSIVE, SOURCE, DESTINATION][..],
+        &[ESSIVE, INSTRUMENTAL, COMITATIVE][..],
+    ] {
         let mut position = cursor;
         if take_vector(words, &mut position).is_ok()
             && expect_word(words, &mut position, cases[0]).is_ok()

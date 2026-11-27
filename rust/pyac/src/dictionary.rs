@@ -14,8 +14,7 @@ pub use decode::decode_dictionary;
 pub use index::DictionaryIndex;
 pub use model::{DictionaryEntry, DictionaryIndexError, LexicalForm, SourceGloss, SourceLink};
 pub use operation::{
-    OperationParameter, ArgumentSlot, OperationResult, OperationSignature,
-    OperationSignatureKey,
+    ArgumentSlot, OperationParameter, OperationResult, OperationSignature, OperationSignatureKey,
 };
 pub use reader::{DictionaryFileReader, DictionaryReadError, DictionarySection};
 pub use volume::{

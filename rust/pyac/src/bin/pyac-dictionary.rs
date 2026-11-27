@@ -5,9 +5,9 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use pyac::dictionary::{
-    DictionaryFileReader, DictionaryMetadata, DictionaryVolume, DictionaryVolumeEntry, LexicalForm,
-    OperationParameter, ArgumentSlot, OperationResult, OperationSignature, SourceGloss,
-    SourceLink, decode_dictionary, encode_dictionary,
+    ArgumentSlot, DictionaryFileReader, DictionaryMetadata, DictionaryVolume,
+    DictionaryVolumeEntry, LexicalForm, OperationParameter, OperationResult, OperationSignature,
+    SourceGloss, SourceLink, decode_dictionary, encode_dictionary,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};

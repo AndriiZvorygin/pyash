@@ -18,7 +18,10 @@ use std::path::Path;
 fn read(relative: &str) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(relative);
     fs::read_to_string(&path).unwrap_or_else(|error| {
-        panic!("cannot read {} for the naming guard: {error}", path.display())
+        panic!(
+            "cannot read {} for the naming guard: {error}",
+            path.display()
+        )
     })
 }
 
@@ -62,8 +65,14 @@ fn the_english_role_names_are_gone() {
     ] {
         let source = read(file);
         for banned in [
-            "const SU:", "const OB:", "const FROM:", "const TO:", "const AS:", "const BY:",
-            "const WITH:", "const AT:",
+            "const SU:",
+            "const OB:",
+            "const FROM:",
+            "const TO:",
+            "const AS:",
+            "const BY:",
+            "const WITH:",
+            "const AT:",
         ] {
             assert!(
                 !source.contains(banned),
@@ -92,9 +101,23 @@ fn identifiers_are_english_not_pya_spellings() {
     ] {
         let source = read(file);
         for banned in [
-            "GJAT_", "BWIT_", "HGUT_", "HGIP_", "DLEK_", "GI_NAME", "NA_NOMINATIVE",
-            "KA_ACCUSATIVE", "SWIH_ESSIVE", "SO_SOURCE", "MA_DESTINATION", "YU_INSTRUMENTAL",
-            "MWAH_COMITATIVE", "LWOH_LOCATIVE", "LI_REALIS", "PLUK", "TLAS",
+            "GJAT_",
+            "BWIT_",
+            "HGUT_",
+            "HGIP_",
+            "DLEK_",
+            "GI_NAME",
+            "NA_NOMINATIVE",
+            "KA_ACCUSATIVE",
+            "SWIH_ESSIVE",
+            "SO_SOURCE",
+            "MA_DESTINATION",
+            "YU_INSTRUMENTAL",
+            "MWAH_COMITATIVE",
+            "LWOH_LOCATIVE",
+            "LI_REALIS",
+            "PLUK",
+            "TLAS",
         ] {
             assert!(
                 !source.contains(banned),
@@ -115,7 +138,9 @@ fn both_encodings_state_the_same_dispatch_identity() {
     ] {
         let source = read(file);
         assert!(
-            source.contains("dispatch identity = verb + mood + sorted[(grammatical_case, noun_class)]"),
+            source.contains(
+                "dispatch identity = verb + mood + sorted[(grammatical_case, noun_class)]"
+            ),
             "{file} should state the dispatch identity verbatim, so the two encodings cannot drift apart"
         );
     }
@@ -127,8 +152,7 @@ fn both_encodings_state_the_same_dispatch_identity() {
 fn the_argument_result_split_is_stated() {
     let source = read("src/dictionary/operation.rs");
     assert!(
-        source.contains("case-keyed")
-            && source.contains("keyed by noun class only"),
+        source.contains("case-keyed") && source.contains("keyed by noun class only"),
         "operation.rs should say arguments are case-keyed inputs and results are noun-class-keyed outputs"
     );
     assert!(

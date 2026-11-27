@@ -184,9 +184,20 @@ fn packing_a_noun_class_is_reversible() {
         }
     }
 
-    for hnuc in [NAME_TYPE, NUMBER_TYPE, BOOLEAN_TYPE, VECTOR_TYPE, 0x0001, 0xffff] {
+    for hnuc in [
+        NAME_TYPE,
+        NUMBER_TYPE,
+        BOOLEAN_TYPE,
+        VECTOR_TYPE,
+        0x0001,
+        0xffff,
+    ] {
         let packed = pack_word_noun_class(hnuc);
         assert_eq!(unpack_word_noun_class(packed), Some(hnuc));
-        assert_eq!(unpack_quote_noun_class(packed), None, "a word class is not a quote");
+        assert_eq!(
+            unpack_quote_noun_class(packed),
+            None,
+            "a word class is not a quote"
+        );
     }
 }

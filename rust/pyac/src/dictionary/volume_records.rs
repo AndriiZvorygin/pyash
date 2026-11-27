@@ -3,10 +3,7 @@ use super::volume::{DictionaryMetadata, DictionaryVolumeError};
 use super::wire::{
     Field, Subject, Value, encode_index_sentence_v4, encode_sentence, encode_text_sentence,
 };
-use super::words::{
-    ACCUSATIVE, LOCATIVE, DESTINATION, COMITATIVE, SOURCE, ESSIVE,
-    INSTRUMENTAL,
-};
+use super::words::{ACCUSATIVE, COMITATIVE, DESTINATION, ESSIVE, INSTRUMENTAL, LOCATIVE, SOURCE};
 use super::{DictionaryEntry, DictionaryVolumeEntry};
 use crate::WORDS_PER_CODELET;
 

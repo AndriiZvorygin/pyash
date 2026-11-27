@@ -5,10 +5,7 @@ use super::reader_codec::{
     take_vector,
 };
 use super::volume_records::INDEX_SUBJECT;
-use super::words::{
-    ACCUSATIVE, LOCATIVE, DESTINATION, COMITATIVE, SOURCE, ESSIVE,
-    INSTRUMENTAL,
-};
+use super::words::{ACCUSATIVE, COMITATIVE, DESTINATION, ESSIVE, INSTRUMENTAL, LOCATIVE, SOURCE};
 use super::{ArgumentSlot, OperationSignatureKey};
 use std::io::{Read, Seek};
 use unicode_normalization::UnicodeNormalization;

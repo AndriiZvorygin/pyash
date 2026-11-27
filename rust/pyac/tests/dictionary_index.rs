@@ -1,6 +1,6 @@
 use pyac::dictionary::{
-    DictionaryEntry, DictionaryIndex, DictionaryIndexError, LexicalForm, OperationParameter,
-    ArgumentSlot, OperationResult, OperationSignature, OperationSignatureKey, SourceLink,
+    ArgumentSlot, DictionaryEntry, DictionaryIndex, DictionaryIndexError, LexicalForm,
+    OperationParameter, OperationResult, OperationSignature, OperationSignatureKey, SourceLink,
 };
 
 fn entry(key: &[u16], start: u32) -> DictionaryEntry {

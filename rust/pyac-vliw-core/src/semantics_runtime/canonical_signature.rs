@@ -80,11 +80,7 @@ pub(super) fn unpack_quote_noun_class(class: u32) -> Option<(u32, u32, bool)> {
     if class & TYPE_QUOTE_TAG == 0 {
         return None;
     }
-    Some((
-        (class >> 12) & 0xf,
-        (class >> 4) & 0xff,
-        class & 1 != 0,
-    ))
+    Some(((class >> 12) & 0xf, (class >> 4) & 0xff, class & 1 != 0))
 }
 
 /// Unpack a bare-word noun class into its HNUC, or `None` for any other class.
@@ -255,7 +251,11 @@ fn noun_class(
     let quote = quote_header(first);
     if quote.valid != 0 {
         let vector = first & 0x0700 != 0;
-        return Ok(pack_quote_noun_class(quote.sort, quote.scalar_bytes, vector));
+        return Ok(pack_quote_noun_class(
+            quote.sort,
+            quote.scalar_bytes,
+            vector,
+        ));
     }
     Ok(TYPE_WORD_TAG)
 }

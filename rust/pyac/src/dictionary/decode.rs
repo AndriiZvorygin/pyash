@@ -21,23 +21,19 @@ use std::io::{Read, Seek};
 use super::operation::{ArgumentSlot, OperationParameter, OperationResult, OperationSignature};
 use super::reader::DictionaryFileReader;
 use super::reader_codec::{
-    Sentence, expect_end, take_record_subject, take_text,
-    take_uint32, take_vector,
+    Sentence, expect_end, take_record_subject, take_text, take_uint32, take_vector,
 };
 use super::volume::{
     DictionaryMetadata, DictionaryVolume, DictionaryVolumeEntry, DictionaryVolumeError,
 };
+use super::words::{COMITATIVE, DESTINATION, ESSIVE, INSTRUMENTAL, SOURCE};
 use crate::WORDS_PER_CODELET;
-use super::words::{
-    DESTINATION, COMITATIVE, SOURCE, ESSIVE, INSTRUMENTAL,
-};
 
 /// Read every entry of a v4 volume into the editable model.
 pub fn decode_dictionary<R: Read + Seek>(
     source: R,
 ) -> Result<DictionaryVolume, DictionaryVolumeError> {
-    let mut reader = DictionaryFileReader::open(source)
-        .map_err(|error| fail(error.to_string()))?;
+    let mut reader = DictionaryFileReader::open(source).map_err(|error| fail(error.to_string()))?;
     if reader.profile_version() != super::volume_records::PROFILE_VERSION {
         return Err(DictionaryVolumeError::InvalidEntry(
             "decode requires a pyac-vliw-dictionary/4 volume",
@@ -50,7 +46,9 @@ pub fn decode_dictionary<R: Read + Seek>(
         languages: reader.metadata().languages.clone(),
         normalization_policy: reader.metadata().normalization_policy.clone(),
     };
-    let keys = reader.canonical_keys().map_err(|error| fail(error.to_string()))?;
+    let keys = reader
+        .canonical_keys()
+        .map_err(|error| fail(error.to_string()))?;
 
     let mut entries = Vec::with_capacity(keys.len());
     for key in keys {
@@ -122,14 +120,29 @@ fn decode_entry(
         let fields = read_fields(sentence)?;
         let cases: Vec<u16> = fields.iter().map(Field::case).collect();
         match (cases.as_slice(), fields.as_slice()) {
-            ([ESSIVE, SOURCE, DESTINATION], [Field::Text(_, language), Field::Text(_, surface), Field::Text(_, normalized)]) => {
+            (
+                [ESSIVE, SOURCE, DESTINATION],
+                [
+                    Field::Text(_, language),
+                    Field::Text(_, surface),
+                    Field::Text(_, normalized),
+                ],
+            ) => {
                 entry.lexical_forms.push(super::model::LexicalForm {
                     language: language.clone(),
                     surface: surface.clone(),
                     normalized: normalized.clone(),
                 });
             }
-            ([ESSIVE, SOURCE, DESTINATION, INSTRUMENTAL], [Field::Text(_, dataset), Field::Text(_, release), Field::Text(_, identifier), Field::Text(_, relation)]) => {
+            (
+                [ESSIVE, SOURCE, DESTINATION, INSTRUMENTAL],
+                [
+                    Field::Text(_, dataset),
+                    Field::Text(_, release),
+                    Field::Text(_, identifier),
+                    Field::Text(_, relation),
+                ],
+            ) => {
                 entry.source_links.push(super::model::SourceLink {
                     dataset: dataset.clone(),
                     release: release.clone(),
@@ -137,7 +150,16 @@ fn decode_entry(
                     relation: relation.clone(),
                 });
             }
-            ([ESSIVE, SOURCE, DESTINATION, INSTRUMENTAL, COMITATIVE], [Field::Text(_, language), Field::Text(_, dataset), Field::Text(_, release), Field::Text(_, identifier), Field::Text(_, text)]) => {
+            (
+                [ESSIVE, SOURCE, DESTINATION, INSTRUMENTAL, COMITATIVE],
+                [
+                    Field::Text(_, language),
+                    Field::Text(_, dataset),
+                    Field::Text(_, release),
+                    Field::Text(_, identifier),
+                    Field::Text(_, text),
+                ],
+            ) => {
                 entry.source_glosses.push(super::model::SourceGloss {
                     language: language.clone(),
                     text: text.clone(),
@@ -159,7 +181,14 @@ fn decode_entry(
                 entry.operation_signatures.push(decode_signature(dispatch)?);
                 pending_signature = true;
             }
-            ([ESSIVE, SOURCE, DESTINATION], [Field::Vector(_, slot), Field::Text(_, label), Field::Text(_, description)]) => {
+            (
+                [ESSIVE, SOURCE, DESTINATION],
+                [
+                    Field::Vector(_, slot),
+                    Field::Text(_, label),
+                    Field::Text(_, description),
+                ],
+            ) => {
                 if !pending_signature {
                     return Err(DictionaryVolumeError::InvalidEntry(
                         "operation argument precedes its signature",
@@ -177,7 +206,9 @@ fn decode_entry(
                     .arguments;
                 let target = arguments
                     .iter_mut()
-                    .find(|argument| argument.case_type == case_type && argument.tag_label.is_empty())
+                    .find(|argument| {
+                        argument.case_type == case_type && argument.tag_label.is_empty()
+                    })
                     .ok_or_else(|| {
                         DictionaryVolumeError::InvalidEntry(
                             "operation argument descriptor has no matching slot in its dispatch",
@@ -186,7 +217,14 @@ fn decode_entry(
                 target.tag_label = label.clone();
                 target.descriptive_specification = description.clone();
             }
-            ([ESSIVE, DESTINATION, COMITATIVE], [Field::Vector(_, noun_class), Field::Text(_, label), Field::Text(_, description)]) => {
+            (
+                [ESSIVE, DESTINATION, COMITATIVE],
+                [
+                    Field::Vector(_, noun_class),
+                    Field::Text(_, label),
+                    Field::Text(_, description),
+                ],
+            ) => {
                 if !pending_signature {
                     return Err(DictionaryVolumeError::InvalidEntry(
                         "operation result precedes its signature",
@@ -280,8 +318,7 @@ fn read_value(words: &[u16], cursor: &mut usize) -> Result<Value, DictionaryVolu
             .map_err(|error| fail(error.to_string()));
     }
     let quote = crate::literal::decode_quote_header(header);
-    let is_uint16_vector = quote
-        .is_some_and(|item| item.sort == 4 && item.scalar_bytes == 2);
+    let is_uint16_vector = quote.is_some_and(|item| item.sort == 4 && item.scalar_bytes == 2);
     if is_uint16_vector {
         return take_vector(words, cursor)
             .map(Value::Vector)
@@ -344,14 +381,10 @@ fn decode_slot(slot: &[u16]) -> Result<ArgumentSlot, DictionaryVolumeError> {
     })
 }
 
-fn take_sequence(
-    words: &[u16],
-    cursor: &mut usize,
-) -> Result<Vec<u16>, DictionaryVolumeError> {
+fn take_sequence(words: &[u16], cursor: &mut usize) -> Result<Vec<u16>, DictionaryVolumeError> {
     let count = *words
         .get(*cursor)
-        .ok_or_else(|| fail("sequence has no length prefix".to_owned()))?
-        as usize;
+        .ok_or_else(|| fail("sequence has no length prefix".to_owned()))? as usize;
     *cursor += 1;
     let end = cursor
         .checked_add(count)
@@ -363,13 +396,3 @@ fn take_sequence(
     *cursor = end;
     Ok(values)
 }
-
-
-
-
-
-
-
-
-
-

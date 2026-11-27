@@ -861,11 +861,11 @@ export function buildAcceptedReferenceSource({
     languages
   };
   if (!render) return { entries, summary };
-  for (const [reason, count] of Object.entries(selectedSenses.drops)) {
+  for (const [reason, bucket] of Object.entries(selectedSenses.drops)) {
     const ceiling = DROPPED_SENSE_BASELINE[reason] ?? 0;
-    if (count > ceiling) {
+    if (bucket.count > ceiling) {
       throw new Error(
-        `the reference build now drops ${count} sense rows for ${reason}, up from ${ceiling}. `
+        `the reference build now drops ${bucket.count} sense rows for ${reason}, up from ${ceiling}. `
         + `Either fix the target or raise DROPPED_SENSE_BASELINE deliberately.`
       );
     }

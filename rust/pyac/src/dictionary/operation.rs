@@ -190,11 +190,9 @@ pub(super) fn validate_signature(signature: &OperationSignature) -> Option<&'sta
     {
         return Some("an argument case may occur only once");
     }
-    if signature
-        .arguments
-        .iter()
-        .any(|argument| argument.tag_label.trim().is_empty() || argument.descriptive_specification.trim().is_empty())
-    {
+    if signature.arguments.iter().any(|argument| {
+        argument.tag_label.trim().is_empty() || argument.descriptive_specification.trim().is_empty()
+    }) {
         return Some("each argument needs a semantic name and description");
     }
     if signature.results.iter().any(|result| {
