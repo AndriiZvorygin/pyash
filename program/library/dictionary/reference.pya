@@ -248017,6 +248017,12 @@ su name tlat kwon ob text "hnim tlat" as text "wordnet" from text "Open English 
 su name tlat kwon ob text "hnim tlat" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "a:02646150-a" with text "pertaining to or dealing with or used as a common noun" at text "source-gloss" be text ya
 su name tlat kwon ob text "hnim tlat" from text "hnim" at text "component" be text ya
 su name tlat kwon ob text "hnim tlat" from text "tlat" at text "component" be text ya
+su name tlat kwon ob text "hnim tsuk" at text "entry" be text ya
+su name tlat kwon ob text "hnim tsuk" as text "en" from text "noun class" to text "noun class" at text "lexical-form" be text ya
+su name tlat kwon ob text "hnim tsuk" as text "wiktionary" from text "en_all_nopic_2026-08" to text "noun_class" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "hnim tsuk" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "noun_class" with text "A grammatical category similar to gender in which nouns may be organized according to meaning, such as gender, animacy or shape." at text "source-gloss" be text ya
+su name tlat kwon ob text "hnim tsuk" from text "hnim" at text "component" be text ya
+su name tlat kwon ob text "hnim tsuk" from text "tsuk" at text "component" be text ya
 su name tlat kwon ob text "hnim tsut" at text "entry" be text ya
 su name tlat kwon ob text "hnim tsut" as text "en" from text "onomancer" to text "onomancer" at text "lexical-form" be text ya
 su name tlat kwon ob text "hnim tsut" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "Human" by text "subsumed-by" at text "source-link" be text ya
@@ -639353,6 +639359,12 @@ su name tlat kwon ob text "tlas kse2p" as text "wordnet" from text "Open English
 su name tlat kwon ob text "tlas kse2p" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:13337744-n" with text "a tax levied on the difference between a commodity's price before taxes and its cost of production" at text "source-gloss" be text ya
 su name tlat kwon ob text "tlas kse2p" from text "tlas" at text "component" be text ya
 su name tlat kwon ob text "tlas kse2p" from text "kse2p" at text "component" be text ya
+su name tlat kwon ob text "tlas kwin" at text "entry" be text ya
+su name tlat kwon ob text "tlas kwin" as text "en" from text "return value" to text "return value" at text "lexical-form" be text ya
+su name tlat kwon ob text "tlas kwin" as text "wiktionary" from text "en_all_nopic_2026-08" to text "return_value" by text "exact-term" at text "source-link" be text ya
+su name tlat kwon ob text "tlas kwin" as text "en" from text "wiktionary" to text "en_all_nopic_2026-08" by text "return_value" with text "The output of a program or subroutine, passed back to the context where it was called; a retval." at text "source-gloss" be text ya
+su name tlat kwon ob text "tlas kwin" from text "tlas" at text "component" be text ya
+su name tlat kwon ob text "tlas kwin" from text "kwin" at text "component" be text ya
 su name tlat kwon ob text "tlas kyit" at text "entry" be text ya
 su name tlat kwon ob text "tlas kyit" as text "en" from text "quote" to text "quote" at text "lexical-form" be text ya
 su name tlat kwon ob text "tlas kyit" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "Committing" by text "subsumed-by" at text "source-link" be text ya

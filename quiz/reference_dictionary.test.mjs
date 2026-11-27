@@ -265,3 +265,24 @@ test("the CLI prints the Wiktionary citation URL for a term it defines", () => {
   const url = `https://zim.zvorygin.ca/content/wiktionary_en_all_nopic_2026-08/signature`;
   assert.match(url, /^https:\/\/zim\.zvorygin\.ca\/content\/wiktionary_[\w-]+\/[\w-]+$/);
 });
+
+test("a concept WordNet cannot index resolves through its compound and Wiktionary", async () => {
+  // `noun class` and `return value` have no WordNet sense at all, and neither
+  // English word is a legal Pyac spelling, so each is a compound whose
+  // definition comes from Wiktionary. This is the shape every such concept
+  // takes: compound -> entry -> cited definition.
+  const silent = { stdout: { write() {} } };
+  for (const [surface, article] of [["noun class", "noun_class"], ["return value", "return_value"]]) {
+    const lines = [];
+    const capture = { stdout: { write: (text) => lines.push(text) } };
+    const result = await runPyacDictionary(["reference", "from", "en", surface], capture);
+    assert.ok(result.matches?.length >= 1, `${surface} resolves`);
+    const rendered = lines.join("");
+    assert.match(rendered, new RegExp(`Wiktionary ${article}:`), `${surface} cites Wiktionary`);
+    assert.match(
+      rendered,
+      new RegExp(`/content/wiktionary_en_all_nopic_2026-08/${article}`),
+      `${surface} gives a resolvable citation URL`
+    );
+  }
+});

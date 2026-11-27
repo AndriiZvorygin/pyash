@@ -4,4 +4,6 @@ su text "scope" ob text "Wiktionary entries for Pyac concepts WordNet does not i
 su text "scope release" ob text "en_all_nopic_2026-08" ya
 su text "scope site" ob text "https://zim.zvorygin.ca" ya
 su text "srim" ob text "signature" ya
+su text "hnim tsuk" ob text "noun_class" ya
+su text "tlas kwin" ob text "return_value" ya
 prah
