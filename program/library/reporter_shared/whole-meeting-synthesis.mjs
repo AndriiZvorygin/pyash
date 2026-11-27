@@ -207,7 +207,7 @@ function sectionContent(mdText, heading) {
   return lines.slice(start, end).join("\n").trim();
 }
 
-function hasCompleteRequiredSections(mdText) {
+function hasCompleteRequiredSections(mdText, minTopLength = 180) {
   const text = String(mdText || "");
   const hasH1 = /^#\s+Whole Meeting Summary\b/mu.test(text);
   const hasTop = /^##\s+Top Newsworthy Developments\b/mu.test(text);
@@ -217,7 +217,7 @@ function hasCompleteRequiredSections(mdText) {
   const top = sectionContent(text, "Top Newsworthy Developments");
   const why = sectionContent(text, "Why It Matters");
   const watch = sectionContent(text, "Watch Next");
-  return top.length >= 180 && why.length >= 30 && watch.length >= 20;
+  return top.length >= Math.max(0, Number(minTopLength) || 0) && why.length >= 30 && watch.length >= 20;
 }
 
 function normalizeRequiredSummaryHeadings(mdText = "") {
@@ -240,6 +240,10 @@ function matchesAnyPattern(text, patterns = []) {
 
 function proceduralHeading(heading = "") {
   return matchesAnyPattern(heading, [
+    /^\s*\d+(?:\.[a-z0-9]+)?\s+o canada\b/u,
+    /^\s*\d+(?:\.[a-z0-9]+)?\s+roll call\b/u,
+    /^\s*\d+(?:\.[a-z0-9]+)?\s+land acknowledgement\b/u,
+    /^\s*\d+(?:\.[a-z0-9]+)?\s+declaration of interest\b/u,
     /call to order/u,
     /additional business/u,
     /declarations of interest/u,
@@ -250,9 +254,15 @@ function proceduralHeading(heading = "") {
   ]);
 }
 
-function lowSignalSummary(summary = "") {
+function lowSignalSummary(summary = "", heading = "") {
   const s = String(summary || "").toLowerCase().replace(/\s+/gu, " ").trim();
+  const h = String(heading || "").toLowerCase().replace(/\s+/gu, " ").trim();
   if (!s) return true;
+  if (/\bother business\b/u.test(h) && /\bno items? (?:were )?(?:presented|submitted)\b/u.test(s)) return true;
+  if (/\bnotices? of motion\b/u.test(h)
+    && /\b(?:no notices? of motion|no motions? (?:were )?served|seeing no hands(?: go up)?|no hands (?:were )?(?:raised|up))\b/u.test(s)) {
+    return true;
+  }
   return /\b(no submissions?|none submitted|no deputations?|none scheduled|no scheduled sessions?|for information only|no correspondence(?:\s+items?)?\s+(?:were\s+presented|for\s+consideration)|meeting then proceeded)\b/u.test(s);
 }
 
@@ -291,7 +301,7 @@ function humanImpactPriority(section = {}) {
   return p;
 }
 
-function buildNewsPriorityItems(sections = [], topN = 8) {
+export function buildNewsPriorityItems(sections = [], topN = 8) {
   return (Array.isArray(sections) ? sections : [])
     .map((section, i) => {
       const heading = String(section?.heading || "").trim();
@@ -303,7 +313,7 @@ function buildNewsPriorityItems(sections = [], topN = 8) {
         score: scoreNewsCandidate(section),
       };
     })
-    .filter((row) => row.heading && row.summary && !proceduralHeading(row.heading) && !lowSignalSummary(row.summary))
+    .filter((row) => row.heading && row.summary && !proceduralHeading(row.heading) && !lowSignalSummary(row.summary, row.heading))
     .sort((a, b) => humanImpactPriority(b) - humanImpactPriority(a) || b.score - a.score || a.index - b.index)
     .slice(0, topN);
 }
@@ -618,11 +628,14 @@ function buildChunkSummaryPrompt({
     "- Preserve an action by a subordinate committee or board only when that acting body and action are explicit in the source.",
     "- Do not name individual councillors, motion movers, or seconders. Describe the committee, staff, presenter, report, or correspondence instead.",
     "- Do not add a person's name merely to make a sentence sound specific. A presenter or correspondence author's name is allowed only when it appears verbatim in the source and is essential to understanding the topic.",
+    "- One agenda heading may contain several unrelated subtopics, events, speakers, or child chapters. Keep each source-supported actor, action, event, and location paired only as the source pairs them; chronology or proximity alone does not establish a relationship.",
+    "- Do not attach an event, venue, cause, purpose, or participant to the preceding organization or topic unless the source explicitly links them. State distinct topics in separate sentences when their relationship is not explicit.",
     "- Do not turn reviewed, discussed, proposed, considered, or received items into approved, adopted, awarded, authorized, or funded outcomes.",
     "- Preserve status and tense exactly: do not change cleared/completed/authorized into targeting/planned/pending, or change a proposal into a completed outcome.",
     "- If a person's name in a heading differs from a person's name in its summary, omit both names rather than merging or choosing between them.",
     "- Canonical covered headings are authoritative for agenda item names, report codes, projects, and locations. If body text conflicts with a heading on one of those identifiers, use the heading value and omit the conflicting value.",
     "- Do not combine separate agenda items into one motion, outcome, cause, or attribution.",
+    "- Do not combine separate subtopics, events, or speaker turns within one agenda item into a shared claim. The same heading or nearby placement does not prove that one organization hosted, sponsored, caused, or participated in another event.",
     ...(SUMMARY_TIME_MODE === "upcoming"
       ? [
         "- This is an upcoming agenda preview before the meeting occurs.",
@@ -644,7 +657,7 @@ function buildChunkScorePrompt({ chunkSource = "", chunkSummary = "", bodyLabel 
     "Rules:",
     "- Penalize inverted amounts, terms, dates, directions, approvals, or outcomes.",
     "- Penalize invented causality, funding links, motives, constraints, and vote results.",
-    "- Penalize facts moved between separate agenda topics.",
+    "- Penalize facts moved or linked across separate agenda topics, subtopics, child chapters, speakers, or events without an explicit source relationship.",
     "- Penalize named councillors, motion movers, or seconders.",
     `- Penalize unsupported substitution of the meeting body "${bodyLabel || "the supplied governing body"}".`,
     "- Do not penalize a subordinate committee or board action explicitly stated in CHUNK_SOURCE.",
@@ -677,7 +690,8 @@ function buildChunkReviewAdjudicationPrompt({
     "- Do not infer approval, rejection, or a final outcome from an agenda heading, project purpose, by-law title, chapter title, or proposed use.",
     "- Treat a conservative omission of an unclear outcome as faithful unless the source explicitly states the outcome.",
     "- Penalize an outcome claim in the summary only when it contradicts an explicit source statement.",
-    "- Penalize invented amounts, dates, causality, funding links, motives, or facts moved between topics.",
+    "- Penalize invented amounts, dates, causality, funding links, motives, or facts moved between topics, events, speaker turns, or child chapters.",
+    "- A shared agenda heading and chronological proximity do not prove that one organization, person, or decision is related to a later event; require an explicit source link.",
     "- Penalize named councillors, movers, seconders, or unsupported substitution of the supplied meeting body.",
     "- Do not penalize a subordinate committee or board action explicitly stated in CHUNK_SOURCE.",
     `- The supplied governing body is "${bodyLabel || "the supplied governing body"}".`,
@@ -706,14 +720,18 @@ function buildFinalSummaryPrompt({
   jurisdiction,
   feedback,
   priorityItems,
+  agendaCoveragePlan,
+  coverageBulletBank,
+  wordBudget,
 }) {
   const focusLine = String(focus || "").trim() || "factual civic reporting";
   const rankedItemsText = (Array.isArray(priorityItems) ? priorityItems : [])
-    // Stage B receives ranking identity only. Re-supplying the raw section
-    // summaries here bypasses Stage A's bounded normalization and can
-    // reintroduce conflicting attributions or outcomes.
+    // Agenda section detail arrives through the bounded LLM-produced checklist below.
     .map((it, idx) => `${idx + 1}. [${it.index}] ${it.heading}`)
     .join("\n");
+  const coveragePlanText = formatAgendaCoveragePlan(agendaCoveragePlan);
+  const topicCount = (Array.isArray(agendaCoveragePlan) ? agendaCoveragePlan : [])
+    .reduce((total, row) => total + normalizeAgendaCoverageTopics(row?.topics).length, 0);
   return [
     "Create a readable, grounded whole-meeting local-news recap from chunk summaries.",
     "",
@@ -728,19 +746,23 @@ function buildFinalSummaryPrompt({
     "3) ## Why It Matters",
     "4) ## Watch Next",
     "- Under the H1, write one paragraph of 2 to 3 sentences.",
-    "- Under Top Newsworthy Developments, write 6 to 12 bullets. Each bullet must cover exactly one substantive agenda topic and one source-supported status or outcome.",
+    "- Under Top Newsworthy Developments, write one concise bullet for each numbered topic in AGENDA_COVERAGE_CHECKLIST. Keep independently reportable topics in separate bullets.",
     "- Under Why It Matters, write 2 to 4 bullets. Each bullet must cover exactly one agenda topic and only impacts explicitly supplied in the chunks.",
     "- Under Watch Next, write bullets only for explicit unresolved decisions, applications, or staff follow-ups. If none are explicit, write one plain sentence saying so.",
     "",
     "Rules:",
-    "- Use only facts present in CHUNK_SUMMARIES or RANKED_NEWS_CANDIDATES.",
+    "- Use only facts present in CHUNK_SUMMARIES, RANKED_NEWS_CANDIDATES, or the source detail attached to a numbered agenda checklist topic.",
     "- Lead with the most consequential substantive item from RANKED_NEWS_CANDIDATES, not procedural openers.",
     "- Write in plain local-news language: concise, concrete, and restrained.",
     "- Use only stakes and impacts explicitly stated in the supplied chunks. Do not infer who relies on a service, what a proposal threatens, or why an outcome occurred.",
     "- Preserve coverage from early, middle, and late meeting phases. Include at least one substantive topic from every supplied chunk, including the final chunk.",
+    "- Preserve every LLM-generated agenda coverage bullet and its source-supported details in Top Newsworthy Developments. Do not omit or replace a bank bullet with a broad heading.",
+    "- Cover every numbered topic in AGENDA_COVERAGE_CHECKLIST, in addition to at least one substantive topic from every chronology chunk. The checklist is a coverage requirement, not a ranking suggestion; do not omit a topic to keep the recap short.",
+    "- Give each substantive item in RANKED_NEWS_CANDIDATES its own coverage. When a candidate includes separate events or speaker contributions, preserve each independently meaningful one as a distinct sentence or bullet.",
     "- Keep facts from separate agenda sections separate. Never invent a causal relationship, funding relationship, or common decision between sections.",
+    "- Keep separate subtopics, events, speakers, and child chapters within the same agenda section distinct too. The same heading or chronological proximity does not establish that one organization hosted, sponsored, caused, or participated in a later event.",
     "- Preserve organization, program, place, report, and speaker names exactly as supplied; do not invent abbreviations or rename entities.",
-    "- RANKED_NEWS_CANDIDATES and covered headings are authoritative for agenda item names, report codes, projects, and locations when a chunk sentence conflicts with them.",
+    "- RANKED_NEWS_CANDIDATES and covered headings are authoritative for agenda item names, report codes, projects, and locations when a chunk sentence conflicts with them. Use the checklist's source detail for the attached topic's supported action, status, names, and figures.",
     "- Never name individual councillors, motion movers, or seconders in the whole-meeting recap. Describe the committee, staff, presenter, report, or correspondence instead.",
     "- A presenter or correspondence author's name may appear only when copied verbatim from a supplied chunk and essential to the story.",
     `- Refer to the meeting's governing body as "${bodyLabel || "the governing body"}"; never substitute Council, county council, or another body label.`,
@@ -769,11 +791,11 @@ function buildFinalSummaryPrompt({
     "- Do not mention the weekday, time of day, today, tonight, this evening, or repeat the meeting date unless a source event specifically depends on that timing.",
     "- Do not add motives or loaded characterizations such as corporate offloads, volatile funding, deep-seated deficits, or historical neglect unless those exact claims are supported.",
     "- Do not use these phrases unless directly quoted from source: distributive justice; ring-fenced; reclamation; spirited debate; stark reality check; no unresolved issues; complex landscape.",
-    "- Keep total length under 500 words.",
+    `- Write about ${wordBudget} words as a working target for ${topicCount} numbered agenda topics and all substantive chronology phases. Expand beyond the target when needed to cover each required topic; there is no maximum length when coverage requires more space.`,
     ...(SUMMARY_TIME_MODE === "upcoming"
       ? [
         "- This is an upcoming agenda preview before the meeting occurs.",
-        "- Write primarily in present/future tense.",
+        "- Write primarily in present/future tense. For example, say the agenda includes a proposal the body will consider, not that the body approved it.",
         "- Do not repeat the meeting date or describe call to order, minutes confirmation, public forum, or adjournment as completed events.",
         "- When a supporting report describes an earlier action, attribute it to the report or earlier meeting and do not present it as this meeting's decision.",
       ]
@@ -787,6 +809,13 @@ function buildFinalSummaryPrompt({
     "",
     "CHUNK_SUMMARIES:",
     chunkSource,
+    "",
+    "LLM_GENERATED_AGENDA_COVERAGE_BULLET_BANK:",
+    String(coverageBulletBank || "(none)"),
+    "",
+    "FINAL AGENDA_COVERAGE_CHECKLIST: cover each listed topic in Top Newsworthy Developments, keeping distinct topics separate.",
+    "AGENDA_COVERAGE_CHECKLIST:",
+    coveragePlanText || "(no ranked agenda-section topics)",
     ...(SUMMARY_TIME_MODE === "upcoming"
       ? [
         "FINAL UPCOMING-PREVIEW CHECK: the meeting has not happened. Do not write convened, called to order, reviewed, considered, approved, adopted, voted, directed, received, confirmed, transitioned, or discussed as an action by the governing body. Use scheduled, proposed, will consider, or staff recommend.",
@@ -803,6 +832,7 @@ function buildFinalScorePrompt({
   meetingDateIso,
   meetingDateLong,
   priorityItems,
+  agendaCoveragePlan,
 }) {
   const rankedItemsText = (Array.isArray(priorityItems) ? priorityItems : [])
     .map((it, idx) => `${idx + 1}. [${it.index}] ${it.heading}`)
@@ -820,6 +850,7 @@ function buildFinalScorePrompt({
     "- Penalize invented claims, wrong attributions, or nonexistent outcomes.",
     "- Penalize any named councillor, motion mover, or seconder in the recap. A presenter or correspondence author's verbatim name is allowed when essential.",
     "- Penalize omission of every substantive topic from an entire supplied chunk, especially the final chunk.",
+    "- Penalize omission of a substantive ranked agenda item or an independently meaningful event described in its chunk summary.",
     "- Do not penalize omission of secondary details when at least one substantive topic from that chunk is accurately covered.",
     "- When supplied sources conflict on vote or approval status, reward conservative proposal/discussion wording and penalize a definite outcome claim.",
     "- Penalize unqualified financial headlines or summaries that turn combined savings, revenue, efficiencies, or cost avoidance into direct or net savings.",
@@ -827,9 +858,9 @@ function buildFinalScorePrompt({
     "- Penalize financial results described as Council-approved when the source only says the report was received for information.",
     "- When a chunk reports debate or consideration without an explicit outcome, reward conservative wording such as debated, considered, unresolved, or under consideration.",
     "- Watch Next may mention an unresolved decision only when a supplied chunk explicitly describes the terms as debated or under consideration.",
-    "- Penalize invented causal or funding links between separate agenda sections.",
-    "- Do not penalize a causal or funding relationship copied from within the same supplied chunk.",
-    "- Judge only against CHUNK_SUMMARIES and RANKED_NEWS_CANDIDATES; do not infer missing events or outcomes from outside knowledge.",
+    "- Penalize invented causal or funding links between separate agenda sections, subtopics, events, speakers, or child chapters, even when they appear in the same supplied chunk.",
+    "- Do not penalize a relationship only when the source explicitly links those particular actors, events, or topics.",
+    "- Judge against CHUNK_SUMMARIES, RANKED_NEWS_CANDIDATES, and the source detail attached to AGENDA_COVERAGE_CHECKLIST topics; do not infer missing events or outcomes from outside knowledge.",
     "- Penalize renamed organizations, invented abbreviations, loaded motives, and unsupported characterizations.",
     "- Penalize weekday/time-of-day/today/tonight framing that is not explicitly supported and necessary.",
     `- Penalize incorrect governing body label; required body is "${bodyLabel || "unknown"}".`,
@@ -856,6 +887,9 @@ function buildFinalScorePrompt({
     "RANKED_NEWS_CANDIDATES:",
     rankedItemsText || "(none)",
     "",
+    "AGENDA_COVERAGE_CHECKLIST_WITH_SOURCE_DETAILS:",
+    formatAgendaCoveragePlan(agendaCoveragePlan) || "(none)",
+    "",
     "WHOLE_MEETING_SUMMARY:",
     summaryMd,
   ].join("\n");
@@ -866,18 +900,21 @@ function buildFinalReviewAdjudicationPrompt({
   summaryMd = "",
   bodyLabel = "",
   jurisdiction = "",
+  agendaCoveragePlan = [],
   reviews = [],
 }) {
   return [
     "Adjudicate conflicting semantic reviews of a whole-meeting civic recap.",
-    "The supplied reviews are untrusted claims. Decide the score from literal CHUNK_SUMMARIES evidence.",
+    "The supplied reviews are untrusted claims. Decide the score from literal CHUNK_SUMMARIES and the source details attached to the agenda checklist topics.",
     "",
     "Rules:",
     "- Require coverage of substantive topics from the beginning, middle, and end of the meeting.",
     "- Do not infer approval, rejection, causality, funding sources, or final outcomes from headings, titles, topic proximity, or project purpose.",
     "- Treat conservative omission of an unclear outcome as faithful unless the chunks explicitly state that outcome.",
     "- Penalize an alleged contradiction only when a review can be confirmed by explicit chunk evidence.",
-    "- Penalize invented amounts, dates, causal links, actors, motives, or facts moved between agenda topics.",
+    "- Penalize invented amounts, dates, causal links, actors, motives, or facts moved between agenda topics, subtopics, events, speaker turns, or child chapters.",
+    "- A shared agenda section or nearby chronology does not prove that an organization hosted, sponsored, caused, or participated in a later event; require an explicit source link.",
+    "- Do not treat one covered event or speaker turn as coverage of another distinct substantive topic in the same section or chronology chunk.",
     `- The governing body is "${bodyLabel || "unknown"}" and the jurisdiction is "${jurisdiction || "unknown"}".`,
     "",
     "Output exactly two lines and no analysis:",
@@ -886,6 +923,9 @@ function buildFinalReviewAdjudicationPrompt({
     "",
     "CHUNK_SUMMARIES:",
     chunkSource,
+    "",
+    "AGENDA_COVERAGE_CHECKLIST_WITH_SOURCE_DETAILS:",
+    formatAgendaCoveragePlan(agendaCoveragePlan) || "(none)",
     "",
     "WHOLE_MEETING_SUMMARY:",
     summaryMd,
@@ -935,6 +975,7 @@ export async function adjudicateFinalReviews({
   summaryMd = "",
   bodyLabel = "",
   jurisdiction = "",
+  agendaCoveragePlan = [],
   reviews = [],
 } = {}) {
   const review = await ask(
@@ -947,6 +988,7 @@ export async function adjudicateFinalReviews({
           summaryMd,
           bodyLabel,
           jurisdiction,
+          agendaCoveragePlan,
           reviews,
         }),
       },
@@ -968,26 +1010,583 @@ function parseJsonObject(text = "") {
   }
 }
 
-export async function auditFinalChunkCoverage({ chunks = [], summaryMd = "" }) {
+function agendaCoverageSourceId(item = {}) {
+  return `agenda section ${Number(item?.index) || "?"}: ${String(item?.heading || "").trim()}`;
+}
+
+function buildAgendaCoverageChecklistPrompt(sourceId, sourceText) {
+  return [
+    "Extract a whole-meeting coverage checklist from this one civic agenda section.",
+    "Return strict JSON only with this shape: {\"topics\":[{\"topic\":\"short source-grounded topic\",\"source_detail\":\"concise supporting fact from SOURCE_SUMMARY\"}]}.",
+    "List each independently reportable substantive development, decision, public contribution, or notable event in this section as a separate topic, with a separate source_detail for its actor, action, status, and key supporting facts when supplied.",
+    "Keep separate speaker contributions and event announcements distinct, even when they share an agenda heading. Do not include routine procedure, named movers, or minor supporting details.",
+    "Use only information explicitly present in SOURCE_SUMMARY. Preserve names, figures, and decision status exactly; do not infer facts or combine details from different topics.",
+    "",
+    `SOURCE_ID: ${sourceId}`,
+    `SOURCE_SUMMARY: ${sourceText}`,
+  ].join("\n");
+}
+
+function normalizeAgendaCoverageTopicRows(topics) {
+  const seen = new Set();
+  const rows = [];
+  for (const value of (Array.isArray(topics) ? topics : [])) {
+    const topic = String(value?.topic || "").trim().slice(0, 320);
+    const sourceDetail = String(value?.source_detail || "").trim().slice(0, 900);
+    const key = topic.toLocaleLowerCase();
+    if (!topic || !sourceDetail || seen.has(key)) continue;
+    seen.add(key);
+    rows.push({ topic, source_detail: sourceDetail });
+  }
+  return rows;
+}
+
+function normalizeAgendaCoverageTopics(topics) {
+  return normalizeAgendaCoverageTopicRows(topics).map((row) => row.topic);
+}
+
+export async function buildFinalAgendaCoveragePlan({ priorityItems = [], ask }) {
+  const plan = [];
+  for (const item of (Array.isArray(priorityItems) ? priorityItems : [])) {
+    const sourceId = agendaCoverageSourceId(item);
+    const sourceText = String(item?.summary || "").trim();
+    if (!sourceText) continue;
+    const checklistRaw = await ask(
+      [
+        {
+          role: "system",
+          content: "You extract source-grounded substantive topics for civic recap coverage. Return strict JSON only.",
+        },
+        { role: "user", content: buildAgendaCoverageChecklistPrompt(sourceId, sourceText) },
+      ],
+      { numPredict: Math.max(700, Math.min(1800, Math.ceil(sourceText.length / 12))) },
+    );
+    const checklist = parseJsonObject(checklistRaw);
+    const rawTopics = Array.isArray(checklist?.topics) ? checklist.topics : [];
+    const topics = normalizeAgendaCoverageTopicRows(rawTopics);
+    if (topics.length !== rawTopics.length) {
+      throw new Error(`meeting summary retryable: agenda coverage checklist for ${sourceId} contains a topic without source detail`);
+    }
+    plan.push({
+      "source id": sourceId,
+      "source summary": sourceText,
+      topics,
+      raw: String(checklistRaw || ""),
+    });
+  }
+  return plan;
+}
+
+export function formatAgendaCoveragePlan(plan = []) {
+  return (Array.isArray(plan) ? plan : [])
+    .map((row) => {
+      const topics = normalizeAgendaCoverageTopicRows(row?.topics);
+      return topics.length
+        ? `${String(row?.["source id"] || "agenda section")}\n${topics.map((topic, index) => `${index + 1}. ${topic.topic}\n   Source detail: ${topic.source_detail}`).join("\n")}`
+        : `${String(row?.["source id"] || "agenda section")}: no valid substantive topics were extracted`;
+    })
+    .join("\n");
+}
+
+function buildAgendaCoverageBulletPrompt(row, feedback = "") {
+  const topics = normalizeAgendaCoverageTopicRows(row?.topics);
+  return [
+    "Create source-grounded recap bullets for every numbered topic in this one agenda section.",
+    "Return strict JSON only with this shape: {\"topic_bullets\":[{\"topic_number\":1,\"bullet\":\"one concise factual sentence\"}]}.",
+    "Return exactly one non-empty bullet for each numbered topic. Preserve its action, attribution, status, and source-supported names or figures. Do not merge distinct topics or add facts that are absent from SOURCE_SUMMARY and SOURCE DETAIL.",
+    SUMMARY_TIME_MODE === "upcoming"
+      ? "This governing-body meeting has not happened yet. Use scheduled, proposed, will consider, or staff recommend for its agenda items. For a historical action in prior minutes or a report, make the minutes/report the sentence subject (for example, 'the minutes record the appointment') instead of writing 'the Board appointed'. Do not say the current governing body reviewed, considered, approved, adopted, voted, directed, received, confirmed, transitioned, or discussed an item."
+      : "Preserve completed-meeting action, attribution, and outcome status exactly as supported by the supplied source.",
+    "Do not name individual councillors, motion movers, or seconders. Do not include headings or explanatory text outside the JSON.",
+    `SOURCE_ID: ${String(row?.["source id"] || "agenda section")}`,
+    `SOURCE_SUMMARY: ${String(row?.["source summary"] || "")}`,
+    "NUMBERED TOPICS WITH SOURCE DETAIL:",
+    topics.map((topic, index) => `${index + 1}. ${topic.topic}\n   Source detail: ${topic.source_detail}`).join("\n"),
+    feedback ? `RETRY_FEEDBACK: ${feedback}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+function buildSingleAgendaTopicBulletPrompt(row, topic, topicNumber, feedback = "") {
+  return [
+    "Write one concise source-grounded recap bullet for this numbered agenda topic.",
+    "Return strict JSON only with this shape: {\"bullet\":\"one factual sentence\"}.",
+    "Preserve the topic's action, attribution, status, names, and figures only when present in its source detail. Do not add facts, combine adjacent topics, or write a generic heading.",
+    SUMMARY_TIME_MODE === "upcoming"
+      ? "This governing-body meeting has not happened yet. Phrase current agenda actions as scheduled or proposed. For historical actions in minutes or reports, make that prior document the sentence subject (such as 'the minutes record the appointment') instead of writing 'the Board appointed'. Never state that the current governing body has already acted."
+      : "Preserve completed-meeting action, attribution, and outcome status exactly as supported by the source.",
+    `SOURCE_ID: ${String(row?.["source id"] || "agenda section")}`,
+    `SOURCE_SUMMARY: ${String(row?.["source summary"] || "")}`,
+    `TOPIC_NUMBER: ${topicNumber}`,
+    `SOURCE_TOPIC: ${topic.topic}`,
+    `SOURCE_TOPIC_DETAIL: ${topic.source_detail}`,
+    feedback ? `RETRY_FEEDBACK: ${feedback}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+export async function repairMissingAgendaTopicBullets({ groups = [], agendaCoveragePlan = [], missing = [], ask } = {}) {
+  const updatedGroups = (Array.isArray(groups) ? groups : []).map((group) => ({
+    ...group,
+    bullets: (Array.isArray(group?.bullets) ? group.bullets : []).map((row) => ({ ...row })),
+  }));
+  const planRows = Array.isArray(agendaCoveragePlan) ? agendaCoveragePlan : [];
+  for (const finding of (Array.isArray(missing) ? missing : [])) {
+    const message = String(finding || "").trim();
+    let match = null;
+    for (const planRow of planRows) {
+      const sourceId = String(planRow?.["source id"] || "");
+      const prefix = `${sourceId}: `;
+      if (!sourceId || !message.startsWith(prefix)) continue;
+      const remainder = message.slice(prefix.length);
+      const topic = normalizeAgendaCoverageTopicRows(planRow?.topics)
+        .find((row) => remainder.startsWith(`${row.topic}:`));
+      if (topic) {
+        match = { sourceId, planRow, topic };
+        break;
+      }
+    }
+    if (!match) continue;
+    const group = updatedGroups.find((row) => String(row?.["source id"] || "") === match.sourceId);
+    const groupIndex = group?.bullets?.findIndex((row) => row.topic === match.topic.topic) ?? -1;
+    const topicIndex = normalizeAgendaCoverageTopicRows(match.planRow?.topics)
+      .findIndex((row) => row.topic === match.topic.topic);
+    if (!group || groupIndex < 0 || topicIndex < 0) continue;
+
+    let replacement = "";
+    const sourcePrefixLength = `${match.sourceId}: `.length;
+    let feedback = `A source-specific coverage audit reports that this topic is not identifiable in the current bullet: ${message.slice(sourcePrefixLength + match.topic.topic.length + 1)}. Rewrite the bullet so this exact source topic and its supported action are explicit.`;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const raw = await ask(
+        [
+          { role: "system", content: "Repair one source-grounded civic recap bullet. Return strict JSON only." },
+          { role: "user", content: buildSingleAgendaTopicBulletPrompt(match.planRow, match.topic, topicIndex + 1, feedback) },
+        ],
+        { numPredict: 320 },
+      );
+      const parsed = parseJsonObject(raw);
+      const candidate = String(parsed?.bullet || "").trim();
+      const temporalDefects = SUMMARY_TIME_MODE === "upcoming" ? previewTemporalDefects(candidate) : [];
+      if (candidate && temporalDefects.length === 0) {
+        replacement = candidate;
+        break;
+      }
+      feedback = temporalDefects.length
+        ? `Rewrite completed-meeting phrasing for this upcoming preview: ${temporalDefects.join(", ")}. Attribute historical action to its prior minutes or report.`
+        : "Return a non-empty JSON bullet string for this exact source topic.";
+    }
+    if (replacement) group.bullets[groupIndex] = { ...group.bullets[groupIndex], bullet: replacement };
+  }
+  return updatedGroups;
+}
+
+export async function buildFinalAgendaCoverageBulletGroups({ agendaCoveragePlan = [], ask, log = () => {} } = {}) {
+  const groups = [];
+  for (const row of (Array.isArray(agendaCoveragePlan) ? agendaCoveragePlan : [])) {
+    const topics = normalizeAgendaCoverageTopicRows(row?.topics);
+    if (!topics.length) continue;
+    let feedback = "";
+    let bullets = [];
+    let lastValidation = "no response";
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const raw = await ask(
+        [
+          { role: "system", content: "Write precise civic recap bullets from the supplied agenda topic sources. Return strict JSON only." },
+          { role: "user", content: buildAgendaCoverageBulletPrompt(row, feedback) },
+        ],
+        { numPredict: Math.max(500, Math.min(2800, topics.length * 90)) },
+      );
+      const parsed = parseJsonObject(raw);
+      const supplied = Array.isArray(parsed?.topic_bullets) ? parsed.topic_bullets : [];
+      const byNumber = new Map();
+      for (const item of supplied) {
+        const topicNumber = Number(item?.topic_number);
+        const bullet = String(item?.bullet || "").trim();
+        if (Number.isInteger(topicNumber) && topicNumber > 0 && topicNumber <= topics.length && bullet && !byNumber.has(topicNumber)) {
+          byNumber.set(topicNumber, bullet);
+        }
+      }
+      const missing = topics
+        .map((_topic, index) => index + 1)
+        .filter((topicNumber) => !byNumber.has(topicNumber));
+      const candidateBullets = topics.map((_topic, index) => byNumber.get(index + 1) || "");
+      const temporalDefects = SUMMARY_TIME_MODE === "upcoming"
+        ? candidateBullets.flatMap((bullet) => previewTemporalDefects(bullet))
+        : [];
+      if (!missing.length && supplied.length === topics.length && temporalDefects.length === 0) {
+        bullets = topics.map((_topic, index) => byNumber.get(index + 1));
+        break;
+      }
+      feedback = [
+        `Return one non-empty topic_bullets row for every topic number, in order. Missing or invalid topic numbers: ${missing.join(", ") || "duplicate or extra rows"}. Preserve the given source detail.`,
+        temporalDefects.length
+          ? `Upcoming-preview tense defects to rewrite in your bullets: ${temporalDefects.join(", ")}. Attribute past actions to the earlier minutes or report that records them.`
+          : "",
+      ].filter(Boolean).join(" ");
+      lastValidation = `keys=${Object.keys(parsed || {}).join(",") || "none"} supplied=${supplied.length}/${topics.length} missing=${missing.join(",") || "none"} temporal=${temporalDefects.join("|") || "none"}`;
+      log(`[meeting-summary][final][agenda-bullets] rejected ${row?.["source id"] || "agenda section"} attempt=${attempt} ${lastValidation}`);
+    }
+    if (bullets.length !== topics.length) {
+      log(`[meeting-summary][final][agenda-bullets] splitting into one-topic generation for ${String(row?.["source id"] || "agenda section")}`);
+      const individuallyGenerated = [];
+      for (let index = 0; index < topics.length; index += 1) {
+        let topicBullet = "";
+        let topicFeedback = `The section-level generation did not return a valid bullet set (${lastValidation}). Return exactly one bullet for this topic only.`;
+        for (let topicAttempt = 1; topicAttempt <= 3; topicAttempt += 1) {
+          const raw = await ask(
+            [
+              { role: "system", content: "Write one precise source-grounded civic recap sentence. Return strict JSON only." },
+              { role: "user", content: buildSingleAgendaTopicBulletPrompt(row, topics[index], index + 1, topicFeedback) },
+            ],
+            { numPredict: 320 },
+          );
+          const parsed = parseJsonObject(raw);
+          const candidate = String(parsed?.bullet || "").trim();
+          const temporalDefects = SUMMARY_TIME_MODE === "upcoming" ? previewTemporalDefects(candidate) : [];
+          if (candidate && temporalDefects.length === 0) {
+            topicBullet = candidate;
+            break;
+          }
+          topicFeedback = temporalDefects.length
+            ? `Rewrite the completed-meeting phrasing as an upcoming agenda item or attribute history to its minutes/report: ${temporalDefects.join(", ")}.`
+            : "Return a non-empty JSON bullet string for this exact topic.";
+        }
+        if (!topicBullet) {
+          throw new Error(`meeting summary retryable: agenda bullet generation incomplete for ${String(row?.["source id"] || "agenda section")} topic ${index + 1}`);
+        }
+        individuallyGenerated.push(topicBullet);
+      }
+      bullets = individuallyGenerated;
+    }
+    groups.push({
+      "source id": String(row?.["source id"] || "agenda section"),
+      topics,
+      bullets: bullets.map((bullet, index) => ({
+        topic: topics[index].topic,
+        source_detail: topics[index].source_detail,
+        bullet,
+      })),
+    });
+  }
+  return groups;
+}
+
+export function formatFinalAgendaCoverageBulletBank(groups = []) {
+  return (Array.isArray(groups) ? groups : [])
+    .map((group) => `${group["source id"]}\n${group.bullets.map((bullet) => `- ${bullet.bullet}`).join("\n")}`)
+    .join("\n\n");
+}
+
+export async function buildFinalAgendaCoverageBulletBank({ agendaCoveragePlan = [], ask } = {}) {
+  return formatFinalAgendaCoverageBulletBank(
+    await buildFinalAgendaCoverageBulletGroups({ agendaCoveragePlan, ask }),
+  );
+}
+
+function buildChronologySupplementPrompt({ chunk = {}, agendaBullets = "", auditEvidence = "", feedback = "" } = {}) {
+  return [
+    "Write source-grounded recap bullets for this chronology chunk that the current agenda bullets do not already cover.",
+    "Return strict JSON only with this shape: {\"topic_bullets\":[\"one concise factual sentence\"]}.",
+    "Include every independent substantive development in this chunk that is not already identifiable in AGENDA_BULLETS. Do not repeat a covered event. Keep distinct speakers, topics, and actions separate. Return at least one non-empty bullet when the chunk has substantive content; do not include routine ceremony or procedure.",
+    SUMMARY_TIME_MODE === "upcoming"
+      ? "This governing-body meeting has not happened yet. Use scheduled, proposed, will consider, or staff recommend for its agenda items. For historical actions in prior minutes or reports, make that document the sentence subject (for example, 'the minutes record the appointment') instead of writing 'the Board appointed'. Never describe the current governing body as having already acted."
+      : "Preserve completed-meeting action, attribution, chronology, and outcome status exactly as supported by the chunk.",
+    "Do not name individual councillors, motion movers, or seconders. Do not add facts, figures, dates, or relationships absent from CHUNK_SUMMARY.",
+    `CHUNK_ID: ${String(chunk?.["chunk id"] || "unknown")}`,
+    `CHUNK_HEADINGS: ${(Array.isArray(chunk?.["covered headings"]) ? chunk["covered headings"] : []).join(" | ")}`,
+    `CHUNK_SUMMARY: ${String(chunk?.["chunk summary text"] || "")}`,
+    auditEvidence ? `AUDIT_FINDING_TO_CORRECT: ${auditEvidence}` : "",
+    "AGENDA_BULLETS_ALREADY_INCLUDED:",
+    String(agendaBullets || "(none)"),
+    feedback ? `RETRY_FEEDBACK: ${feedback}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+export async function buildChronologyCoverageBulletGroups({ chunks = [], chronologyRows = [], agendaBullets = "", ask } = {}) {
+  const missingIds = new Set((Array.isArray(chronologyRows) ? chronologyRows : [])
+    .filter((row) => row?.has_substantive_topic === true && row?.covered !== true)
+    .map((row) => String(row?.["source id"] || "").trim())
+    .filter(Boolean));
+  const byId = new Map((Array.isArray(chunks) ? chunks : [])
+    .map((chunk) => [String(chunk?.["chunk id"] || "").trim(), chunk]));
+  const auditById = new Map((Array.isArray(chronologyRows) ? chronologyRows : [])
+    .map((row) => [String(row?.["source id"] || "").trim(), row]));
+  const groups = [];
+  for (const sourceId of missingIds) {
+    const chunk = byId.get(sourceId);
+    if (!chunk) throw new Error(`meeting summary retryable: chronology source missing for ${sourceId}`);
+    let feedback = "";
+    let bullets = [];
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const raw = await ask(
+        [
+          { role: "system", content: "Write concise source-grounded civic recap bullets from the supplied chronology chunk. Return strict JSON only." },
+          { role: "user", content: buildChronologySupplementPrompt({
+            chunk,
+            agendaBullets,
+            auditEvidence: String(auditById.get(sourceId)?.evidence || ""),
+            feedback,
+          }) },
+        ],
+        { numPredict: 900 },
+      );
+      const parsed = parseJsonObject(raw);
+      const supplied = Array.isArray(parsed?.topic_bullets)
+        ? parsed.topic_bullets.map((value) => String(value || "").trim()).filter(Boolean)
+        : [];
+      const temporalDefects = SUMMARY_TIME_MODE === "upcoming"
+        ? supplied.flatMap((bullet) => previewTemporalDefects(bullet))
+        : [];
+      if (supplied.length && temporalDefects.length === 0) {
+        bullets = supplied;
+        break;
+      }
+      feedback = temporalDefects.length
+        ? `Rewrite completed-meeting claims for an upcoming preview: ${temporalDefects.join(", ")}. Attribute only explicit historical actions to the earlier minutes or report.`
+        : "Return one or more non-empty topic_bullets for the substantive material in this chunk.";
+    }
+    if (!bullets.length) {
+      throw new Error(`meeting summary retryable: chronology bullet generation incomplete for ${sourceId}`);
+    }
+    groups.push({ "source id": sourceId, bullets });
+  }
+  return groups;
+}
+
+function buildFinalSummaryFramePrompt({
+  chunkSource,
+  agendaCoveragePlan,
+  coverageBulletBank,
+  bodyLabel,
+  jurisdiction,
+  feedback = "",
+}) {
+  return [
+    "Write only the short editorial frame for a complete civic meeting recap; its required Top News bullets are already generated and will be inserted unchanged.",
+    "Return strict JSON only with this shape: {\"opening_paragraph\":\"two or three concise sentences\",\"why_it_matters\":[\"one direct impact\",\"another direct impact\"],\"watch_next\":[\"one explicit follow-up\"]}.",
+    "The opening paragraph must identify the meeting focus and its most consequential supported development without repeating a list of agenda topics. Why It Matters must contain 2 to 4 direct service, financial, regulatory, land-use, or safety impacts explicitly present in the sources. Watch Next must include only explicit unresolved decisions, applications, or staff follow-ups; if none are explicit, return one plain sentence that says no explicit follow-up was recorded.",
+    "Use only facts in the numbered agenda topics and their source details below. Do not introduce names, figures, dates, causes, effects, or outcomes. Do not mention individual councillors or movers.",
+    `Governing body: ${bodyLabel || "unknown"}`,
+    `Jurisdiction: ${jurisdiction || "unknown"}`,
+    SUMMARY_TIME_MODE === "upcoming"
+      ? "This meeting has not happened yet. Frame current agenda actions as scheduled or proposed. Never say that the governing body already reviewed, considered, approved, adopted, voted, directed, received, confirmed, transitioned, or discussed an item. For historical actions in prior minutes or reports, make that document the sentence subject (for example, 'the minutes record the appointment') instead of writing 'the Board appointed'."
+      : "This meeting has happened. Preserve recorded action and decision status; do not present proposals as completed outcomes.",
+    "NUMBERED_AGENDA_TOPICS_WITH_SOURCE_DETAILS:",
+    formatAgendaCoveragePlan(agendaCoveragePlan) || "(none)",
+    feedback ? `RETRY_FEEDBACK: ${feedback}` : "",
+  ].filter(Boolean).join("\n\n");
+}
+
+export async function buildFinalSummaryFrame({
+  chunkSource = "",
+  agendaCoveragePlan = [],
+  coverageBulletBank = "",
+  bodyLabel = "",
+  jurisdiction = "",
+  log = () => {},
+  ask,
+} = {}) {
+  let feedback = "";
+  let lastValidation = "no response";
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const raw = await ask(
+      [
+        { role: "system", content: "Write a restrained, source-grounded civic news frame. Return strict JSON only." },
+        { role: "user", content: buildFinalSummaryFramePrompt({
+          chunkSource,
+          agendaCoveragePlan,
+          coverageBulletBank,
+          bodyLabel,
+          jurisdiction,
+          feedback,
+        }) },
+      ],
+      { numPredict: 700 },
+    );
+    const parsed = parseJsonObject(raw);
+    const readStringField = (keys) => {
+      for (const key of keys) {
+        const value = parsed?.[key];
+        if (typeof value === "string" && value.trim()) return value.trim();
+      }
+      return "";
+    };
+    const readListField = (keys) => {
+      for (const key of keys) {
+        const value = parsed?.[key];
+        if (Array.isArray(value)) {
+          return value.map((entry) => String(entry || "").trim()).filter(Boolean);
+        }
+        if (typeof value === "string" && value.trim()) return [value.trim()];
+      }
+      return [];
+    };
+    const opening = readStringField(["opening_paragraph", "Opening Paragraph"]);
+    const why = readListField(["why_it_matters", "Why It Matters"]);
+    const watch = readListField(["watch_next", "Watch Next"]);
+    const frameText = [opening, ...why, ...watch].join("\n");
+    const temporalDefects = SUMMARY_TIME_MODE === "upcoming" ? previewTemporalDefects(frameText) : [];
+    if (opening && why.length >= 2 && why.length <= 4 && watch.length && temporalDefects.length === 0) {
+      return { opening_paragraph: opening, why_it_matters: why, watch_next: watch };
+    }
+    lastValidation = `keys=${Object.keys(parsed || {}).join(",") || "none"} opening=${opening ? "yes" : "no"} why=${why.length} watch=${watch.length} temporal=${temporalDefects.join("|") || "none"}`;
+    log(`[meeting-summary][final][frame] rejected attempt=${attempt} ${lastValidation}`);
+    feedback = [
+      "Return non-empty opening_paragraph, 2 to 4 why_it_matters strings, and at least one watch_next string in the required JSON shape.",
+      temporalDefects.length ? `Rewrite upcoming-preview tense defects: ${temporalDefects.join(", ")}.` : "",
+    ].filter(Boolean).join(" ");
+  }
+  throw new Error(`meeting summary retryable: final summary frame generation incomplete or temporally invalid (${lastValidation})`);
+}
+
+export function formatStructuredWholeMeetingSummary({ frame, agendaBullets = [], chronologyBullets = [] } = {}) {
+  const topNews = [
+    ...(Array.isArray(agendaBullets) ? agendaBullets : []),
+    ...(Array.isArray(chronologyBullets) ? chronologyBullets : []),
+  ].map((bullet) => String(bullet || "").trim()).filter(Boolean);
+  const why = (Array.isArray(frame?.why_it_matters) ? frame.why_it_matters : [])
+    .map((bullet) => String(bullet || "").trim()).filter(Boolean);
+  const watch = (Array.isArray(frame?.watch_next) ? frame.watch_next : [])
+    .map((bullet) => String(bullet || "").trim()).filter(Boolean);
+  return [
+    "# Whole Meeting Summary",
+    String(frame?.opening_paragraph || "").trim(),
+    "",
+    "## Top Newsworthy Developments",
+    topNews.map((bullet) => `- ${bullet}`).join("\n"),
+    "",
+    "## Why It Matters",
+    why.map((bullet) => `- ${bullet}`).join("\n"),
+    "",
+    "## Watch Next",
+    watch.map((bullet) => `- ${bullet}`).join("\n"),
+  ].join("\n").trim();
+}
+
+export function estimateWholeMeetingSummaryBudget({ chunks = [], agendaCoveragePlan = [] } = {}) {
+  const topicCount = (Array.isArray(agendaCoveragePlan) ? agendaCoveragePlan : [])
+    .reduce((total, row) => total + normalizeAgendaCoverageTopics(row?.topics).length, 0);
+  const chunkCount = Array.isArray(chunks) ? chunks.length : 0;
+  const wordBudget = Math.max(700, 250 + (topicCount * 44) + (chunkCount * 18));
+  return {
+    topicCount,
+    wordBudget,
+    numPredict: Math.max(1200, Math.ceil(wordBudget * 2)),
+  };
+}
+
+export async function auditFinalChunkCoverage({
+  chunks = [],
+  priorityItems = [],
+  agendaCoveragePlan,
+  summaryMd = "",
+}) {
   const missing = [];
   const rawRows = [];
   const adjudicationRows = [];
-  for (const chunk of chunks) {
-    const chunkId = String(chunk?.["chunk id"] || "").trim();
-    if (!chunkId) continue;
-    const chunkSummary = String(chunk?.["chunk summary text"] || "").trim();
+  const chronologyRows = [];
+  const sources = [
+    ...(Array.isArray(chunks) ? chunks : []).map((chunk) => ({
+      id: String(chunk?.["chunk id"] || "").trim(),
+      label: "chronology chunk",
+      source: String(chunk?.["chunk summary text"] || "").trim(),
+    })),
+    ...(Array.isArray(priorityItems) ? priorityItems : []).map((item) => ({
+      id: agendaCoverageSourceId(item),
+      label: "agenda section",
+      source: String(item?.summary || "").trim(),
+    })),
+  ].filter((source) => source.id && source.source);
+  const plannedRows = Array.isArray(agendaCoveragePlan)
+    ? new Map(agendaCoveragePlan.map((row) => [String(row?.["source id"] || ""), row]))
+    : null;
+
+  for (const source of sources) {
+    const sourceId = source.id;
+    const sourceLabel = source.label;
+    const sourceText = source.source;
+    if (sourceLabel === "agenda section") {
+      const planned = plannedRows?.get(sourceId);
+      let topicRows;
+      if (planned) {
+        topicRows = normalizeAgendaCoverageTopicRows(planned.topics);
+        rawRows.push({ "source id": sourceId, "topic checklist": planned.raw || "reused compiled checklist" });
+      } else {
+        const checklistRaw = await ask(
+          [
+            {
+              role: "system",
+              content: "You extract source-grounded substantive topics for civic recap coverage. Return strict JSON only.",
+            },
+            { role: "user", content: buildAgendaCoverageChecklistPrompt(sourceId, sourceText) },
+          ],
+          { numPredict: Math.max(700, Math.min(1800, Math.ceil(sourceText.length / 12))) },
+        );
+        const checklist = parseJsonObject(checklistRaw);
+        const rawTopics = Array.isArray(checklist?.topics) ? checklist.topics : [];
+        topicRows = normalizeAgendaCoverageTopicRows(rawTopics);
+        rawRows.push({ "source id": sourceId, "topic checklist": checklistRaw });
+        if (topicRows.length !== rawTopics.length) {
+          missing.push(`${sourceId}: agenda coverage topic is missing source detail`);
+          continue;
+        }
+      }
+      const topics = topicRows.map((row) => row.topic);
+      if (!topics.length) {
+        missing.push(`${sourceId}: no valid substantive topic checklist`);
+        continue;
+      }
+
+      for (const topic of topics) {
+        const topicDetail = topicRows
+          .find((row) => row.topic === topic)?.source_detail || "";
+        const topicPrompt = [
+          "Check whether FINAL_SUMMARY includes this one source-grounded agenda topic.",
+          "Return strict JSON only: {\"covered\":true,\"evidence\":\"short phrase\"} or {\"covered\":false,\"evidence\":\"missing topic\"}.",
+          "This is an inclusion check for SOURCE_TOPIC. FINAL_SUMMARY may also cover other agenda sections; ignore every other topic and do not call it unsupported because it is absent from this section.",
+          "Set covered=true only when this particular substantive topic is identifiable in FINAL_SUMMARY. Use SOURCE_TOPIC_DETAIL as additional source evidence and do not require exact wording.",
+          "",
+          `SOURCE_ID: ${sourceId}`,
+          `SOURCE_SUMMARY: ${sourceText}`,
+          `SOURCE_TOPIC: ${topic}`,
+          ...(topicDetail ? [`SOURCE_TOPIC_DETAIL: ${topicDetail}`] : []),
+          "",
+          "FINAL_SUMMARY:",
+          summaryMd,
+        ].join("\n");
+        const topicRaw = await ask(
+          [
+            {
+              role: "system",
+              content: "You check one source-grounded topic for inclusion in a civic recap. Ignore unrelated agenda topics. Return strict JSON only.",
+            },
+            { role: "user", content: topicPrompt },
+          ],
+          { numPredict: 180 },
+        );
+        rawRows.push({ "source id": sourceId, topic, raw: topicRaw });
+        const coverage = parseJsonObject(topicRaw);
+        if (coverage?.covered !== true) {
+          const evidence = String(coverage?.evidence || "topic not present").trim();
+          missing.push(`${sourceId}: ${topic}: ${evidence}`);
+        }
+      }
+      continue;
+    }
+
     const buildPrompt = ({ priorAudit = "" } = {}) => [
       priorAudit
-        ? "Adjudicate a disputed semantic coverage result for one chronology chunk."
-        : "Decide semantic topic coverage for one chronology chunk.",
+        ? `Adjudicate a disputed semantic coverage result for one ${sourceLabel}.`
+        : `Decide semantic topic coverage for one ${sourceLabel}.`,
       priorAudit ? "The prior audit is an untrusted claim; recheck against literal evidence." : "",
-      "covered is true only when FINAL_SUMMARY contains at least one identifiable substantive presentation, service, report, public input, decision, or outcome from CHUNK_SUMMARY.",
-      "A procedural mention alone is insufficient when CHUNK_SUMMARY contains substantive material.",
+      "A chronology chunk can contain several agenda sections. First classify whether SOURCE_SUMMARY contains any substantive reportable development, then check coverage only when it does.",
+      "Return strict JSON with all fields: {\"has_substantive_topic\":false,\"covered\":true,\"evidence\":\"no substantive topic is present\"} when SOURCE_SUMMARY contains only routine ceremony, procedure, an empty agenda placeholder, or a transition; otherwise use {\"has_substantive_topic\":true,\"covered\":true|false,\"evidence\":\"short phrase\"}.",
+      "When has_substantive_topic=false, do not require FINAL_SUMMARY to mention the chunk. When true, require at least one identifiable substantive topic from this chunk in FINAL_SUMMARY; do not exempt it merely because routine procedure also appears.",
+      "For a substantive source, at least one substantive topic from this chunk must be identifiable in FINAL_SUMMARY; covered must be true.",
+      "If FINAL_SUMMARY contains any substantive topic from this chunk, covered must be true even if other details or topics are omitted; ranked agenda sections are checked separately.",
+      "Do not accept coverage from an earlier chunk as coverage of this chunk.",
       "Coverage may be concise and paraphrased; do not require exact wording.",
-      "Return exactly: {\"covered\":true,\"evidence\":\"short phrase identifying the covered topic\"}",
       "",
-      `CHUNK_ID: ${chunkId}`,
-      `CHUNK_SUMMARY: ${chunkSummary}`,
+      `SOURCE_ID: ${sourceId}`,
+      `SOURCE_SUMMARY: ${sourceText}`,
       "",
       "FINAL_SUMMARY:",
       summaryMd,
@@ -997,38 +1596,60 @@ export async function auditFinalChunkCoverage({ chunks = [], summaryMd = "" }) {
       [
         {
           role: "system",
-          content: "You audit one chronology chunk for semantic topic coverage in a civic recap. Return strict JSON only.",
+          content: "You classify one chronology source for substantive reportable content and, only if present, audit its coverage in a recap. Return strict JSON only.",
         },
         {
           role: "user",
           content: buildPrompt(),
         },
       ],
-      { numPredict: 180 },
+      { numPredict: 220 },
     );
-    rawRows.push({ "chunk id": chunkId, raw });
+    rawRows.push({ "source id": sourceId, raw });
     let parsed = parseJsonObject(raw);
+    if (parsed?.has_substantive_topic === false) {
+      chronologyRows.push({ "source id": sourceId, has_substantive_topic: false, covered: true, evidence: String(parsed?.evidence || "").trim() });
+      continue;
+    }
+    if (parsed?.has_substantive_topic !== true) {
+      chronologyRows.push({ "source id": sourceId, has_substantive_topic: null, covered: false, evidence: String(parsed?.evidence || "LLM did not classify substantive content").trim() });
+      missing.push(`${sourceId}: LLM did not classify substantive content`);
+      continue;
+    }
+    const initiallyCovered = parsed?.covered === true;
+    const missingEvidence = String(parsed?.evidence || "").trim();
     if (parsed?.covered !== true) {
       const adjudication = await ask(
         [
           {
             role: "system",
-            content: "You adjudicate one disputed chronology-chunk coverage result. Return strict JSON only.",
+            content: "You adjudicate one disputed agenda-source coverage result against literal evidence. Return strict JSON only.",
           },
           {
             role: "user",
             content: buildPrompt({ priorAudit: raw }),
           },
         ],
-        { numPredict: 220 },
+        { numPredict: 260 },
       );
-      adjudicationRows.push({ "chunk id": chunkId, raw: adjudication });
+      adjudicationRows.push({ "source id": sourceId, raw: adjudication });
       parsed = parseJsonObject(adjudication);
     }
-    if (parsed?.covered !== true) missing.push(chunkId);
+    // A disputed omission is retryable. The adjudicator can add evidence, but
+    // it cannot turn the initial audit's missing-topic finding into coverage.
+    if (!initiallyCovered || parsed?.has_substantive_topic !== true || parsed?.covered !== true) {
+      missing.push(`${sourceId}: ${missingEvidence || "substantive topic not represented"}`);
+    }
+    chronologyRows.push({
+      "source id": sourceId,
+      has_substantive_topic: true,
+      covered: initiallyCovered && parsed?.has_substantive_topic === true && parsed?.covered === true,
+      evidence: missingEvidence,
+    });
   }
   return {
     missing,
+    chronologyRows,
     raw: JSON.stringify(rawRows),
     adjudication: JSON.stringify(adjudicationRows),
   };
@@ -1082,6 +1703,7 @@ export function buildChunkRetryGuidance({
     freshActorRepair
       ? "Write a fresh source-grounded replacement that preserves the required headings and topic coverage while fixing every listed defect."
       : "Revise the rejected draft below instead of generating an unrelated replacement. Preserve every correct heading and grounded fact while fixing every listed defect.",
+    "Keep distinct subtopics, events, speakers, and their source-paired actions separate. Do not use chronology or proximity to invent a relationship between them.",
     repeatedActorRepair,
     forbiddenNames.length ? `Remove named councillors/movers: ${forbiddenNames.join(", ")}.` : "",
     wrongBody.length ? `Use only "${bodyLabel}" as the acting body: ${wrongBody.join(", ")}.` : "",
@@ -1251,7 +1873,7 @@ async function synthesizeChunkSummaries({
   return chunks;
 }
 
-function buildChunkSourceForStageB(chunks = []) {
+export function buildChunkSourceForStageB(chunks = []) {
   return chunks.map((chunk) => {
     const headings = (Array.isArray(chunk["covered headings"]) ? chunk["covered headings"] : []).join(" | ");
     return [
@@ -1290,11 +1912,158 @@ async function synthesizeFinalMeetingSummary({
   log = () => {},
 }) {
   const chunkSource = buildChunkSourceForStageB(chunksArtifact?.chunks || []);
+  const agendaCoveragePlan = await buildFinalAgendaCoveragePlan({ priorityItems, ask });
+  const coverageBulletGroups = await buildFinalAgendaCoverageBulletGroups({ agendaCoveragePlan, ask, log });
+  let coverageBulletBank = formatFinalAgendaCoverageBulletBank(coverageBulletGroups);
+  const summaryBudget = estimateWholeMeetingSummaryBudget({
+    chunks: chunksArtifact?.chunks || [],
+    agendaCoveragePlan,
+  });
+  log(`[meeting-summary][final] agenda_bullet_bank_ready topics=${summaryBudget.topicCount}`);
+  log(`[meeting-summary][final] required_agenda_topics=${summaryBudget.topicCount} target_words=${summaryBudget.wordBudget} output_tokens=${summaryBudget.numPredict}`);
   const numericGroundingSource = buildFinalNumericGroundingSource(
     chunkSource,
     priorityItems,
     [meetingDateIso, meetingDateLong],
   );
+
+  const frame = await buildFinalSummaryFrame({
+    chunkSource,
+    agendaCoveragePlan,
+    coverageBulletBank,
+    bodyLabel,
+    jurisdiction,
+    log,
+    ask,
+  });
+  let agendaBullets = coverageBulletGroups.flatMap((group) => group.bullets.map((row) => row.bullet));
+  let chronologyBulletGroups = [];
+  let structuredDraft = formatStructuredWholeMeetingSummary({ frame, agendaBullets });
+  let structuredCoverageAudit = await auditFinalChunkCoverage({
+    chunks: chunksArtifact?.chunks || [],
+    priorityItems,
+    agendaCoveragePlan,
+    summaryMd: structuredDraft,
+  });
+  for (let coverageRepairAttempt = 1; coverageRepairAttempt <= 2 && structuredCoverageAudit.missing.length; coverageRepairAttempt += 1) {
+    const repairedAgendaGroups = await repairMissingAgendaTopicBullets({
+      groups: coverageBulletGroups,
+      agendaCoveragePlan,
+      missing: structuredCoverageAudit.missing,
+      ask,
+    });
+    if (JSON.stringify(repairedAgendaGroups) !== JSON.stringify(coverageBulletGroups)) {
+      coverageBulletGroups.splice(0, coverageBulletGroups.length, ...repairedAgendaGroups);
+      agendaBullets = coverageBulletGroups.flatMap((group) => group.bullets.map((row) => row.bullet));
+      coverageBulletBank = formatFinalAgendaCoverageBulletBank(coverageBulletGroups);
+    }
+
+    const currentChronologyBullets = chronologyBulletGroups.flatMap((group) => group.bullets);
+    if (structuredCoverageAudit.chronologyRows.some((row) => row.has_substantive_topic === true && row.covered !== true)) {
+      const additions = await buildChronologyCoverageBulletGroups({
+        chunks: chunksArtifact?.chunks || [],
+        chronologyRows: structuredCoverageAudit.chronologyRows,
+        agendaBullets: [...agendaBullets, ...currentChronologyBullets].join("\n"),
+        ask,
+      });
+      for (const addition of additions) {
+        const existing = chronologyBulletGroups.find((group) => group["source id"] === addition["source id"]);
+        if (existing) {
+          existing.bullets.push(...addition.bullets.filter((bullet) => !existing.bullets.includes(bullet)));
+        } else {
+          chronologyBulletGroups.push(addition);
+        }
+      }
+      chronologyBulletGroups.sort((a, b) =>
+        chunksArtifact.chunks.findIndex((chunk) => chunk["chunk id"] === a["source id"])
+        - chunksArtifact.chunks.findIndex((chunk) => chunk["chunk id"] === b["source id"]),
+      );
+    }
+    structuredDraft = formatStructuredWholeMeetingSummary({
+      frame,
+      agendaBullets,
+      chronologyBullets: chronologyBulletGroups.flatMap((group) => group.bullets),
+    });
+    structuredCoverageAudit = await auditFinalChunkCoverage({
+      chunks: chunksArtifact?.chunks || [],
+      priorityItems,
+      agendaCoveragePlan,
+      summaryMd: structuredDraft,
+    });
+    log(`[meeting-summary][final][coverage-repair] attempt=${coverageRepairAttempt} missing=${structuredCoverageAudit.missing.length} findings=${structuredCoverageAudit.missing.join(" | ").slice(0, 1400) || "(none)"}`);
+  }
+  const structuredTemporalDefects = SUMMARY_TIME_MODE === "upcoming" ? previewTemporalDefects(structuredDraft) : [];
+  const structuredNumericDefects = unsupportedNumericTokens(structuredDraft, numericGroundingSource);
+  const structuredBodyDefects = governingBodyDefects(structuredDraft, bodyLabel, chunkSource);
+  const structuredFinancialAudit = await auditFinancialClaim({
+    ask,
+    sourceText: numericGroundingSource,
+    candidateText: structuredDraft,
+    context: `Structured whole-meeting ${SUMMARY_TIME_MODE === "upcoming" ? "preview" : "recap"}; preserve financial category, certainty, attribution, and governing-body decision status.`,
+  });
+  const structuredReviews = [];
+  for (let reviewIndex = 0; reviewIndex < 3; reviewIndex += 1) {
+    structuredReviews.push(await ask(
+      [
+        { role: "system", content: "You are a strict semantic verifier for civic meeting summaries. Judge only against the supplied sources." },
+        {
+          role: "user",
+          content: buildFinalScorePrompt({
+            chunkSource,
+            summaryMd: structuredDraft,
+            bodyLabel,
+            jurisdiction,
+            meetingDateIso,
+            meetingDateLong,
+            priorityItems,
+            agendaCoveragePlan,
+          }),
+        },
+      ],
+      { numPredict: 360 },
+    ));
+  }
+  const structuredReviewScores = structuredReviews.map(parseScore).sort((a, b) => a - b);
+  let structuredVerifierScore = structuredReviewScores[Math.floor(structuredReviewScores.length / 2)] || 0;
+  let structuredReview = structuredReviews.map((value, index) => `REVIEW_${index + 1}:\n${value}`).join("\n\n");
+  if (structuredVerifierScore < PASS_THRESHOLD
+    || (structuredReviewScores.at(-1) || 0) - (structuredReviewScores[0] || 0) >= 0.2) {
+    const adjudication = await adjudicateFinalReviews({
+      chunkSource,
+      summaryMd: structuredDraft,
+      bodyLabel,
+      jurisdiction,
+      agendaCoveragePlan,
+      reviews: structuredReviews,
+    });
+    structuredVerifierScore = adjudication.score;
+    structuredReview = [structuredReview, `ADJUDICATION:\n${adjudication.review}`].join("\n\n");
+  }
+  const structuredTopLength = Math.min(180, Math.max(80, summaryBudget.topicCount * 45));
+  const structuredPenalty = (hasCompleteRequiredSections(structuredDraft, structuredTopLength) ? 0 : 0.4)
+    + synthesisPenalty(structuredDraft)
+    + (structuredTemporalDefects.length ? 0.6 : 0)
+    + (structuredBodyDefects.length ? 0.6 : 0)
+    + (structuredNumericDefects.length ? 0.6 : 0)
+    + (structuredCoverageAudit.missing.length ? 1 : 0)
+    + (structuredFinancialAudit.verdict === "PASS" ? 0 : 0.7);
+  const structuredScore = Math.max(0, structuredVerifierScore - structuredPenalty);
+  log(`[meeting-summary][final][segmented] verifier=${structuredVerifierScore.toFixed(3)} score=${structuredScore.toFixed(3)} agenda_topics=${agendaBullets.length} chronology_supplements=${chronologyBulletGroups.length} missing=${structuredCoverageAudit.missing.length} findings=${structuredCoverageAudit.missing.join(" | ").slice(0, 1800) || "(none)"}`);
+  const structuredValid = structuredScore >= PASS_THRESHOLD
+    && structuredTemporalDefects.length === 0
+    && structuredNumericDefects.length === 0
+    && structuredBodyDefects.length === 0
+    && structuredCoverageAudit.missing.length === 0
+    && structuredFinancialAudit.verdict === "PASS";
+  if (structuredValid) {
+    return {
+      markdown: structuredDraft,
+      score: Number(structuredScore.toFixed(3)),
+      verifierFeedback: structuredReview,
+    };
+  }
+  log(`[meeting-summary][final][segmented] rejected; entering full-draft LLM repair path feedback=${structuredReview.replace(/\s+/gu, " ").trim().slice(0, 400) || "(none)"}`);
+
   let feedback = "";
   let bestText = "";
   let bestScore = -1;
@@ -1318,14 +2087,19 @@ async function synthesizeFinalMeetingSummary({
             jurisdiction,
             feedback,
             priorityItems,
+            agendaCoveragePlan,
+            coverageBulletBank,
+            wordBudget: summaryBudget.wordBudget,
           }),
         },
       ],
-      { numPredict: 1200 },
+      { numPredict: summaryBudget.numPredict },
     );
     const draft = normalizeRequiredSummaryHeadings(String(draftRaw || "").trim());
     const coverageAudit = await auditFinalChunkCoverage({
       chunks: chunksArtifact?.chunks || [],
+      priorityItems,
+      agendaCoveragePlan,
       summaryMd: draft,
     });
     const financialAudit = await auditFinancialClaim({
@@ -1350,6 +2124,7 @@ async function synthesizeFinalMeetingSummary({
               meetingDateIso,
               meetingDateLong,
               priorityItems,
+              agendaCoveragePlan,
             }),
           },
         ],
@@ -1368,6 +2143,7 @@ async function synthesizeFinalMeetingSummary({
         summaryMd: draft,
         bodyLabel,
         jurisdiction,
+        agendaCoveragePlan,
         reviews,
       });
       verifierScore = adjudication.score;
@@ -1398,7 +2174,7 @@ async function synthesizeFinalMeetingSummary({
       `numeric_penalty=${numericPenalty.toFixed(3)}`,
       `coverage_penalty=${coveragePenalty.toFixed(3)}`,
       `financial_penalty=${financialPenalty.toFixed(3)}`,
-      `missing_chunks=${coverageAudit.missing.join(",") || "(none)"}`,
+      `missing_coverage_sources=${coverageAudit.missing.join(",") || "(none)"}`,
       `score=${score.toFixed(3)}`,
     ].join(" ");
     log(`[meeting-summary][final] ${diagnostics}`);
@@ -1415,7 +2191,7 @@ async function synthesizeFinalMeetingSummary({
       temporalDefects.length ? `UPCOMING_TENSE_RETRY: Rewrite without completed-meeting claims: ${temporalDefects.join(", ")}.` : "",
       bodyDefects.length ? `GOVERNING_BODY_RETRY: Use only "${bodyLabel}" as the acting body; remove: ${bodyDefects.join(", ")}.` : "",
       numericDefects.length ? `NUMERIC_GROUNDING_RETRY: Remove or correct numeric tokens absent from source: ${numericDefects.join(", ")}.` : "",
-      coverageAudit.missing.length ? `CHUNK_COVERAGE_RETRY: Cover a substantive topic from each missing chunk: ${coverageAudit.missing.join(", ")}.` : "",
+      coverageAudit.missing.length ? `COVERAGE_RETRY: Add the missing substantive topics from these reviewed sources: ${coverageAudit.missing.join(", ")}.` : "",
       financialAudit.verdict !== "PASS" ? `FINANCIAL_CLAIM_RETRY: ${financialAudit.feedback}` : "",
     ].filter(Boolean).join("\n");
     if (score >= PASS_THRESHOLD) break;
@@ -1431,7 +2207,8 @@ async function synthesizeFinalMeetingSummary({
             role: "user",
             content: [
               `Financial repair attempt ${financialRepairAttempt}: start over from the literal chunk summaries and rewrite the complete markdown recap.`,
-              "The prior recap was rejected by a financial-claim audit. Preserve all required headings, substantive topic coverage, decision status, and explicit follow-ups while correcting only unsupported financial framing.",
+              "The prior recap was rejected by a financial-claim audit. Preserve all required headings, every agenda topic in AGENDA_COVERAGE_CHECKLIST, coverage across every chronology chunk, decision status, and explicit follow-ups while correcting only unsupported financial framing.",
+              `Write about ${summaryBudget.wordBudget} words as a working target for ${summaryBudget.topicCount} numbered agenda topics and all substantive chronology phases; expand beyond it when needed for complete coverage.`,
               "Classify each financial statement against the supplied chunks. Distinguish direct costs or transfers from combined savings, revenue, efficiencies, projected amounts, and future cost avoidance.",
               "Attribute reported, projected, estimated, combined, or disputed figures to the report, staff, presenter, or agreement when the chunks support that attribution.",
               "Treat numeric grounding as a closed vocabulary: do not introduce any digit, decimal, percentage, currency amount, year, date fragment, or numbered item absent from the supplied chunks.",
@@ -1446,17 +2223,21 @@ async function synthesizeFinalMeetingSummary({
               "Return exactly these headings: # Whole Meeting Summary, ## Top Newsworthy Developments, ## Why It Matters, ## Watch Next.",
               "CHUNK_SUMMARIES:",
               chunkSource,
+              "LLM_GENERATED_AGENDA_COVERAGE_BULLET_BANK:",
+              coverageBulletBank || "(none)",
               "RANKED_NEWS_CANDIDATES:",
               (Array.isArray(priorityItems) ? priorityItems : [])
                 .map((it, idx) => `${idx + 1}. [${it.index}] ${it.heading}`)
                 .join("\n") || "(none)",
+              "AGENDA_COVERAGE_CHECKLIST:",
+              formatAgendaCoveragePlan(agendaCoveragePlan) || "(no ranked agenda-section topics)",
               SUMMARY_TIME_MODE === "upcoming"
                 ? "FINAL REMINDER: the meeting has not happened. Use scheduled/proposed/will consider/staff recommend; never use convened, called to order, reviewed, considered, approved, adopted, voted, directed, received, confirmed, transitioned, or discussed for the governing body."
                 : "FINAL REMINDER: this is a recap of the completed meeting. Preserve source-supported action and decision status; do not invent approval, adoption, direction, unanimity, or a result that the chunk summaries do not state.",
             ].join("\n\n"),
           },
         ],
-        { numPredict: 1400 },
+        { numPredict: summaryBudget.numPredict },
       );
       const repairedDraft = normalizeRequiredSummaryHeadings(String(repairedRaw || "").trim());
       const repairedFinancialAudit = await auditFinancialClaim({
@@ -1471,6 +2252,8 @@ async function synthesizeFinalMeetingSummary({
 
       const coverageAudit = await auditFinalChunkCoverage({
         chunks: chunksArtifact?.chunks || [],
+        priorityItems,
+        agendaCoveragePlan,
         summaryMd: repairedDraft,
       });
       const repairedNumericDefects = unsupportedNumericTokens(repairedDraft, numericGroundingSource);
@@ -1491,6 +2274,7 @@ async function synthesizeFinalMeetingSummary({
                 meetingDateIso,
                 meetingDateLong,
                 priorityItems,
+                agendaCoveragePlan,
               }),
             },
           ],
@@ -1507,6 +2291,7 @@ async function synthesizeFinalMeetingSummary({
           summaryMd: repairedDraft,
           bodyLabel,
           jurisdiction,
+          agendaCoveragePlan,
           reviews: repairedReviews,
         });
         repairedVerifierScore = adjudication.score;
@@ -1561,23 +2346,28 @@ async function synthesizeFinalMeetingSummary({
               "Historical actions inside supporting reports may remain only when explicitly attributed to the report, staff, presenter, or an earlier meeting.",
               "Preserve all required headings and coverage of early, middle, and late chunks.",
               "Treat numeric grounding as a closed vocabulary: do not introduce any digit, decimal, percentage, currency amount, year, date fragment, or numbered item absent from the supplied chunks.",
-              "Omit financial figures and disputed historical details unless they are essential, directly supported, and clearly attributed. Keep the complete preview under 350 words.",
+              "Omit financial figures and disputed historical details unless they are essential, directly supported, and clearly attributed.",
+              `Write one concise bullet for each numbered topic in AGENDA_COVERAGE_CHECKLIST and include each substantive chronology phase. Use about ${summaryBudget.wordBudget} words as a working target for ${summaryBudget.topicCount} topics; expand beyond it when coverage needs more space.`,
               `TEMPORAL_DEFECTS_TO_REMOVE: ${temporalDefects.join(", ")}`,
               `REJECTED_PREVIEW:\n${String(bestText || "").trim()}`,
               "Return exactly these headings: # Whole Meeting Summary, ## Top Newsworthy Developments, ## Why It Matters, ## Watch Next.",
               "CHUNK_SUMMARIES:",
               chunkSource,
+              "LLM_GENERATED_AGENDA_COVERAGE_BULLET_BANK:",
+              coverageBulletBank || "(none)",
               "RANKED_NEWS_CANDIDATES:",
               (Array.isArray(priorityItems) ? priorityItems : [])
                 .map((it, idx) => `${idx + 1}. [${it.index}] ${it.heading}`)
                 .join("\n") || "(none)",
+              "AGENDA_COVERAGE_CHECKLIST:",
+              formatAgendaCoveragePlan(agendaCoveragePlan) || "(no ranked agenda-section topics)",
               SUMMARY_TIME_MODE === "upcoming"
                 ? "FINAL REMINDER: the meeting has not happened. Use scheduled/proposed/will consider/staff recommend; never use completed-meeting verbs for the governing body."
                 : "FINAL REMINDER: preserve source-supported status and attribution.",
             ].join("\n\n"),
           },
         ],
-        { numPredict: 1400 },
+        { numPredict: summaryBudget.numPredict },
       );
       const repairedDraft = normalizeRequiredSummaryHeadings(String(repairedRaw || "").trim());
       const repairedTemporalDefects = previewTemporalDefects(repairedDraft);
@@ -1591,6 +2381,8 @@ async function synthesizeFinalMeetingSummary({
       });
       const coverageAudit = await auditFinalChunkCoverage({
         chunks: chunksArtifact?.chunks || [],
+        priorityItems,
+        agendaCoveragePlan,
         summaryMd: repairedDraft,
       });
       const repairedReviews = [];
@@ -1608,6 +2400,7 @@ async function synthesizeFinalMeetingSummary({
                 meetingDateIso,
                 meetingDateLong,
                 priorityItems,
+                agendaCoveragePlan,
               }),
             },
           ],
@@ -1659,6 +2452,8 @@ async function synthesizeFinalMeetingSummary({
   }
 
   const qualityCoverageAudit = { missing: [...bestCoverageMissing] };
+  let rejectedQualityDraft = String(bestText || "").trim();
+  let rejectedQualityReview = String(bestReview || "").trim();
   const qualityDefects = () => [
     ...(SUMMARY_TIME_MODE === "upcoming" ? previewTemporalDefects(bestText) : []),
     ...unsupportedNumericTokens(bestText, numericGroundingSource),
@@ -1670,39 +2465,53 @@ async function synthesizeFinalMeetingSummary({
   if (qualityGateNeedsRepair) {
     for (let qualityRepairAttempt = 1; qualityRepairAttempt <= 3; qualityRepairAttempt += 1) {
       const defects = qualityDefects();
+      const repairApproach = [
+        "Source-audit retry: check each reviewer finding against its cited chunk, correct unsupported status, attribution, and causal links, and preserve every separately grounded topic.",
+        "Fresh chronology pass: rebuild from the source chunks in order. Pair each action, event, and outcome with its own evidence, and do not carry forward rejected framing.",
+        "Conservative final pass: remove only claims that cannot be paired with the supplied sources while retaining every other grounded event and whole-meeting coverage.",
+      ][qualityRepairAttempt - 1];
       const repairedRaw = await ask(
         [
           { role: "system", content: "Write a fresh, complete, source-grounded civic meeting summary. Return markdown only." },
           {
             role: "user",
             content: [
-              "Start over from the supplied chunk summaries and write a complete whole-meeting summary.",
-              "Preserve the exact four required headings and cover at least one substantive topic from every supplied chunk, including the first and last chunks.",
+              `Quality repair attempt ${qualityRepairAttempt}. ${repairApproach}`,
+              "Start from the supplied chunk summaries and write a complete whole-meeting summary.",
+              "Preserve the exact four required headings and cover at least one substantive topic from every supplied chunk that contains substantive material, including the first and last chunks.",
               SUMMARY_TIME_MODE === "upcoming"
-                ? "This is an upcoming preview. Use scheduled/proposed/future wording; never say the governing body reviewed, considered, approved, adopted, voted, directed, received, confirmed, or discussed an upcoming item. Do not repeat the meeting date or describe call to order, minutes confirmation, public forum, or adjournment as completed events."
+                ? "This is an upcoming preview. Use scheduled/proposed/future wording; never say the governing body reviewed, considered, approved, adopted, voted, directed, received, confirmed, or discussed an upcoming item. In particular, do not write that the Board approved an item; say the agenda lists a proposal the Board will consider. Do not repeat the meeting date or describe call to order, minutes confirmation, public forum, or adjournment as completed events."
                 : "This is a recap. Preserve source-supported decision status and attribution.",
               "Use only facts and numeric tokens present in the supplied chunks or ranked candidates. Omit unsupported numbers rather than guessing.",
               "Omit financial figures and disputed historical details unless they are essential, directly supported, and clearly attributed.",
-              "Keep the complete summary under 350 words; omit uncertain detail instead of filling space.",
+              `Write one concise bullet for each numbered topic in AGENDA_COVERAGE_CHECKLIST and include each substantive chronology phase. Use about ${summaryBudget.wordBudget} words as a working target for ${summaryBudget.topicCount} topics; expand beyond it when coverage needs more space.`,
               `REPAIR_DEFECTS: ${defects.join(", ") || "low quality score"}`,
+              `PRIOR_REJECTED_RECAP:\n${rejectedQualityDraft || "(no prior recap)"}`,
+              `SEMANTIC_REVIEW_FINDINGS_TO_CHECK_AGAINST_THE_CHUNKS:\n${rejectedQualityReview.slice(0, 6000) || "(no semantic reviewer feedback)"}`,
               "Return exactly these headings: # Whole Meeting Summary, ## Top Newsworthy Developments, ## Why It Matters, ## Watch Next.",
               "CHUNK_SUMMARIES:",
               chunkSource,
+              "LLM_GENERATED_AGENDA_COVERAGE_BULLET_BANK:",
+              coverageBulletBank || "(none)",
               "RANKED_NEWS_CANDIDATES:",
               (Array.isArray(priorityItems) ? priorityItems : [])
                 .map((it, idx) => `${idx + 1}. [${it.index}] ${it.heading}`)
                 .join("\n") || "(none)",
+              "AGENDA_COVERAGE_CHECKLIST:",
+              formatAgendaCoveragePlan(agendaCoveragePlan) || "(no ranked agenda-section topics)",
               SUMMARY_TIME_MODE === "upcoming"
                 ? "FINAL REMINDER: the meeting has not happened. Use scheduled/proposed/will consider/staff recommend; never use completed-meeting verbs for the governing body."
                 : "FINAL REMINDER: preserve source-supported status and attribution.",
             ].join("\n\n"),
           },
         ],
-        { numPredict: 1400 },
+        { numPredict: summaryBudget.numPredict },
       );
       const repairedDraft = normalizeRequiredSummaryHeadings(String(repairedRaw || "").trim());
       const repairedCoverageAudit = await auditFinalChunkCoverage({
         chunks: chunksArtifact?.chunks || [],
+        priorityItems,
+        agendaCoveragePlan,
         summaryMd: repairedDraft,
       });
       const repairedTemporalDefects = SUMMARY_TIME_MODE === "upcoming" ? previewTemporalDefects(repairedDraft) : [];
@@ -1729,6 +2538,7 @@ async function synthesizeFinalMeetingSummary({
                 meetingDateIso,
                 meetingDateLong,
                 priorityItems,
+                agendaCoveragePlan,
               }),
             },
           ],
@@ -1738,6 +2548,8 @@ async function synthesizeFinalMeetingSummary({
       const repairedReviewScores = repairedReviews.map(parseScore).sort((a, b) => a - b);
       const repairedVerifierScore = repairedReviewScores[Math.floor(repairedReviewScores.length / 2)] || 0;
       const repairedReview = repairedReviews.map((value, index) => `REVIEW_${index + 1}:\n${value}`).join("\n\n");
+      rejectedQualityDraft = repairedDraft;
+      rejectedQualityReview = repairedReview;
       const repairedPenalty = (hasCompleteRequiredSections(repairedDraft) ? 0 : 0.4)
         + synthesisPenalty(repairedDraft)
         + (repairedTemporalDefects.length ? 0.6 : 0)
@@ -1746,7 +2558,7 @@ async function synthesizeFinalMeetingSummary({
         + (repairedCoverageAudit.missing.length ? 1 : 0)
         + (repairedFinancialAudit.verdict === "PASS" ? 0 : 0.7);
       const repairedScore = Math.max(0, repairedVerifierScore - repairedPenalty);
-      log(`[meeting-summary][quality-repair] attempt=${qualityRepairAttempt} verifier=${repairedVerifierScore.toFixed(3)} score=${repairedScore.toFixed(3)} missing_chunks=${repairedCoverageAudit.missing.join(",") || "(none)"}`);
+      log(`[meeting-summary][quality-repair] attempt=${qualityRepairAttempt} verifier=${repairedVerifierScore.toFixed(3)} score=${repairedScore.toFixed(3)} missing_coverage_sources=${repairedCoverageAudit.missing.join(",") || "(none)"}`);
       const repairedIsClean = repairedTemporalDefects.length === 0
         && repairedNumericDefects.length === 0
         && repairedBodyDefects.length === 0
