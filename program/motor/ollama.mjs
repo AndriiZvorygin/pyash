@@ -3,6 +3,18 @@
 
 import { remember } from "../remember/index.mjs";
 import { resolveConfigText } from "../configure/env.mjs";
+import { describeThink } from "./ollama_think.mjs";
+
+// A thinking model spends its token budget on its reasoning first. Ollama
+// returns that reasoning in a field of its own and leaves `response` empty, so
+// a caller that only reads `response` gets nothing back and waits for a stage
+// that will never answer. The house decides per model whether the reasoning is
+// wanted: `mind think` in the config is off unless the house asks for it.
+function thinkSetting() {
+  const fact = remember?.("mind think");
+  const ob = fact?.ob ?? {};
+  return describeThink({ think: ob.boolean ?? ob.text, env: process.env });
+}
 
 async function generateStream({ model, prompt, onChunk } = {}) {
   const base = resolveConfigText("ollama host", { rememberFn: remember }) ?? "http://localhost:11434";
@@ -10,7 +22,7 @@ async function generateStream({ model, prompt, onChunk } = {}) {
   const res = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model, prompt, stream: true })
+    body: JSON.stringify({ model, prompt, stream: true, think: thinkSetting() })
   });
 
   if (!res.ok) {
@@ -68,7 +80,7 @@ async function generate(model, prompt) {
 async function chat({ model, messages, tools = [], stream = false }) {
   const base = resolveConfigText("ollama host", { rememberFn: remember }) ?? "http://localhost:11434";
   const endpoint = `${base.replace(/\/$/, "")}/api/chat`;
-  const body = { model, messages, stream: !!stream };
+  const body = { model, messages, stream: !!stream, think: thinkSetting() };
   if (Array.isArray(tools) && tools.length > 0) body.tools = tools;
   const res = await fetch(endpoint, {
     method: "POST",

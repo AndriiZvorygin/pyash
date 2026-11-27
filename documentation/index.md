@@ -5,11 +5,15 @@
   routing, and operations.
 - `documentation/design.md` — architecture overview and module layout.
 - `documentation/reference.md` — how to run the REPL, traces, and helper scripts.
+- `documentation/reference/pyash-coding-saddle.md` — terminal and web coding saddle controls, state, and operation.
+- `documentation/runbooks/maintaining-coding-saddle.md` — source ownership, scenario tests, and change workflow for Saddle agents.
 - `documentation/state.md` — current scope, goals, and known edges.
 - `documentation/decisions.md` — recorded choices and trade-offs.
 - `documentation/quiz-plan.md` — quiz coverage, gaps, and how to run quizzes.
 - `documentation/examples.md` — notes about the curated `examples/` transcripts.
 - `documentation/recipes/agent-operations.md` — scheduler, channel, and runtime operations runbook.
+- `documentation/runbooks/dev-vocab-operations.md` — end-to-end vocabulary, WordNet sweep, decision review, index, and publishing workflow for the `dev-vocab` branch.
+- `documentation/reference/sumo-concept-sweep.md` — SUMO concept sweep design: evidence sources, link shape and relation semantics, worklist sizing, and the stage graph.
 - `documentation/recipes/pyash-agent-admin.md` — configure/reconcile/debug recipe for Pyash agent administration.
 - `documentation/recipes/channel-stop-control.md` — channel interrupt control (`stop`, `@agent stop`) and verification runbook.
 - `documentation/agent-memory.md` — current agent memory model (session files, summary, and runtime memory).
@@ -20,11 +24,18 @@
 - `documentation/reference/verify-envelope.md` — provisional sentence envelope for `verify` outcomes.
 - `documentation/reference/verify-count-modes.md` — reference profile for `verify` word/letter count modes.
 - `documentation/reference/music-module.md` — reference profile for `music video` and `music say` contracts.
+- `documentation/reference/holden-culotta-ai-consciousness-remote-viewing-video.md` — source-linked, timecoded notes on an X video about AI consciousness and remote viewing, including the speaker’s remote-viewing procedure for LLMs as a step-by-step protocol and the short-form narration script cut from it.
 - `documentation/reference/speaker-identification.md` — reference profile for persistent speaker identification/enrollment from audio.
 - `documentation/reference/quantum-randomness-and-evolutionary-computing.md` — evidence and direct-QRNG policy for evolutionary-computing experiments.
 - `documentation/reference/lwonprom-c-pyash-style-analysis.md` — relationship between the lwonprom C implementation, Pyash composition, and complexity discipline.
+- `documentation/reference/pyash-vliw-decode-and-dispatch.md` — sentence / codelet / control-word model, the head bitmap as field map, dispatch dictionary and revision semantics, and the unresolved execution-model choice for an ASIC.
+- `documentation/reference/parity-gate.md` — authority map, parity classes, declared differential corpus, and the result-level gate command.
+- `documentation/reference/pyashwords-deprecated.md` — why `pyashWords.json` is a deprecated historical asset, what replaced it, and the current dependency list.
+- `documentation/reference/atlaskv-pyash-style-analysis.md` — relationship between the AtlasKV paper (KG-to-attention injection, hierarchical key pruning) and Pyash knowledge, sense, and evidence surfaces.
 - `documentation/release-preview-0.1.md` — initial release gate, smoke route, and known limits.
 - `documentation/pyash.md` — high-level design goals and interlanguage intent.
+- `documentation/workbook/` — active structured workbooks for vocabulary curation and similar agent work; separate from proposals.
+- [Pyash GPU Housekeeper workbook](workbook/pyash-gpu-housekeeper.md) — how Pyash sends text and image-generation work through Housekeeper.
 - `documentation/pyac.txt` — broader 2019 language/spec background.
 - `documentation/compositional-cases.md` — axis/context grid and keyword mapping.
 - `documentation/suggest/` — proposals awaiting review, kept apart from accepted documentation; see `documentation/suggest/README.md` for what belongs there and how a proposal graduates.

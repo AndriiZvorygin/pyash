@@ -36,3 +36,16 @@ test("loop stops when descending fromindex reaches toindex", async () => {
   const counter = remember("counter");
   assert.equal(counter.ob.num, 3);
 });
+
+test("loop with equal fromindex and toindex executes zero iterations", async () => {
+  forget();
+
+  await run("exists su name counter ob num 0 be number ya");
+  await run("su name inc fromindex num 0 be ceremony def");
+  await run("ob num 1 to name counter be plus do");
+  await run("su name inc be ceremony prah");
+
+  await run("fromindex num 3 toindex num 3 be inc do");
+
+  assert.equal(remember("counter")?.ob?.num, 0);
+});

@@ -2,9 +2,11 @@ import pyashWords from "../pyashWords.json" with { type: "json" };
 import { decodeLegacyCodeletGroups, VliwCodeletError } from "./codelets.mjs";
 import {
   INT_SORT_DENOTE,
+  LETTER_SORT_DENOTE,
   LETTER_QUOTE_WORD,
   NUMBER_QUOTE_WORD,
   PARAGRAPH_LETTER_QUOTE_WORD,
+  float32QuoteWords,
   QUOTED_GRAMMAR_WORD,
   UINT_SORT_DENOTE,
   VECTOR_THICK_LONG,
@@ -13,10 +15,13 @@ import {
   isUintVectorQuoteWord,
   lookupLegacyName,
   lookupLegacyWord,
+  lookupLegacyWordSequence,
   quoteWordFor,
   vectorThicknessFor
 } from "./quotes.mjs";
-import { encodePyacWord } from "./word_code.mjs";
+import { decodePyacWord, encodePyacWord } from "./word_code.mjs";
+import { expandVectorInitializer, MAX_VLIW_ARRAY_ELEMENTS } from "./vector_shape.mjs";
+import { encodeTextArrayMembers } from "./text_array.mjs";
 
 const WORD_COUNT = 16;
 const PAYLOAD_WORDS = WORD_COUNT - 1;
@@ -24,6 +29,8 @@ const RAW_BLOCKQUOTE_MIN_WORDS = 15;
 const NAME_TYPE = wordForEntry("name_");
 const GENITIVE_CASE = wordForEntry("genitive_case_");
 const CONDITIONAL_MOOD = wordForEntry("conditional_mood_");
+const DEPENDENT_CLAUSE = wordForEntry("dependent_clause_");
+const CLAUSE_TAIL = wordForEntry("clause_tail_");
 
 const ROLE_ENTRIES = Object.freeze({
   su: "nominative_case_",
@@ -31,6 +38,7 @@ const ROLE_ENTRIES = Object.freeze({
   as: "essive_case_",
   from: "source_case_",
   to: "destination_case_",
+  at: "locative_case_",
   by: "instrumental_case_",
   with: "comitative_case_",
   fromindex: "multiplicative_case_",
@@ -60,17 +68,39 @@ for (const entry of pyashWords) {
   if (Number.isInteger(word) && !ENTRIES_BY_HNUC.has(word)) ENTRIES_BY_HNUC.set(word, entry);
 }
 
+/**
+ * The English name for an HNUC, decoded rather than looked up.
+ *
+ * The codec is the identity between a spelling and its HNUC, so it covers every
+ * word in the reference volume. `ENTRIES_BY_HNUC` is built from the deprecated
+ * `pyashWords.json`, which holds a fraction of that vocabulary — decoding from
+ * it made `pyash dict` crash on most grammar atoms (abessive_case_, bvah,
+ * 0x4c8f and 152 others) even though the volume carries them.
+ */
+function decodedName(hnuc) {
+  try {
+    return decodePyacWord(hnuc);
+  } catch {
+    return null;
+  }
+}
+
 const THIS_WORD = encodePyacWord("tsah");
 const TYPE_ENTRY_BY_SURFACE = Object.freeze({
   num: "number_",
   number: "number_",
   bool: "boolean_",
   boolean: "boolean_",
-  text: "text_"
+  text: "text_",
+  vec: "vector",
+  float: "float"
 });
 const OPERATOR_ENTRY_BY_SURFACE = Object.freeze({
   divide: "divisions",
-  xor: "exclusive_or"
+  xor: "exclusive_or",
+  not: "negatory_quantifier_",
+  and: "and_",
+  or: "and_or_"
 });
 const OPERATOR_SURFACE_BY_WORD = new Map(
   Object.entries(OPERATOR_ENTRY_BY_SURFACE).map(([surface, entry]) => [wordForEntry(entry), surface])
@@ -78,7 +108,15 @@ const OPERATOR_SURFACE_BY_WORD = new Map(
 const TYPE_SURFACE_BY_WORD = new Map([
   [wordForEntry("number_"), "num"],
   [wordForEntry("boolean_"), "bool"],
-  [wordForEntry("text_"), "text"]
+  [wordForEntry("text_"), "text"],
+  [wordForEntry("vector"), "vec"],
+  [wordForEntry("float"), "float"]
+]);
+const STORAGE_DTYPE_BY_WORD = new Map([
+  [wordForEntry("paucal_number_"), "paucal_number_"],
+  [wordForEntry("number_"), "number_"],
+  [wordForEntry("plural_number_"), "plural_number_"],
+  [wordForEntry("multal_number_"), "multal_number_"]
 ]);
 
 function wordForEntry(english) {
@@ -114,7 +152,12 @@ function nameWords(value, role) {
   if (typeof value !== "string" || !value.trim()) {
     throw invalid("invalid-name", `VLIW ${role} requires a non-empty name`);
   }
-  return value.trim().split(/\s+/u).map((token) => nameWord(token, role));
+  return value.trim().split(/\s+/u).flatMap((token) => {
+    const sequence = lookupLegacyWordSequence(token);
+    return sequence
+      ? sequence.map((entry) => Number.parseInt(entry.hnuc, 16))
+      : [nameWord(token, role)];
+  });
 }
 
 function typeWords(values, role) {
@@ -165,52 +208,92 @@ function quoteKindFrame(value, payload, role) {
   return { words, rawQuotes };
 }
 
-function encodeVectorValue(vector, role) {
+function encodeVectorValue(vector, role, declaredLength = null) {
   if (!vector || typeof vector !== "object" || !Array.isArray(vector.values)) {
     throw invalid("unsupported-vector", `VLIW ${role} vector requires a typed values list`);
   }
   const type = vector.type ?? "num";
-  if (!["num", "bool", "text"].includes(type)) {
+  if (!["num", "bool", "float32", "float64", "text"].includes(type)) {
     throw invalid("unsupported-vector-type", `VLIW ${role} vector type is unsupported`, { type });
   }
-  if (vector.values.length < 2 || vector.values.length > 0xffff) {
-    throw invalid("unsupported-vector-width", `VLIW ${role} vector length must be between 2 and 65535`, {
-      count: vector.values.length
+  let initialValues;
+  try {
+    initialValues = expandVectorInitializer(
+      type,
+      vector.values,
+      declaredLength,
+      MAX_VLIW_ARRAY_ELEMENTS
+    );
+  } catch (error) {
+    throw invalid("unsupported-vector-width", error.message, {
+      count: vector.values.length,
+      declaredLength
     });
   }
 
   if (type === "text") {
-    const words = [];
-    const rawQuotes = [];
-    for (const value of vector.values) {
+    for (const value of initialValues) {
       if (typeof value !== "string" || value.length === 0) {
         throw invalid("unsupported-vector-value", "VLIW text vector elements must be non-empty strings", {
           value
         });
       }
-      const start = words.length;
-      if (value.length === 1) {
-        words.push(LETTER_QUOTE_WORD, value.charCodeAt(0));
-      } else {
-        const encoded = textWords(value, role);
-        words.push(...encoded.words);
-        rawQuotes.push(...encoded.rawQuotes.map((quote) => ({
-          ...quote,
-          payloadStart: start + quote.payloadStart
-        })));
-      }
     }
-    return { words, rawQuotes };
+    const words = encodeTextArrayMembers(initialValues, {
+      letterQuoteWord: LETTER_QUOTE_WORD,
+      paragraphQuoteWord: PARAGRAPH_LETTER_QUOTE_WORD
+    });
+    return {
+      words: [
+        quoteWordFor({
+          sort: LETTER_SORT_DENOTE,
+          vectorThick: VECTOR_THICK_LONG,
+          scalarBytes: 2,
+          sequence: true
+        }),
+        initialValues.length,
+        ...words
+      ],
+      rawQuotes: []
+    };
+  }
+
+  if (type === "float32" || type === "float64") {
+    const scalarBytes = type === "float32" ? 4 : 8;
+    const scalarWords = scalarBytes / 2;
+    const payload = initialValues.flatMap((value) => {
+      if (typeof value !== "number" || !Number.isFinite(value)) {
+        throw invalid("non-finite-float", `VLIW ${type} vector elements must be finite numbers`, { value });
+      }
+      const normalized = type === "float32" ? Math.fround(value) : value;
+      if (!Number.isFinite(normalized)) {
+        throw invalid("non-finite-float", `VLIW ${type} vector element is outside its finite range`, { value });
+      }
+      const view = new DataView(new ArrayBuffer(scalarBytes));
+      if (scalarBytes === 4) view.setFloat32(0, normalized, true);
+      else view.setFloat64(0, normalized, true);
+      return Array.from({ length: scalarWords }, (_, index) => view.getUint16(index * 2, true));
+    });
+    const thickness = initialValues.length === 1 ? VECTOR_THICK_LONG : vectorThicknessFor(initialValues.length);
+    const quote = quoteWordFor({
+      sort: 6,
+      vectorThick: thickness,
+      scalarBytes
+    });
+    return {
+      words: [quote, ...(thickness === VECTOR_THICK_LONG ? [initialValues.length] : []), ...payload],
+      rawQuotes: []
+    };
   }
 
   const sort = type === "num" ? UINT_SORT_DENOTE : INT_SORT_DENOTE;
-  const payload = vector.values.map((value) => {
+  const payload = initialValues.map((value) => {
     if (type === "num" && Number.isInteger(value) && value >= 0 && value <= 0xffff) return value;
     if (type === "bool" && (value === "truth" || value === true)) return 1;
     if (type === "bool" && (value === "lie" || value === false)) return 0;
     throw invalid("unsupported-vector-value", `VLIW ${type} vector element is invalid`, { value });
   });
-  const thickness = vectorThicknessFor(payload.length);
+  const thickness = payload.length === 1 ? VECTOR_THICK_LONG : vectorThicknessFor(payload.length);
   const quote = quoteWordFor({ sort, vectorThick: thickness, scalarBytes: 2 });
   return {
     words: [quote, ...(thickness === VECTOR_THICK_LONG ? [payload.length] : []), ...payload],
@@ -218,20 +301,29 @@ function encodeVectorValue(vector, role) {
   };
 }
 
-function encodeValue(value, role) {
-  if (Number.isInteger(value?.num)) {
-    if (value.num < 0 || value.num > 0xffff) {
-      throw invalid("unsupported-value", `VLIW ${role} number must be an unsigned 16-bit integer`, {
-        value: value.num
-      });
-    }
+function encodeValue(value, role, declaredVectorLength = null) {
+  if (value?.la && typeof value.la === "object") {
+    const nested = encodeClause(value.la);
+    return {
+      words: [DEPENDENT_CLAUSE, ...nested.words, CLAUSE_TAIL],
+      boundaries: nested.boundaries.map((offset) => offset + 1),
+      rawQuotes: nested.rawQuotes.map((quote) => ({
+        ...quote,
+        payloadStart: quote.payloadStart + 1
+      }))
+    };
+  }
+  if (Number.isInteger(value?.num) && !Object.is(value.num, -0) && value.num >= 0 && value.num <= 0xffff) {
     return { words: [NUMBER_QUOTE_WORD, value.num], rawQuotes: [] };
+  }
+  if (typeof value?.num === "number") {
+    return { words: float32QuoteWords(value.num), rawQuotes: [] };
   }
   if (typeof value?.text === "string") {
     return textWords(value.text, role);
   }
   if (value?.ve !== undefined) {
-    return encodeVectorValue(value.ve, role);
+    return encodeVectorValue(value.ve, role, declaredVectorLength);
   }
   if (typeof value?.boolean === "boolean") {
     return { words: [wordForEntry(value.boolean ? "truth" : "lie")], rawQuotes: [] };
@@ -271,12 +363,22 @@ function encodeClause(sentence, { conditional = false } = {}) {
   const boundaries = [];
   const rawQuotes = [];
   for (const role of FIELD_ORDER) {
+    if (sentence.be === "vector" && role === "by") continue;
     const returnValue = isReturn && sentence.ret?.role === role
-      ? { name: sentence.ret.name }
+      ? sentence.ret.name
+        ? { name: sentence.ret.name }
+        : sentence.ret.num !== undefined
+          ? { num: sentence.ret.num }
+          : sentence.ret.genitive
+            ? { genitive: sentence.ret.genitive }
+            : undefined
       : undefined;
     const fieldValue = sentence[role] ?? returnValue;
     if (fieldValue === undefined) continue;
-    let value = encodeValue(fieldValue, role);
+    const declaredVectorLength = sentence.be === "vector" && role === "ob"
+      ? sentence.by?.num ?? null
+      : null;
+    let value = encodeValue(fieldValue, role, declaredVectorLength);
     const quoteKind = sentence.quoteKinds?.[role];
     if (quoteKind !== undefined) {
       if (typeof sentence[role]?.text !== "string" || typeof quoteKind !== "string" || !quoteKind) {
@@ -286,6 +388,7 @@ function encodeClause(sentence, { conditional = false } = {}) {
     }
     const valueStart = words.length;
     words.push(...value.words);
+    boundaries.push(...(value.boundaries ?? []).map((offset) => valueStart + offset));
     rawQuotes.push(...value.rawQuotes.map((quote) => ({
       ...quote,
       payloadStart: valueStart + quote.payloadStart
@@ -297,15 +400,15 @@ function encodeClause(sentence, { conditional = false } = {}) {
 
   if (!isReturn && !isParagraphEnd) {
     const verbTokens = String(sentence.be).trim().split(/\s+/u);
-    const verbs = verbTokens.map((token) => lookupLegacyName(OPERATOR_ENTRY_BY_SURFACE[token] ?? token));
-    const missingIndex = verbs.findIndex((verb) => !verb?.hnuc);
+    const verbs = verbTokens.map((token) => lookupLegacyWordSequence(OPERATOR_ENTRY_BY_SURFACE[token] ?? token));
+    const missingIndex = verbs.findIndex((sequence) => !sequence);
     if (missingIndex >= 0) {
       throw invalid("unrepresentable-verb", `VLIW verb has no vocabulary HNUC (${verbTokens[missingIndex]})`, {
         verb: sentence.be,
         token: verbTokens[missingIndex]
       });
     }
-    words.push(...verbs.map((verb) => Number.parseInt(verb.hnuc, 16)));
+    words.push(...verbs.flatMap((sequence) => sequence.map((verb) => Number.parseInt(verb.hnuc, 16))));
   }
   const mood = isReturn ? "ret" : conditional ? "then" : sentence.mood;
   const moodEntry = MOOD_ENTRIES[mood];
@@ -368,9 +471,20 @@ function encodeSentenceWords(sentence) {
 }
 
 function vectorsFor(words, boundaryOffsets, rawQuotes = []) {
+  const rawRegions = [];
+  let rawWordTotal = 0;
+  for (const quote of rawQuotes.slice().sort((left, right) => left.payloadStart - right.payloadStart)) {
+    const indexedOffset = quote.payloadStart - rawWordTotal;
+    const usedInCodelet = indexedOffset % PAYLOAD_WORDS;
+    const available = PAYLOAD_WORDS - usedInCodelet;
+    if (quote.payloadWords > available) {
+      rawRegions.push(quote);
+      rawWordTotal += quote.payloadWords;
+    }
+  }
   const pieces = [];
   let cursor = 0;
-  for (const quote of rawQuotes.slice().sort((left, right) => left.payloadStart - right.payloadStart)) {
+  for (const quote of rawRegions) {
     const payloadStart = quote.payloadStart;
     const payloadEnd = payloadStart + quote.payloadWords;
     if (payloadStart < cursor || payloadEnd > words.length) {
@@ -440,17 +554,34 @@ function wordName(word, role) {
   if (word === wordForEntry("multiplicative_case_")) return "fromindex";
   if (word === wordForEntry("toindex_")) return "toindex";
   if (ROLE_BY_WORD.has(word)) return ROLE_BY_WORD.get(word);
-  if (TYPE_SURFACE_BY_WORD.has(word)) return TYPE_SURFACE_BY_WORD.get(word);
+  if (role === "as" && STORAGE_DTYPE_BY_WORD.has(word)) return STORAGE_DTYPE_BY_WORD.get(word);
+  // The vector HNUC is both a type marker and a verb; verbs keep their lexical spelling.
+  if (role !== "verb" && TYPE_SURFACE_BY_WORD.has(word)) return TYPE_SURFACE_BY_WORD.get(word);
   if (role === "verb" && OPERATOR_SURFACE_BY_WORD.has(word)) return OPERATOR_SURFACE_BY_WORD.get(word);
   const entry = ENTRIES_BY_HNUC.get(word);
   if (entry?.en && !entry.en.endsWith("_")) return entry.en;
+  const decoded = decodedName(word);
+  if (decoded) return decoded;
   throw invalid("unrepresentable-name", `VLIW ${role} HNUC has no recoverable vocabulary name`, {
     role,
     word: `0x${word.toString(16).padStart(4, "0")}`
   });
 }
 
-function decodeValue(items, role) {
+function decodeValue(items, role, boundaryOffsets) {
+  if (
+    items.length >= 3
+    && items[0].kind === "word"
+    && items[0].word === DEPENDENT_CLAUSE
+    && items.at(-1).kind === "word"
+    && items.at(-1).word === CLAUSE_TAIL
+  ) {
+    const nested = decodeClauseItems(items.slice(1, -1), boundaryOffsets);
+    if (nested.nextIndex !== items.at(-1).offset) {
+      throw invalid("malformed-dependent-clause", `VLIW ${role} dependent clause has trailing content`);
+    }
+    return { la: nested.sentence };
+  }
   if (
     items.length === 1
     && items[0].kind === "tagged-quote"
@@ -476,6 +607,15 @@ function decodeValue(items, role) {
     }
     if (isIntVectorQuoteWord(word) && Array.isArray(value)) {
       return { ve: { type: "bool", values: value.map((item) => item === 0 ? "lie" : "truth") } };
+    }
+    if ((items[0].quote.family === "float32-vector" || items[0].quote.family === "float64-vector") && Array.isArray(value)) {
+      return { ve: { type: items[0].quote.family === "float32-vector" ? "float32" : "float64", values: value } };
+    }
+    if (items[0].quote.family === "text-array" && Array.isArray(value)) {
+      return { ve: { type: "text", values: value } };
+    }
+    if (["float32", "float64", "fixed16"].includes(items[0].quote.family) && typeof value === "number") {
+      return { num: value };
     }
     if (word === NUMBER_QUOTE_WORD && Number.isInteger(value) && value >= 0 && value <= 0xffff) {
       return { num: value };
@@ -556,12 +696,29 @@ function decodeClauseItems(items, boundaryOffsets) {
   const fields = {};
   const quoteKinds = {};
   let pending = [];
-  for (const item of items) {
+  let cursor = 0;
+  while (cursor < items.length) {
+    const item = items[cursor];
+    if (item.kind === "word" && item.word === DEPENDENT_CLAUSE) {
+      let depth = 1;
+      let tail = cursor + 1;
+      for (; tail < items.length; tail += 1) {
+        if (items[tail].kind !== "word") continue;
+        if (items[tail].word === DEPENDENT_CLAUSE) depth += 1;
+        else if (items[tail].word === CLAUSE_TAIL && --depth === 0) break;
+      }
+      if (tail >= items.length) {
+        throw invalid("malformed-dependent-clause", "VLIW dependent clause is missing its clause tail");
+      }
+      pending.push(...items.slice(cursor, tail + 1));
+      cursor = tail + 1;
+      continue;
+    }
     const isBoundary = boundaryOffsets.has(item.offset);
     if (isBoundary && item.kind === "word" && ROLE_BY_WORD.has(item.word)) {
       const role = ROLE_BY_WORD.get(item.word);
       if (Object.hasOwn(fields, role)) throw invalid("duplicate-case", `VLIW sentence repeats the ${role} case`);
-      const value = decodeValue(pending, role);
+      const value = decodeValue(pending, role, boundaryOffsets);
       if (Object.hasOwn(value, "quotedKind")) {
         fields[role] = value.quotedValue;
         quoteKinds[role] = value.quotedKind;
@@ -569,6 +726,7 @@ function decodeClauseItems(items, boundaryOffsets) {
         fields[role] = value;
       }
       pending = [];
+      cursor += 1;
       continue;
     }
     if (isBoundary && item.kind === "word" && MOOD_BY_WORD.has(item.word)) {
@@ -593,6 +751,7 @@ function decodeClauseItems(items, boundaryOffsets) {
       };
     }
     pending.push(item);
+    cursor += 1;
   }
   throw invalid("unsupported-sentence", "VLIW sentence is missing a marked mood boundary");
 }
@@ -621,7 +780,7 @@ function decodeSentenceGroup(decoded) {
     }
     return {
       ...condition,
-      mood: consequence.mood,
+      mood: "do",
       consequence,
       alternative
     };
@@ -634,7 +793,7 @@ function decodeSentenceGroup(decoded) {
     }
     sentence = {
       ...condition,
-      mood: sentence.mood,
+      mood: "do",
       consequence: sentence
     };
   }

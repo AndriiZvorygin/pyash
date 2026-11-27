@@ -395,7 +395,7 @@ export function parseTokens(
         !["be", "then", "else", "ta", "ret"].includes(words[j])
       ) {
         const token = tokenValue(words[j]);
-        if (elemType === "num" || elemType === "number") {
+        if (elemType === "num" || elemType === "number" || elemType === "float" || elemType === "float32" || elemType === "float64") {
           const num = Number(token);
           vector.values.push(Number.isNaN(num) ? token : num);
         } else if (elemType === "bool" || elemType === "boolean") {
@@ -410,7 +410,10 @@ export function parseTokens(
 
       const target = slot || (current ? s[current] : null);
       if (target) {
-        target.ve = vector;
+        target.ve = {
+          ...vector,
+          type: elemType === "float" ? "float32" : elemType
+        };
       }
 
       i = j - 1;
@@ -445,6 +448,7 @@ export function parseTokens(
           "num",
           "number",
           "text",
+          "float",
           "filename",
           "vec",
           "ve",
@@ -477,7 +481,7 @@ export function parseTokens(
             temp.push("vec");
             k += 1;
             const elem = words[k];
-            if (elem && (elem === "num" || elem === "number" || elem === "text" || elem === "bool" || elem === "boolean")) {
+            if (elem && (elem === "num" || elem === "number" || elem === "text" || elem === "bool" || elem === "boolean" || elem === "float")) {
               temp.push(elem === "number" ? "num" : (elem === "boolean" ? "bool" : elem));
               k += 1;
             }

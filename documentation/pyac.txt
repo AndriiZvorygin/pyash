@@ -2055,6 +2055,11 @@ word (s)
 8
 8 byte, _multal_number binary data
 4
+numeric storage width
+_paucal_number is 8 bit
+_number is 16 bit
+_plural_number is 32 bit
+_multal_number is 64 bit
 16
 unsigned integer
 5

@@ -9,10 +9,11 @@ This guide keeps contributions consistent for the Pyash codebase.
 - Output formatting sits in `program/beautiful.mjs`; Ollama network I/O is in `program/motor/ollama.mjs`.
 - Quizzes are under `quiz/*.test.mjs`; keep helpers near the code they cover.
 - Docs: `documentation/specifications/00-index.md` is the normative spec index (start there); `documentation/specifications/01-sentence-and-grammar.md` and `02-core-execution.md` define the sentence model and dispatch contract. `documentation/pyac.txt` is the broader spec, `documentation/pyash.md` the design goals, `documentation/compositional-cases.md` the case grid. `program/configure/workplace.json` is example data/config; keep secrets out of the repo.
+- Vocabulary work (atoms, compounds, WordNet links, Chinese links, and their sweeps) may be done on the current working branch. The bulk import is finished, so current vocabulary work is fine-tuning rather than authoring the accepted catalog wholesale; branch isolation is no longer required. See [the dev-vocab operations guide](documentation/runbooks/dev-vocab-operations.md) for the end-to-end procedure. Repairing a defect in the deprecated `program/library/pyashWords.json` identity rows is allowed, and the repair belongs in `documentation/reference/pyashwords-deprecated.md`.
 - Ceremonies (`def...prah`) have speakable, multi-word names; bodies run in sandpits during invocation, and `this`/`ret` flow updates the caller’s evoke/targets and records sandpit traces.
 
 ## Build, Quiz, and Development Commands
-- `npm test` (or `node --test quiz`) runs the full suite; run it before pushing.
+- `npm test` (or `node --test quiz`) runs the full suite. On a `dev*` working branch, run the targeted quizzes for the paths you changed instead; the full suite is the merge gate when a branch is merged into `dev` or `master`.
 - `npm test` is pre-approved; no extra confirmation is needed to run it.
 - `node --test quiz/core.test.mjs` runs a targeted file while iterating.
 - `node program/main.mjs` starts the REPL to exercise new verbs interactively.
@@ -40,6 +41,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 
 ## Quiz Guidelines
 - Add quizzes for every new code path; mirror real REPL usage strings where possible.
+- A new verb or signature declares a parity class (`core`, `pure`, `host`, or `legacy`) in `documentation/reference/parity-gate.md`; `core` changes must pass `npm run parity:gate`.
 - Follow `node:test` with `assert/strict` (see `quiz/core.test.mjs`).
 - Name quizzes with readable sentences; reset memory between cases to avoid coupling.
 - Cover at least one happy path and one edge/guard path for each new verb or interpreter change.
@@ -54,6 +56,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 - Unless the user explicitly says otherwise, a completed requested change must be committed and pushed to the configured remote workflow after validation. Preserve unrelated WIP and use the repository's dual-remote helper when applicable.
 - Remote commits on `dev` are a synchronization step, not a reason to stop or defer a push. Fetch both configured remotes, inspect their `dev` tips and local `dev` commits, then merge remote `dev` commits into the current `dev` branch; preserve local commits and make no force-pushes. If `origin/dev` and `github/dev` differ, merge both tips before publishing.
 - Do not create a side branch or worktree just to avoid synchronizing `dev`. Keep unrelated dirty files and active background work intact. Merge when the dirty paths do not conflict; if they overlap, preserve them with a recoverable patch or stash only when no active process is writing those files, then restore and resolve the work before continuing.
+- Changes in other worktrees, or unrelated dirty paths in the active worktree, are never by themselves a reason to stall, stop, or delay requested work. Preserve them and continue on non-overlapping paths; pause only for a concrete same-path conflict, an active writer touching required files, or a destructive operation that needs confirmation.
 - Resolve ordinary merge conflicts in favor of the combined intended changes, rerun the relevant tests, and continue to `bash command/push_all.sh`. If a push races with a new remote commit, fetch, merge that commit into `dev`, rerun the relevant checks, and retry. Do not report `ahead`/`behind` counts or a non-fast-forward rejection alone as a blocker; stop only for a concrete access, policy, or unresolvable-content problem and state the exact failed step.
 - PRs should describe behavior changes, list new verbs/grammar, and link issues. Include proof (screenshots/logs/transcripts) for REPL-facing changes.
 - Mention added tests and any known gaps. Call out external needs (e.g., Ollama server availability) so reviewers can reproduce.
@@ -100,3 +103,9 @@ This guide keeps contributions consistent for the Pyash codebase.
 - A non-empty Housekeeper queue is normal and is not a reason to stall, refuse, or wait before submitting independent work. Submit the bounded job and let Housekeeper perform admission, placement, concurrency control, and queueing across available hosts/devices.
 - Check active work when diagnosing a stalled job, when a task explicitly requires isolated performance measurements, or when no managed queue is available. Do not manually unload models or create competing unmanaged inference processes to make room.
 - Preserve declared dependencies between pipeline stages. Independent duties may run concurrently when Housekeeper admits them; same-device overlap remains governed by Housekeeper capacity/VRAM admission and the runtime's concurrency-safety declaration.
+
+## Production Service Artifact Rule
+- A production service must load compiled artifacts from disk; service startup must never compile source, shaders, or GPU pipelines, download model weights, or train models.
+- Build/deployment steps must produce and persist the exact target artifacts before service activation. Missing, stale, or incompatible artifacts fail clearly; startup must not JIT, silently fall back to another execution backend, or switch to CPU.
+- Production readiness has a hard 60-second ceiling. Do not add a longer startup wait or configurable override to conceal compilation during startup.
+- Add a regression test for artifact generation/loading and the startup ceiling whenever changing a production service's executable artifact path.

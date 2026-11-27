@@ -7,6 +7,8 @@ description: "Diagnose GPU/model residency and queue behavior in Pyash using Hou
 
 Use this skill when video/refinery runs show repeated GPU model load/unload churn, high `load_duration` spikes, or slow oscillation between providers.
 
+For Pyash job authoring, use the [GPU Housekeeper workbook](../../documentation/workbook/pyash-gpu-housekeeper.md): text jobs use durable `vyah start future be gpu mind do` handles, while ordinary image generation uses the workflow-aware `be draw do` path. The low-level `gpu draw` future API requires a complete ComfyUI API graph, not just an image description.
+
 ## Goals
 
 - Keep model/provider transitions intentional and stage-bounded.

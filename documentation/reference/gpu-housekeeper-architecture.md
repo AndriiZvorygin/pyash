@@ -17,8 +17,14 @@ The housekeeper owns host-local GPU runtime control:
 - start/restart/discharge managed runtimes,
 - admit execution per physical device,
 - serialize default runtimes while allowing explicitly safe shared runtimes,
-- execute real Ollama, ComfyUI, and KataGo jobs,
+- execute real Ollama, ComfyUI, KataGo, and managed VLIW jobs,
 - expose job status and results over HTTP.
+
+The Rust VLIW interpreter is an independent GPU runtime service. Housekeeper
+continues to own GPU admission, queue durability, federation, and runtime
+lifecycle; it forwards only validated canonical PyAC packs to the service.
+Changing VLIW interpreter or shader code rebuilds/recreates that service, not
+the Housekeeper process or other GPU runtimes.
 
 It should not duplicate the durable queue. The Pyash holding spool is the
 system of record for queued duties and final handles; housekeeper job state is
@@ -113,6 +119,7 @@ unusually long-running job needs a larger recovery window.
 - `POST /capacity/preview`
 - `POST /capacity/prepare` (Strata pre-load admission and idle-runtime handoff)
 - `POST /submit`
+- `POST /submit-pyac` (authenticated raw VLIW pack upload)
 - `GET /job/<remoteJobId>`
 - `POST /discharge`
 - `POST /runtime/begin`
@@ -140,6 +147,24 @@ Housekeeper snapshots advertise protocol capabilities; model provisioning is
 forwarded only to peers that advertise `ollamaModelProvisioning`, so an older
 peer cannot receive an unsupported `ollama-ensure-model` job.
 Different physical devices can execute concurrently without sharing a gate.
+
+The VLIW client uses `/submit-pyac`: the request body is two consecutive
+PyAC-framed packs (a Pyash authentication sentence and the executable pack),
+not JSON or Base64. Configure the same machine-local shared key on every
+federated Housekeeper in `configure/secret.pya`:
+
+```text
+exists su name gpu authentication key ob text "<shared-secret>" be text ya
+```
+
+The GPU Housekeeper container receives that directory read-only at
+`/run/pyash/configure`; the image does not contain the key. A receiver
+validates identity, pack digest, and HMAC before persisting the job pack and
+admitting it to the durable queue. Peer forwarding preserves the signed bytes
+so the destination verifies them independently. The Housekeeper then sends
+the raw pack to the resident Rust VLIW runtime at `/v1/execute-pack`. Existing
+JSON `/submit` and `/v1/execute` interfaces remain for other runtimes and
+previously accepted jobs.
 
 `/queue` lists queued and running jobs with `source` metadata and the selected
 `executionHostId` and `deviceId`; `/job/<id>` includes the same source record,
@@ -218,6 +243,7 @@ The default managed runtimes are:
 - `katago`
 - `huggingface` (the Criterion sequence-to-sequence service)
 - `strata` when `GPU_HOUSEKEEPER_STRATA_RUNTIME_URL` is configured
+- `vliw` through the standalone Rust VLIW HTTP service
 
 Runtime configuration can be overridden with `GPU_HOUSEKEEPER_RUNTIME_REGISTRY`.
 
@@ -243,6 +269,27 @@ after its configured idle grace and with zero in-flight requests. Discharge
 uses Strata's `/v1/unload`, verifies `loaded:false`, and then rechecks actual
 free VRAM before the requesting runtime proceeds. Missing status, activity,
 authentication, or unload confirmation fails closed.
+
+### Rust VLIW runtime service
+
+The `vliw` Housekeeper runtime forwards only protocol-v1
+`pyac-pack-execute` requests to `pyac-vliw-runtime` over the private Docker
+network. The Rust HTTP service validates the envelope and PyAC pack, then
+invokes the existing Rust/WGPU worker and returns its typed result. Housekeeper
+performs GPU capacity admission before starting the service or sending a pack.
+The service is started on demand and stopped after the normal 300-second idle
+grace; an executing VLIW job prevents idle discharge.
+
+Runtime maintenance pauses only local VLIW dispatch. Active VLIW duties drain;
+new and capacity-waiting VLIW duties stay in the durable Housekeeper queue.
+Other runtimes continue to be admitted. `/runtime/begin` resumes the held VLIW
+queue after health is confirmed, while `/runtime/stop` leaves it held until a
+begin request. The standalone update helper uses this contract to rebuild and
+recreate only the VLIW container. The one-time Housekeeper deployment installs
+the route, but subsequent VLIW interpreter updates do not rebuild or restart
+Housekeeper. See
+[`container/pyac-vliw-runtime/README.md`](../../container/pyac-vliw-runtime/README.md)
+for the service API and rollout sequence.
 
 ## 3. Runtime Behavior
 

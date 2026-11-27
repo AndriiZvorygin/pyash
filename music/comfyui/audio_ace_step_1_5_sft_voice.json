@@ -1,0 +1,159 @@
+{
+  "prompt": {
+    "3": {
+      "class_type": "AceStepSFTGenerate",
+      "inputs": {
+        "seed": [
+          "109",
+          0
+        ],
+        "steps": 50,
+        "cfg": 7.0,
+        "sampler_name": "jkass_quality",
+        "scheduler": "ace_step",
+        "denoise": 1.0,
+        "duration": 175.0,
+        "infer_method": "ode",
+        "guidance_mode": "apg",
+        "model": [
+          "78",
+          0
+        ],
+        "positive": [
+          "47",
+          0
+        ],
+        "negative": [
+          "47",
+          1
+        ],
+        "vae": [
+          "106",
+          0
+        ],
+        "reference_audio": [
+          "110",
+          0
+        ],
+        "reference_xl_attention": true,
+        "reference_guidance_scale": 1.0,
+        "reference_timbre_repeats": 1,
+        "timbre_cls_token": true,
+        "voice_boost": 0.0,
+        "use_tiled_vae": true,
+        "decode_audio": true
+      },
+      "_meta": {
+        "title": "Generate with a reference voice"
+      }
+    },
+    "47": {
+      "class_type": "AceStepSFTTextEncode",
+      "inputs": {
+        "clip": [
+          "105",
+          0
+        ],
+        "caption": "warm cinematic pop hymn, intimate female vocal, breathy lead, piano and strings, slow build, clear dry vocal, emotional and tender",
+        "lyrics": "[Verse]\nA line of the song.",
+        "instrumental": false,
+        "seed": [
+          "109",
+          0
+        ],
+        "duration": 175.0,
+        "bpm": 75,
+        "timesignature": "4",
+        "language": "en",
+        "keyscale": "auto",
+        "generate_audio_codes": true,
+        "lm_cfg_scale": 2.0,
+        "lm_temperature": 0.85,
+        "lm_top_p": 0.9,
+        "lm_top_k": 0,
+        "lm_min_p": 0.0
+      },
+      "_meta": {
+        "title": "Text Encode"
+      }
+    },
+    "78": {
+      "class_type": "ModelSamplingAuraFlow",
+      "inputs": {
+        "shift": 3.0,
+        "sampling": "flow",
+        "model": [
+          "104",
+          0
+        ]
+      },
+      "_meta": {
+        "title": "Model Sampling AuraFlow"
+      }
+    },
+    "104": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "acestep_v1.5_sft.safetensors",
+        "weight_dtype": "default"
+      },
+      "_meta": {
+        "title": "UNET Loader"
+      }
+    },
+    "105": {
+      "class_type": "DualCLIPLoader",
+      "inputs": {
+        "clip_name1": "qwen_0.6b_ace15.safetensors",
+        "clip_name2": "qwen_4b_ace15.safetensors",
+        "type": "ace",
+        "device": "default"
+      },
+      "_meta": {
+        "title": "Dual CLIP Loader"
+      }
+    },
+    "106": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "ace_1.5_vae.safetensors"
+      },
+      "_meta": {
+        "title": "VAE Loader"
+      }
+    },
+    "107": {
+      "class_type": "SaveAudioMP3",
+      "inputs": {
+        "filename_prefix": "music/ace-step-1-5-sft-voice",
+        "quality": "V0",
+        "audio": [
+          "3",
+          5
+        ]
+      },
+      "_meta": {
+        "title": "Save Audio MP3"
+      }
+    },
+    "109": {
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 20261127
+      },
+      "_meta": {
+        "title": "Seed"
+      }
+    },
+    "110": {
+      "class_type": "AceStepSFTLoadReferenceAudio",
+      "inputs": {
+        "enabled": false,
+        "audio": ""
+      },
+      "_meta": {
+        "title": "Load Reference Audio"
+      }
+    }
+  }
+}

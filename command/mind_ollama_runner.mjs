@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import dns from "node:dns";
 import { spawn, spawnSync } from "node:child_process";
 import { attachImagesToMessages } from "./ollama_image_payload.mjs";
+import { describeThink } from "../program/motor/ollama_think.mjs";
 import { enqueueInputEnvelope, queueDepth } from "../program/runtime/gpu/queue.mjs";
 import { readGpuHandleStatus, writeGpuHandleStatus, isTerminalHandleStatus } from "../program/runtime/gpu/handle_status.mjs";
 import { resolveGpuQueueWaitTimeoutMs } from "../program/runtime/gpu/worker.mjs";
@@ -543,10 +544,18 @@ async function runHousekeeperManagedMind(payload, { signal } = {}) {
   });
 }
 
+// A thinking model spends its token budget on its reasoning and returns the
+// answer empty, which reads to the caller as a stage that never replied. A
+// caller that wants the reasoning says so: the payload's own `think` wins, then
+// the house's setting, and a model that has not asked is answered without it.
+function thinkFor(payload) {
+  return describeThink({ think: payload?.think, env: process.env });
+}
+
 async function runGenerate(payload) {
   const base = resolveHost(payload);
   const endpoint = `${base.replace(/\/$/, "")}/api/generate`;
-  const body = { model: payload.model, prompt: payload.prompt, stream: !!payload.stream };
+  const body = { model: payload.model, prompt: payload.prompt, stream: !!payload.stream, think: thinkFor(payload) };
   const options = ollamaOptions(payload);
   if (Object.keys(options).length > 0) body.options = options;
   if (payload.think !== undefined) body.think = payload.think;
@@ -567,7 +576,8 @@ async function runChat(payload) {
   const body = {
     model: payload.model,
     messages: ollamaMessages,
-    stream: !!payload.stream
+    stream: !!payload.stream,
+    think: thinkFor(payload)
   };
   const options = ollamaOptions(payload);
   if (Object.keys(options).length > 0) body.options = options;

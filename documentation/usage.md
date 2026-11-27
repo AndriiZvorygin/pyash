@@ -35,6 +35,26 @@ Install globally:
 npm link
 ```
 
+`pyash translate` usage
+-----------------------
+
+The default form renders `.pyac` codelets as readable English Pyash. Use `as pyac`
+for a dictionary-free, lossless word-level decode and its inverse:
+
+```bash
+pyash translate from program.pyac to program-pyac.pya as pyac
+pyash translate from program-pyac.pya to program-roundtrip.pyac as pyac
+```
+
+The `.pya` word dump keeps all 16 uint16 slots of each codelet in order. Slot
+zero (the index) is written as `0x`-prefixed four-digit hex. Canonical HNUCs in
+the remaining slots use their Pyac spelling (so the accusative case remains
+`ka`); values without a canonical Pyac word encoding use the same hex form.
+This also makes raw quote payload and padding words lossless. Translating the
+dump back recreates the original PyAC pack exactly. This mode is a
+decoder/encoder, not an English translation, and does not consult the
+dictionary.
+
 `./compile` usage
 -----------------
 

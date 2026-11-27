@@ -45,6 +45,9 @@ exists su name see default prompter ob la be see ko ob text "Describe the image.
 exists su name ai host ob text "http://localhost:11434" be default ya
 exists su name ollama host ob text "http://localhost:11434" be default ya
 exists su name mind model ob text "qwen3.5:9b" be default ya
+# A thinking model answers in its reasoning and leaves the answer empty, which
+# reads as a stage that never replies. Off unless the house wants the reasoning.
+exists su name mind think ob bool lie be default ya
 exists su name coding saddle mind ob text "mind" be default ya
 exists su name zai be mind from state "zai" from space "https://api.z.ai/api/coding/paas/v4" via state "glm-5.3" ya
 exists su name openai be mind from state "openai" from space "https://api.openai.com" via state "gpt-5.3-codex" ya
@@ -71,7 +74,7 @@ exists su name say workflow root ob filename "./say/" be default ya
 exists su name say workflow default ob text "andrii_teaching_voice_qwen3_TTS" be default ya
 exists su name music host ob text "http://localhost:8188" be default ya
 exists su name music workflow root ob filename "./music/" be default ya
-exists su name music workflow default ob text "audio_ace_step_1_5_checkpoint" be default ya
+exists su name music workflow default ob text "audio_ace_step_1_5_xl_turbo" be default ya
 exists su name qwen say tone default ob text "speak as a compassionate teacher" be default ya
 exists su name qwen say tone strategy ob text "heuristic" be default ya
 exists su name qwen say tone promptify system prompt ob text "You are a voice director for a text to speech teaching video. Return only one speaking direction line for Qwen3 instructions." be default ya
@@ -179,10 +182,47 @@ exists su name zim archive search server ob text "http://[::1]:8091" be default 
 exists su name archive focus page size bytes ob num 8388608 be default ya
 exists su name archive focus result size bytes ob num 16000 be default ya
 exists su name zim website capture image ob text "ghcr.io/openzim/zimit" be default ya
+exists su name default language ob text "en" be default ya
 exists su name zim archive default language ob text "eng" be default ya
 exists su name zim archive default creator ob text "Pyash" be default ya
 exists su name zim archive default publisher ob text "Pyash" be default ya
 exists su name web archive network ob bool truth be default ya
+exists su name radio host ob text "::" be default ya
+exists su name radio port ob num 8090 be default ya
+exists su name radio catalogue ob text "radio/audio" be default ya
+exists su name radio station name ob text "Zvorygin Radio" be default ya
+# The address the station is reached at, for the canonical link of a song page.
+# A page without one is still readable; a page with one tells a search engine
+# which address is the real one.
+exists su name radio station url ob text "https://radio.zvorygin.ca" be default ya
+exists su name radio station command ob text "node world/house/radio/command/yiniana_radio.mjs" be default ya
+exists su name radio rotation ob text "world/house/radio/radio/rotation.txt" be default ya
+exists su name radio channels ob text "world/house/radio/radio/channels.txt" be default ya
+exists su name radio song imports ob text "world/house/radio/radio/imports.txt" be default ya
+exists su name radio tags command ob text "node world/house/radio/command/yiniana_tag_catalogue.mjs" be default ya
+exists su name radio transcribe command ob text "node world/house/radio/command/yiniana_transcribe_catalogue.mjs" be default ya
+exists su name radio card depth ob text "radio" be default ya
+exists su name radio producer lanes ob text "world/house/radio/radio/topics.txt" be default ya
+exists su name radio producer command ob text "node world/house/radio/command/yiniana_producer.mjs" be default ya
+exists su name radio producer seeds ob num 2 be default ya
+exists su name radio producer song count ob num 1 be default ya
+exists su name radio producer audition seconds ob num 0 be default ya
+exists su name radio producer min recovery ob num 10 be default ya
+exists su name radio producer loop ob bool lie be default ya
+exists su name radio producer pause seconds ob num 0 be default ya
+exists su name radio producer channel ob text "" be default ya
+exists su name radio producer song style ob bool truth be default ya
+exists su name radio rebuild count ob num 1 be default ya
+su name radio producer engines be map def
+  su name ace-step ob text "audio_ace_step_1_5_xl_turbo" ya
+  su name night ob text "audio_ace_step_1_5_xl_turbo" ya
+  su name christian ob text "audio_ace_step_1_5_xl_turbo" ya
+prah
+su name radio producer durations be map def
+  su name ace-step ob num 240 ya
+  su name night ob num 240 ya
+  su name christian ob num 240 ya
+prah
 su name web archive configure be map def
   su name web archive prefix ob text "prefix" ya
   su name web archive page maximum ob num 2000 ya

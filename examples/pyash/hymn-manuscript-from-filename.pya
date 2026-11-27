@@ -1,5 +1,0 @@
-from filename "../../module/hymn_manuscript.pya" to name hymn manuscript be import do
-
-ob ve filename text source text text hook_hint be input ya
-
-su name song from filename of ob of source with text of ob of hook_hint to name text song out be hymn manuscript do

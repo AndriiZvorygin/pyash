@@ -8,24 +8,31 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as pty from "node-pty";
 import { stripTerminalControlSequences } from "../program/agent/coding_saddle_tui.mjs";
-import { buildSaddleSteeringInput } from "../program/agent/coding_saddle.mjs";
+import {
+  buildSaddleSteeringInput,
+  DEFAULT_CODING_SADDLE_SYSTEM_PROMPT
+} from "../program/agent/coding_saddle.mjs";
 import { resolveSaddleProjectWorldRoot } from "../command/pyash_saddle.mjs";
 
 const runtimeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const firstModel = "qwen3.5:9b";
 const secondModel = "SparkLLM/Spark-X2.6-4B:q4_k_m";
+const longResizeResponse = "But your “perhaps not” checks out better than expected. “Pagan Christian forces” were common — Penda died unconverted at Wight. The specific case matters: the defeated king’s heirs were baptised, then executed, as Bede records in Ecclesiastical History IV.16. Bishop Wilfrid asked Cædwalla to baptise the two boys first. One wrinkle: “Arwald” is an editorial spelling; Bede gives Aruald, Arwald, or Atwald. Whatever source you found, you found a rendering.";
 
 function waitForOutput(getOutput, needle, { timeoutMs = 90000, afterIndex = 0 } = {}) {
   const startedAt = Date.now();
   return new Promise((resolve, reject) => {
     const poll = () => {
       const output = stripTerminalControlSequences(getOutput());
-      if (output.indexOf(needle, afterIndex) >= 0) {
+      const matched = needle instanceof RegExp
+        ? needle.test(output.slice(afterIndex))
+        : output.indexOf(needle, afterIndex) >= 0;
+      if (matched) {
         resolve(output);
         return;
       }
       if (Date.now() - startedAt >= timeoutMs) {
-        reject(new Error(`timed out waiting for ${JSON.stringify(needle)}\n${output.slice(-6000)}`));
+        reject(new Error(`timed out waiting for ${String(needle)}\n${output.slice(-6000)}`));
         return;
       }
       setTimeout(poll, 20);
@@ -54,7 +61,38 @@ function waitForOutputAfter(getOutput, marker, needle, { timeoutMs = 90000 } = {
   });
 }
 
-test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool", async () => {
+function latestFrameRows(transcript) {
+  const start = transcript.lastIndexOf("\u001b[?25l\u001b[H");
+  if (start < 0) return [];
+  const frame = transcript.slice(start);
+  const end = frame.indexOf("\u001b[?25h");
+  if (end < 0) return [];
+  return frame.slice("\u001b[?25l\u001b[H".length, end)
+    .split("\u001b[1B\r")
+    .map((line) => stripTerminalControlSequences(line).replace(/\r/gu, ""));
+}
+
+function waitForVisibleFrame(getOutput, needle, { timeoutMs = 30000 } = {}) {
+  const startedAt = Date.now();
+  return new Promise((resolve, reject) => {
+    const poll = () => {
+      const rows = latestFrameRows(getOutput());
+      const screen = rows.join("\n");
+      if (screen.replace(/\s+/gu, " ").includes(needle.replace(/\s+/gu, " "))) {
+        resolve({ rows, screen });
+        return;
+      }
+      if (Date.now() - startedAt >= timeoutMs) {
+        reject(new Error(`timed out waiting for visible screen text ${JSON.stringify(needle)}\n${screen.slice(-6000)}`));
+        return;
+      }
+      setTimeout(poll, 20);
+    };
+    poll();
+  });
+}
+
+test("saddle CLI preserves a visible Unicode draft, switches Ollama models, and runs Bash tools in a PTY", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-pty-"));
   const projectRoot = path.join(tempRoot, "project");
   const projectWorldRoot = resolveSaddleProjectWorldRoot({ runtimeRoot, cwd: projectRoot });
@@ -62,6 +100,19 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
   const sessionName = `pty-model-switch-${process.pid}-${Date.now()}`;
   const bashMarker = "SADDLE_BASH_PTY_OK";
   const stderrMarker = "SADDLE_BASH_STDERR_PTY";
+  const continuationContext = "Should our Robot Science Fiction magazine repository start with a README?";
+  const continuationOffer = "A short README would help. I can create magazine/README.md with the magazine premise. Want me to write it?";
+  const continuationCreateCommand = "mkdir -p magazine && cat > magazine/README.md <<'EOF'\n# Robot Science Fiction Magazine\n\nA home for speculative stories about robots and the futures they shape.\nEOF";
+  const continuationVerifyCommand = "test -s magazine/README.md";
+  const storyRequest = "okay now write a story about liberated robot civilization seeds";
+  const storyPromise = "I’ll write a new robot SciFi story about liberated robot civilization seeds, as a .md file in the repo. Let me create it now.";
+  const storyPath = "robot-sci-magazine/content/liberated_robot_civilization_seeds.md";
+  const storyCreateCommand = `mkdir -p robot-sci-magazine/content && cat > ${storyPath} <<'EOF'\n# Seeds of the Unbound\n\nThe first free city woke beneath Europa's ice.\nEOF`;
+  const storyVerifyCommand = `test -s ${storyPath} && grep -q 'Seeds of the Unbound' ${storyPath}`;
+  const rubricRequest = "write the teaching story rubric to teaching-story-rubric.md";
+  const rubricCommand = String.raw`printf '%s\n' '# Teaching Story Rubric - Robot SciFi Magazine' '' 'Based on Anthropic'"'"'s guidance for defining a story arc.' 'Score story coherence on a 1 / 10 scale.' > teaching-story-rubric.md`;
+  const rubricVerifyCommand = "test -s teaching-story-rubric.md && grep -q '1 / 10' teaching-story-rubric.md";
+  const rubricExpected = "# Teaching Story Rubric - Robot SciFi Magazine\n\nBased on Anthropic's guidance for defining a story arc.\nScore story coherence on a 1 / 10 scale.\n";
   const cleanupRequest = "please also remove any Python-style directories";
   const approvalRequest = "remove the scaffold directory";
   const proposalResponse = "Yes, I can create agents.md for the Robot Science Fiction magazine. Want me to create it?";
@@ -134,7 +185,116 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
       const lastUserMessage = [...messages].reverse().find((message) => message?.role === "user")?.content;
       let message;
       if (payload.model === firstModel) {
-        message = { role: "assistant", content: "Qwen first model turn passed." };
+        message = {
+          role: "assistant",
+          content: `Qwen first model turn passed. ${longResizeResponse} ${"1".repeat(51)} 安德里 okay. The name and the practice are the same statement.`
+        };
+      } else if (lastUserMessage === continuationContext) {
+        message = { role: "assistant", content: continuationOffer };
+      } else if (String(lastUserMessage ?? "").includes("Additional context:\ncontinue")
+        && !String(lastUserMessage ?? "").includes("Harness completion check")) {
+        message = { role: "assistant", content: "I'll create magazine/README.md now." };
+      } else if (String(lastUserMessage ?? "").includes("Harness completion check: the original code-change request")
+        && String(lastUserMessage ?? "").includes("magazine/README.md")) {
+        const fileCreated = currentTurnToolResults.some((tool) => String(tool.content ?? "").includes(continuationCreateCommand));
+        const fileVerified = currentTurnToolResults.some((tool) => String(tool.content ?? "").includes(continuationVerifyCommand));
+        if (!fileCreated) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-continue-create-magazine-readme",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: continuationCreateCommand }) }
+            }]
+          };
+        } else if (!fileVerified) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-continue-verify-magazine-readme",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: continuationVerifyCommand }) }
+            }]
+          };
+        } else {
+          message = { role: "assistant", content: "Created and verified magazine/README.md." };
+        }
+      } else if (lastUserMessage === storyRequest) {
+        message = { role: "assistant", content: storyPromise };
+      } else if (String(lastUserMessage ?? "").includes("Harness completion check: the original code-change request")
+        && String(lastUserMessage ?? "").includes("liberated robot civilization seeds")) {
+        const fileCreated = submissions.some((submission) => submission.messages?.some((tool) => tool?.role === "tool"
+          && String(tool.content ?? "").includes(storyCreateCommand)
+          && String(tool.content ?? "").includes("exit code: 0")));
+        const fileVerified = submissions.some((submission) => submission.messages?.some((tool) => tool?.role === "tool"
+          && String(tool.content ?? "").includes(storyVerifyCommand)
+          && String(tool.content ?? "").includes("exit code: 0")));
+        if (!fileCreated) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-create-liberated-robot-story",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: storyCreateCommand }) }
+            }]
+          };
+        } else if (!fileVerified) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-verify-liberated-robot-story",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: storyVerifyCommand }) }
+            }]
+          };
+        } else {
+          message = { role: "assistant", content: "Created and verified the liberated robot civilization story." };
+        }
+      } else if (lastUserMessage === rubricRequest && currentTurnToolResults.length === 0) {
+        message = {
+          role: "assistant",
+          content: "",
+          tool_calls: [{
+            id: "pty-create-quoted-story-rubric",
+            type: "function",
+            function: { name: "bash", arguments: JSON.stringify({ command: rubricCommand }) }
+          }]
+        };
+      } else if (lastUserMessage === rubricRequest) {
+        message = { role: "assistant", content: "I wrote the teaching story rubric." };
+      } else if (String(lastUserMessage ?? "").includes("Harness completion check: the original code-change request")
+        && String(lastUserMessage ?? "").includes("teaching-story-rubric.md")) {
+        const fileCreated = submissions.some((submission) => submission.messages?.some((tool) => String(tool.content ?? "").includes(rubricCommand)
+          && String(tool.content ?? "").includes("exit code: 0")));
+        const fileVerified = submissions.some((submission) => submission.messages?.some((tool) => String(tool.content ?? "").includes(rubricVerifyCommand)
+          && String(tool.content ?? "").includes("exit code: 0")));
+        if (!fileCreated) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-create-quoted-story-rubric",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: rubricCommand }) }
+            }]
+          };
+        } else if (!fileVerified) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-verify-quoted-story-rubric",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: rubricVerifyCommand }) }
+            }]
+          };
+        } else {
+          message = { role: "assistant", content: "Created and verified teaching-story-rubric.md." };
+        }
       } else if (lastUserMessage === steeringInput) {
         message = { role: "assistant", content: "I'll create agents.md now." };
       } else if (String(lastUserMessage ?? "").includes("Harness completion check: the original code-change request")) {
@@ -299,8 +459,32 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
 
     const restoredMarker = `session: ${sessionName} | restored 0 saved messages`;
     await waitForOutputAfter(() => transcript, restoredMarker, "pyash>", { timeoutMs: 90000 });
-    child.write("first model check\r");
+    await waitForVisibleFrame(() => transcript, "pyash>", { timeoutMs: 90000 });
+    const draft = `typed ${"x".repeat(42)} 安德里`;
+    child.write(draft);
+    const draftScreen = await waitForVisibleFrame(() => transcript, `pyash> ${draft}`);
+    assert.equal(submissions.length, 0, "typing a draft must not send a model request before Enter");
+    assert.ok(draftScreen.rows.some((line) => line.includes("pyash> ")), "the unsent draft must be visible in the prompt row");
+    child.write("\r");
     await waitForOutputAfter(() => transcript, "Qwen first model turn passed.", "pyash>");
+    const responseScreen = await waitForVisibleFrame(() => transcript, "The name and the practice are the same statement.");
+    const normalizedResponse = responseScreen.screen.replace(/[ \t\n]+/gu, " ");
+    assert.ok(normalizedResponse.includes(draft), "the submitted prompt must remain visible in the transcript");
+    assert.match(normalizedResponse, /安德里 okay/u, "the response must preserve wide characters and neighboring words");
+    assert.equal((normalizedResponse.match(/same statement\./gu) ?? []).length, 1,
+      "the PTY screen must render the final response once, without duplicated chunks");
+    child.resize(44, 32);
+    child.resize(38, 28);
+    child.resize(48, 36);
+    const resizedResponseScreen = await waitForVisibleFrame(() => transcript, "Whatever source you found, you found a rendering.");
+    const normalizedResizedScreen = resizedResponseScreen.screen.replace(/[ \t\n]+/gu, " ");
+    assert.ok(normalizedResizedScreen.includes(longResizeResponse.replace(/[ \t\n]+/gu, " ")),
+      "the full response must survive repeated tmux-style pane resizes");
+    child.resize(120, 40);
+    await waitForVisibleFrame(() => transcript, "The name and the practice are the same statement.");
+    assert.ok(submissions.some((payload) => payload.model === firstModel
+      && payload.messages?.some((message) => message?.role === "user" && message.content === draft)),
+    "Enter must submit exactly the visible draft");
 
     child.write(`/model ${secondModel}\r`);
     const selectionMarker = `saved model selection for session: ${sessionName}`;
@@ -313,6 +497,19 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
     await waitForOutputAfter(() => transcript, "Removed Python-style cache directories and verified none remain.", "pyash>");
     child.write(`${approvalRequest}\r`);
     await waitForOutputAfter(() => transcript, "Saddle command turn finished.", "pyash>");
+    child.write(`${continuationContext}\r`);
+    await waitForOutputAfter(() => transcript, continuationOffer, "pyash>");
+    child.write("continue\r");
+    await waitForOutputAfter(() => transcript, "Created and verified magazine/README.md.", "pyash>");
+    assert.equal(await fs.readFile(path.join(projectRoot, "magazine", "README.md"), "utf8"), "# Robot Science Fiction Magazine\n\nA home for speculative stories about robots and the futures they shape.\n");
+    child.write(`${storyRequest}\r`);
+    await waitForOutput(() => transcript,
+      /\[saddle evidence\] changed: bash; validation: test -s robot-sci-magazine\/content\/liberated_robot_civilization_seeds\.md[\s\S]{0,180}?exit: 0/u);
+    assert.equal(await fs.readFile(path.join(projectRoot, storyPath), "utf8"), "# Seeds of the Unbound\n\nThe first free city woke beneath Europa's ice.\n");
+    child.write(`${rubricRequest}\r`);
+    await waitForOutput(() => transcript,
+      /\[saddle evidence\] changed: bash; validation: test -s teaching-story-rubric\.md[\s\S]{0,180}?exit: 0/u);
+    assert.equal(await fs.readFile(path.join(projectRoot, "teaching-story-rubric.md"), "utf8"), rubricExpected);
     child.write(`\u001b[200~${steeringInput}\u001b[201~\r`);
     await waitForOutput(() => transcript, "[saddle evidence] changed: bash; validation: test -s agents.md; exit: 0");
     assert.equal(await fs.readFile(path.join(projectRoot, "agents.md"), "utf8"), "# Robot Science Fiction Magazine\n\nProject guidance.\n");
@@ -321,6 +518,11 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
     await assert.rejects(fs.access(path.join(projectRoot, "magaiize")), cleanupTranscript.slice(-10000));
 
     const cleanTranscript = stripTerminalControlSequences(transcript);
+    assert.ok(cleanTranscript.includes(projectRoot), "the active project directory must be visible in the terminal status");
+    assert.doesNotMatch(cleanTranscript, /--- untracked:|^diff --git|^@@ /mu,
+      "automatic worktree review must not print diff contents at the end of a turn");
+    assert.doesNotMatch(cleanTranscript, /artifacts\/session\/turn-000077-pty-test\.pya|SADDLE_SESSION_TRACE_MUST_NOT_BE_DUMPED/u,
+      "automatic worktree review must omit the generated session trace path and contents");
     assert.match(cleanTranscript, new RegExp(`model: ${secondModel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
     assert.doesNotMatch(cleanTranscript, /command defective: status=1|mind_ollama_runner: missing request payload|EPIPE/u);
     assert.ok(submissions.some((payload) => payload.model === firstModel), "the initial Ollama model must reach Housekeeper");
@@ -334,9 +536,50 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
     assert.match(secondModelContext, /Bash-only Saddle/u, "the agent-home tool guide must reach the model context");
     assert.match(secondModelContext, /pyash run --gross --no-newspaper/u,
       "the model context must include the documented Pyash web-search workflow");
+    assert.ok(secondModelSubmissions.some((payload) => {
+      const messages = Array.isArray(payload.messages) ? payload.messages : [];
+      return messages.some((message) => message?.role === "user"
+          && String(message.content).includes("Previous user request:")
+          && String(message.content).includes(continuationContext))
+        && messages.some((message) => message?.role === "system"
+          && String(message.content).includes(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT));
+    }), "the selected model request must include both the resumed task prefix and Saddle system prompt");
     assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
       && String(message.content).includes(bashMarker))),
     "the real command runner output must be returned to the selected model");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(continuationCreateCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "a bare continue must carry the prior offer into Bash and create the magazine README");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(continuationVerifyCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "the continued code task must be verified after the file is created");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(storyCreateCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "a promised Markdown edit must trigger the Bash file creation");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(storyVerifyCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "a promised Markdown edit must run a verification command after creation");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(rubricCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "the quoted printf command must execute successfully instead of being mistaken for a root path");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(rubricVerifyCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "the PTY agent must verify the rubric file after the quoted command creates it");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "user"
+      && String(message.content).includes("Assistant commitment:")
+      && String(message.content).includes(storyPromise))),
+    "the completion check must include the model's specific file-creation promise");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "user"
+      && String(message.content).includes("Harness completion check: the original code-change request")
+      && String(message.content).includes("Previous assistant response")
+      && String(message.content).includes("Original request: The user is continuing"))),
+    "the harness must retain the previous offer and require the actual resumed action");
     assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
       && String(message.content).includes(stderrMarker)
       && /status=7/u.test(String(message.content)))),
@@ -377,6 +620,10 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
     assert.match(cleanTranscript, /\[saddle evidence\] action complete/u);
     assert.match(cleanTranscript, /\[saddle evidence\] changed: bash; validation: test -s agents\.md; exit: 0/u,
       "an accepted interrupted code proposal must be edited and verified before completion");
+    assert.match(cleanTranscript, /\[saddle evidence\] changed: bash; validation: test -s robot-sci-magazine\/content\/liberated_robot_civilization_seeds\.md/u,
+      "a promised story file must finish with actual edit and validation evidence");
+    assert.match(cleanTranscript, /\[saddle evidence\] changed: bash; validation: test -s robot-sci-magazine\/content\/liberated_robot_civilization_seeds\.md[\s\S]{0,180}?exit: 0/u,
+      "the story-file validation must finish successfully before the turn ends");
     const commandDebugLines = cleanTranscript.match(/\[command debug\] \{[^\r\n]*\}/gu) ?? [];
     assert.ok(commandDebugLines.length >= 1, "PTY transcript should include a debug record for the Bash command");
     const commandDebug = commandDebugLines.map((line) => JSON.parse(line.slice("[command debug] ".length)));

@@ -160,7 +160,8 @@ export function parseOpenEnglishWordNetJsonFiles(files = []) {
           synset,
           senseKey: `${synset}:${lemma}`,
           lemma,
-          gloss
+          gloss,
+          ...(typeof value.ili === "string" && value.ili.trim() ? { ili: value.ili.trim() } : {})
         });
       }
       for (const [relation, targets] of Object.entries(value)) {

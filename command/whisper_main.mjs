@@ -82,10 +82,30 @@ Environment:
   PYA_HEAR_LANGUAGE    Override language (auto, en, ru, ... )`);
 }
 
+/**
+ * The longest segment the lane will write. The default of whisper is thirty
+ * seconds, which is too long for words that follow a song: the house hears
+ * the song in shorter phrases, so the words of the song can be placed against
+ * it more closely.
+ */
+const MAX_SEGMENT_SECONDS = (() => {
+  const raw = Number(process.env.PYA_HEAR_MAX_SEGMENT_SECONDS || 20);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 20;
+})();
+
 async function runWhisper({ inputPath, modelPath, language, prompt, binPath, outputPath }) {
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   const base = outputPath.replace(/\.txt$/u, "");
-  const args = ["-m", String(modelPath), "-f", String(inputPath), "-nt", "-np", "-otxt", "-of", String(base)];
+  // The text is what the house reads; the subtitle carries the time of every
+  // line, which is what a ticker needs to follow the song.
+  const args = [
+    "-m", String(modelPath),
+    "-f", String(inputPath),
+    "-nt", "-np",
+    "-otxt", "-osrt",
+    "-ml", String(MAX_SEGMENT_SECONDS),
+    "-of", String(base)
+  ];
   if (language) {
     args.push("-l", String(language));
   }

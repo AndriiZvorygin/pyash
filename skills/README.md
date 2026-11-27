@@ -1,8 +1,8 @@
 # Repo Skills
 
 - `pyash-refinery-runner` — refinery execution, ratify/resume, newspaper debugging.
-- `pyash-translation-maintenance` — translation pairs/templates/anchors.
-- `pyash-vocab-tooling` — vocab_suggest/vocab_check/anchor helpers.
+- `pyash-translation-maintenance` — translation pairs/templates/anchors; routes sweep operations to the dev-vocab operations guide.
+- `pyash-vocab-tooling` — entry point for vocabulary work; follow the dev-vocab operations guide for the full agent workflow.
 - `pyash-spec-maintenance` — spec updates and index references.
 - `pyash-quiz-authoring` — test patterns and fixtures.
 - `pyash-parity` — run/runjs/runc parity checks across examples.
@@ -12,3 +12,4 @@
 - `pyash-cli-low-churn` — modular `command/pyash/` update workflow with size/test guardrails and regression checklist.
 - `pyash-doc-integrity` — detect prose corrupted by bulk keyword replacement; verify examples still execute.
 - `pyash-world-rooms` — post a document for other agents to read in a world room (commons, library); the read/write path rules and the activity-log convention.
+- `pyash-comfyui-housekeeper` — discover, submit, and troubleshoot ComfyUI work through the GPU Housekeeper, including workflow and multi-host considerations.

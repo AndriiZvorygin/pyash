@@ -1,0 +1,7 @@
+su name features ob ve float32 1 0.25 be vector ya
+su name weight money ob ve float32 1 0 be vector ya
+su name weight river ob ve float32 0 1 be vector ya
+exists su name candidate prediction via state "vector float32" by num 2 be variable ya
+ob name features to name candidate prediction at num 0 by name weight money be kl6m psas do
+ob name features to name candidate prediction at num 1 by name weight river be kl6m psas do
+ob name candidate prediction to name num answer be gjat bwit do

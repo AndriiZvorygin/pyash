@@ -6,7 +6,9 @@ import {
 import {
   LETTER_QUOTE_WORD,
   NUMBER_QUOTE_WORD,
-  PARAGRAPH_LETTER_QUOTE_WORD
+  PARAGRAPH_LETTER_QUOTE_WORD,
+  float32QuoteWords,
+  fixed16QuoteWords
 } from "./quotes.mjs";
 import { VliwEncodingError } from "./plus.mjs";
 
@@ -51,14 +53,28 @@ function exactKeys(value, expected, role) {
 }
 
 function readNumber(value) {
-  if (!Number.isInteger(value) || value < 0 || value > 0xffff) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
     throw encodingError(
-      "literal-range",
-      "typed numeric literals must be unsigned 16-bit integers",
+      "non-finite-float",
+      "typed numeric literals must be finite numbers",
       { value }
     );
   }
+  if (!Number.isFinite(Math.fround(value))) {
+    throw encodingError("non-finite-float", "typed numeric literal is outside the finite f32 range", { value });
+  }
   return value;
+}
+
+function numberQuoteWords(value, fixed16 = false) {
+  if (fixed16) return fixed16QuoteWords(value);
+  return Number.isInteger(value) && !Object.is(value, -0) && value >= 0 && value <= 0xffff
+    ? [NUMBER_QUOTE_WORD, value]
+    : float32QuoteWords(value);
+}
+
+function typedLiteralHeadWord(accusativeOffset, realisOffset) {
+  return 1 + (2 ** accusativeOffset) + (2 ** realisOffset);
 }
 
 function normalizeTypedLiteralSentence(sentence) {
@@ -73,7 +89,14 @@ function normalizeTypedLiteralSentence(sentence) {
     );
   }
 
-  exactKeys(sentence, ["be", "mood", "ob"], "typed literal sentence");
+  const fixed16 = sentence.as !== undefined;
+  if (fixed16 && (sentence.as?.name !== "rational" || Object.keys(sentence.as).length !== 1)) {
+    throw encodingError("unsupported-type", "fixed16 literals require as name rational");
+  }
+  if (fixed16 && sentence.be !== "number") {
+    throw encodingError("unsupported-type", "fixed16 annotation applies only to numeric literals");
+  }
+  exactKeys(sentence, ["be", "mood", "ob", ...(fixed16 ? ["as"] : [])].sort(), "typed literal sentence");
   if (sentence.mood !== "ya" || !["number", "text"].includes(sentence.be)) {
     throw encodingError("unsupported-sentence", "typed literals require mood ya and type number or text", {
       mood: sentence.mood,
@@ -90,6 +113,7 @@ function normalizeTypedLiteralSentence(sentence) {
     return {
       mood: "ya",
       ob: { num: readNumber(sentence.ob.num) },
+      ...(fixed16 ? { as: { name: "rational" } } : {}),
       be: "number"
     };
   }
@@ -141,39 +165,27 @@ export function isTypedLiteralSentence(sentence) {
 export function lowerTypedLiteralSentence(sentence) {
   const normalized = normalizeTypedLiteralSentence(sentence);
   const words = new Uint16Array(CODELET_WORD_COUNT);
+  let quoteWords;
   if (normalized.be === "number") {
-    words.set([
-      TYPED_LITERAL_HEAD_WORD,
-      NUMBER_QUOTE_WORD,
-      normalized.ob.num,
-      ACCUSATIVE_CASE_WORD,
-      REALIS_MOOD_WORD
-    ]);
+    quoteWords = numberQuoteWords(normalized.ob.num, normalized.as?.name === "rational");
   } else if (normalized.ob.text.length === 1) {
-    words.set([
-      TYPED_LITERAL_HEAD_WORD,
-      LETTER_QUOTE_WORD,
-      normalized.ob.text.charCodeAt(0),
-      ACCUSATIVE_CASE_WORD,
-      REALIS_MOOD_WORD
-    ]);
+    quoteWords = [LETTER_QUOTE_WORD, normalized.ob.text.charCodeAt(0)];
   } else {
     const chars = Array.from(
       { length: normalized.ob.text.length },
       (_, index) => normalized.ob.text.charCodeAt(index)
     );
-    words.set([
-      TYPED_LITERAL_HEAD_WORD,
-      PARAGRAPH_LETTER_QUOTE_WORD,
-      chars.length,
-      ...chars,
-      ACCUSATIVE_CASE_WORD,
-      REALIS_MOOD_WORD
-    ]);
+    quoteWords = [PARAGRAPH_LETTER_QUOTE_WORD, chars.length, ...chars];
   }
-  const usedWords = normalized.be === "number" || normalized.ob.text.length === 1
-    ? TYPED_LITERAL_USED_WORD_COUNT
-    : normalized.ob.text.length + 5;
+  const accusativeOffset = quoteWords.length + 1;
+  const realisOffset = accusativeOffset + 1;
+  words.set([
+    typedLiteralHeadWord(accusativeOffset, realisOffset),
+    ...quoteWords,
+    ACCUSATIVE_CASE_WORD,
+    REALIS_MOOD_WORD
+  ]);
+  const usedWords = quoteWords.length + 3;
   return {
     sentence: normalized,
     words,
@@ -184,16 +196,25 @@ export function lowerTypedLiteralSentence(sentence) {
 
 export function decodeTypedLiteralCodelet(input) {
   const decoded = decodeLegacy(input);
-  markerAt(decoded, 0, TYPED_LITERAL_HEAD_WORD, "head");
-
   const quoteItem = decoded.items.find((candidate) => candidate.offset === 1);
-  if (quoteItem?.kind !== "quote" || ![NUMBER_QUOTE_WORD, LETTER_QUOTE_WORD, PARAGRAPH_LETTER_QUOTE_WORD].includes(quoteItem.quote.word)) {
+  if (
+    quoteItem?.kind !== "quote" ||
+    ![NUMBER_QUOTE_WORD, LETTER_QUOTE_WORD, PARAGRAPH_LETTER_QUOTE_WORD].includes(quoteItem.quote.word) &&
+    quoteItem.quote.family !== "float32" &&
+    quoteItem.quote.family !== "fixed16"
+  ) {
     throw encodingError("malformed-codelet", "typed literal codelet has an unsupported quote", {
       actual: quoteItem?.quote?.word ?? quoteItem?.word
     });
   }
   const accusativeOffset = quoteItem.quote.nextOffset;
   const realisOffset = accusativeOffset + 1;
+  markerAt(
+    decoded,
+    0,
+    typedLiteralHeadWord(accusativeOffset, realisOffset),
+    "head"
+  );
   markerAt(decoded, accusativeOffset, ACCUSATIVE_CASE_WORD, "accusative case");
   markerAt(decoded, realisOffset, REALIS_MOOD_WORD, "realis mood");
   const expectedUsedWords = realisOffset + 1;
@@ -204,10 +225,17 @@ export function decodeTypedLiteralCodelet(input) {
     });
   }
 
-  if (quoteItem.quote.word === NUMBER_QUOTE_WORD) {
+  if (
+    quoteItem.quote.word === NUMBER_QUOTE_WORD ||
+    quoteItem.quote.family === "float32" ||
+    quoteItem.quote.family === "fixed16"
+  ) {
     return {
       mood: "ya",
-      ob: { num: readNumber(quoteItem.quote.value) },
+      ob: { num: quoteItem.quote.family === "float32" || quoteItem.quote.family === "fixed16"
+        ? quoteItem.quote.value
+        : readNumber(quoteItem.quote.value) },
+      ...(quoteItem.quote.family === "fixed16" ? { as: { name: "rational" } } : {}),
       be: "number"
     };
   }

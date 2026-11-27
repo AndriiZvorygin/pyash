@@ -1,9 +1,14 @@
 import { splitSentences, splitSentencesWithLines } from "../sentenceSplitter.mjs";
 import { parse } from "../../understand/index.mjs";
-import { tokenize } from "../../understand/tokenize.mjs";
 import { allRemember, doRemember, forget, remember } from "../../remember/index.mjs";
-import { decodePyashProgram, lowerPyashProgram } from "./sentence.mjs";
+import { decodePyashProgram, lowerPyashProgram, lowerPyashSentence } from "./sentence.mjs";
 import { decodePyacPack, encodePyacPack } from "./database.mjs";
+import {
+  compilePyacStorageSections,
+  splitPyacStoragePack
+} from "./storage_sections.mjs";
+import { lookupLegacyWordSequence } from "./quotes.mjs";
+import { isMutableVectorSentence, normalizeMutableVectorSentence } from "./mutable_vector.mjs";
 import { state as bridgeState } from "../../bridge/state.mjs";
 import {
   isNamedNumericSlotDeclaration,
@@ -12,10 +17,18 @@ import {
 
 export const DEFAULT_PYASH_PROGRAMLET_STEP_BUDGET = 65_536;
 export const MAX_PYASH_PROGRAMLET_STEP_BUDGET = 10_000_000;
-export const MAX_PYASH_PROGRAMLET_CODELETS = 64;
 export const MAX_PYASH_PROGRAMLET_LOCAL_SLOTS = 64;
 export const MAX_PYASH_PROGRAMLET_ARGUMENTS = 8;
 export const MAX_PYASH_PROGRAMLET_CALL_DEPTH = 8;
+const MAX_PYASH_PROGRAM_SECTIONS = 64;
+const MAX_PYASH_SECTION_NAME_WORDS = 8;
+const SECTION_VERBS = new Set(["myocpfun", "myoc pfun", "module partially"]);
+const PROGRAMLET_NAME_ALIASES = new Map([
+  ["ve", "vector"],
+  ["vec", "vector"],
+  ["num", "number"],
+  ["bool", "boolean"]
+]);
 
 const PROGRAMLET_ARGUMENT_EXCLUDED_FIELDS = new Set([
   "mood",
@@ -37,6 +50,18 @@ const PURE_BUILTIN_VERBS = new Set([
   "multiply",
   "divide",
   "exponential",
+  "tfo2t",
+  "tot",
+  "gjat bwit",
+  "dwic kwap",
+  "deviation square",
+  "magnitude boundary",
+  "dvis",
+  "kl6m psas",
+  "scalar produce",
+  "tsoc hsat",
+  "searching see",
+  "choose",
   "invert",
   "xor"
 ]);
@@ -67,22 +92,6 @@ function parseSource(sourceText) {
   }
   const sentences = sourceSentences.map((source, index) => {
     try {
-      const tokens = tokenize(source);
-      let predicateStart = 0;
-      for (let tokenIndex = 0; tokenIndex < tokens.length; tokenIndex += 1) {
-        const token = tokens[tokenIndex].toLowerCase();
-        if (token === "then") {
-          if (tokens.slice(predicateStart, tokenIndex).some((part) => part.toLowerCase() === "and")) {
-            fail("Pyash programlet compound conditional predicates are not admitted", {
-              source,
-              sentence: index + 1
-            });
-          }
-          predicateStart = tokenIndex + 1;
-        } else if (token === "else") {
-          predicateStart = tokenIndex + 1;
-        }
-      }
       return parse(source);
     } catch (error) {
       fail(`cannot parse Pyash programlet sentence ${index + 1}: ${error.message}`, { source });
@@ -110,6 +119,18 @@ function programComplexity(sentences) {
   return decisions + 1;
 }
 
+function programletNameKey(name) {
+  return String(name ?? "").trim().split(/\s+/u).filter(Boolean).flatMap((token) => {
+    const normalizedToken = token.toLowerCase();
+    const sequence = lookupLegacyWordSequence(
+      PROGRAMLET_NAME_ALIASES.get(normalizedToken) ?? normalizedToken
+    );
+    return sequence
+      ? sequence.map(({ hnuc }) => `h:${hnuc}`)
+      : [`t:${normalizedToken}`];
+  }).join("|");
+}
+
 function branchDepth(sentence) {
   if (!sentence || (!sentence.consequence && !sentence.alternative)) return 0;
   return 1 + Math.max(branchDepth(sentence.consequence), branchDepth(sentence.alternative));
@@ -117,16 +138,31 @@ function branchDepth(sentence) {
 
 function outputType(sentence) {
   const types = sentence?.to?.nameTypeWords ?? [];
-  if (!sentence?.to?.name || types.length !== 1) return null;
+  if (!sentence?.to?.name) return null;
+  if (types.length === 2 && types[0] === "vec" && types[1] === "float") return "vec-float";
+  if (types.length === 1 && types[0] === "float") return "float";
+  if (types.length !== 1) return null;
   if (["bool", "boolean"].includes(types[0])) return "bool";
   if (["num", "number"].includes(types[0])) return "num";
   return null;
 }
 
 function scalarInputType(value) {
+  if (value?.ve && ["float32", "float64"].includes(value.ve.type)
+    && Array.isArray(value.ve.values) && value.ve.values.length > 0
+    && value.ve.values.every((item) => Number.isFinite(item))) return "vec-float";
   if (Number.isInteger(value?.num) && value.num >= 0 && value.num <= 0xffff) return "num";
   if (typeof value?.boolean === "boolean") return "bool";
   return null;
+}
+
+function programletInputType(value) {
+  const nameTypes = value?.nameTypeWords ?? [];
+  if (nameTypes.length === 2 && nameTypes[0] === "vec" && nameTypes[1] === "float") return "vec-float";
+  if (nameTypes.length === 1 && nameTypes[0] === "float") return "float";
+  if (nameTypes.length === 1 && ["num", "number"].includes(nameTypes[0])) return "num";
+  if (nameTypes.length === 1 && ["bool", "boolean"].includes(nameTypes[0])) return "bool";
+  return scalarInputType(value);
 }
 
 function programletInputFields(sentence) {
@@ -139,8 +175,8 @@ function validateProgramletInputs(sentence) {
     fail(`Pyash programlet ceremony ${sentence.su.name} exceeds ${MAX_PYASH_PROGRAMLET_ARGUMENTS} scalar input fields`);
   }
   for (const [role, value] of fields) {
-    if (!scalarInputType(value)) {
-      fail(`Pyash programlet ceremony ${sentence.su.name} only admits U16 numeric or boolean scalar input fields`, {
+    if (!programletInputType(value)) {
+      fail(`Pyash programlet ceremony ${sentence.su.name} only admits U16 numeric or boolean scalar input fields and typed float vectors`, {
         role
       });
     }
@@ -157,6 +193,16 @@ function validateProgramletInputCount(sentence, ceremonyName) {
 function programletLocalDeclaration(sentence) {
   if (isNamedNumericSlotDeclaration(sentence)) {
     return { type: "num", kind: namedNumericSlotKind(sentence) };
+  }
+  if (
+    sentence?.mood === "ya"
+    && sentence?.be === "variable"
+    && (sentence?.as?.name === "vector float32" || sentence?.as?.text === "vector float32")
+    && Number.isInteger(sentence?.by?.num)
+    && sentence.by.num >= 1
+    && sentence.by.num <= 16
+  ) {
+    return { type: "vec-float", kind: "variable", length: sentence.by.num };
   }
   const chain = sentence?.ob?.genitive?.chain;
   const inherited = Array.isArray(chain)
@@ -193,7 +239,8 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
     .filter((sentence) => sentence?.mood === "def" && sentence.be === "ceremony")
     .map((sentence) => sentence.su?.name)
     .filter(Boolean);
-  const definitions = new Set(definitionNames);
+  const definitions = new Set(definitionNames.map(programletNameKey));
+  const definitionNamesByKey = new Map(definitionNames.map((name) => [programletNameKey(name), name]));
   if (definitions.size === 0) fail("Pyash programlet must define at least one ceremony");
   if (definitions.size !== definitionNames.length) fail("Pyash programlet ceremony names must be unique");
   const signatures = new Map();
@@ -201,10 +248,10 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
     if (sentence?.mood !== "def" || sentence.be !== "ceremony") continue;
     const type = outputType(sentence);
     if (!type) {
-      fail(`Pyash programlet ceremony ${sentence.su.name} must declare one bool or num output name`);
+      fail(`Pyash programlet ceremony ${sentence.su.name} must declare one supported typed output name`);
     }
     validateProgramletInputs(sentence);
-    signatures.set(sentence.su.name, type);
+    signatures.set(programletNameKey(sentence.su.name), type);
   }
 
   const calls = new Map([...definitions].map((name) => [name, new Set()]));
@@ -227,7 +274,7 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
     if (sentence.mood === "prah") {
       if (
         !activeDefinition
-        || (sentence.su?.name && sentence.su.name !== activeDefinition)
+        || (sentence.su?.name && programletNameKey(sentence.su.name) !== programletNameKey(activeDefinition))
         || (sentence.be && sentence.be !== "ceremony")
       ) {
         fail("Pyash programlet paragraph must close the active ceremony definition", { sentence: index + 1 });
@@ -241,9 +288,7 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
       continue;
     }
     if (activeDefinition) {
-      if (activeDefinitionReturns) {
-        fail(`Pyash programlet ceremony ${activeDefinition} has sentences after ret`, { sentence: index + 1 });
-      }
+      activeDefinitionReturns = false;
       if (sentence.mood === "ya") {
         if (activeDefinitionHasAction) {
           fail("Pyash programlet local numeric slots must be declared before actions", { sentence: index + 1 });
@@ -265,11 +310,30 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
       } else if (sentence.mood === "do") {
         activeDefinitionHasAction = true;
         visitSentence(sentence, (action) => {
+          if (action.mood === "ret") {
+            const registerValue = action.fromindex ?? (
+              action.ret?.role === "fromindex"
+                ? action.ret
+                : undefined
+            );
+            const hasRegisterValue = registerValue === undefined
+              || Number.isInteger(registerValue.num)
+              || Array.isArray(registerValue.genitive?.chain);
+            if (!hasRegisterValue) {
+              fail("Pyash programlet conditional return only supports an explicit fromindex update", {
+                sentence: index + 1
+              });
+            }
+            return;
+          }
           if (action.mood !== "do") {
             fail("Pyash programlet conditional branches must be do sentences", { sentence: index + 1 });
           }
-          const isCall = definitions.has(action.be);
-          if (!PURE_BUILTIN_VERBS.has(action.be) && !isCall) {
+          const actionNameKey = programletNameKey(action.be);
+          const isCall = definitions.has(actionNameKey);
+          const isBooleanPredicate = (action.consequence || action.alternative)
+            && ["not", "and", "or"].includes(action.be);
+          if (!PURE_BUILTIN_VERBS.has(action.be) && !isCall && !isBooleanPredicate) {
             fail(`Pyash programlet rejects effectful or unknown verb: ${action.be}`, { sentence: index + 1 });
           }
           const isBranchPredicate = Boolean(action.consequence || action.alternative);
@@ -279,10 +343,22 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
             });
           }
           const targetSlot = action.to?.name ? activeSlots.get(action.to.name) : null;
+          const embeddingLookupStore = ["tsoc hsat", "searching see"].includes(action.be)
+            && targetSlot?.type === "vec-float";
+          const indexedVectorStore = ["kl6m psas", "scalar produce"].includes(action.be)
+            && targetSlot?.type === "vec-float"
+            && Number.isInteger(action.at?.num)
+            && action.at.num >= 0
+            && action.at.num < targetSlot.length;
           if (targetSlot?.kind === "constant") {
             fail(`constant quantity is read-only: ${action.to.name}`, { sentence: index + 1 });
           }
-          if (targetSlot?.kind === "variable" && outputType(action) !== targetSlot.type) {
+          if (
+            targetSlot?.kind === "variable"
+            && outputType(action) !== targetSlot.type
+            && !indexedVectorStore
+            && !embeddingLookupStore
+          ) {
             const message = targetSlot.type === "num"
               ? `numeric variable slot requires a typed num destination: ${action.to.name}`
               : `boolean variable slot requires a typed bool destination: ${action.to.name}`;
@@ -295,25 +371,39 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
               sentence: index + 1
             });
           }
+          if (["tsoc hsat", "searching see"].includes(action.be) && !embeddingLookupStore) {
+            fail("Pyash programlet tsoc hsat action requires a declared float-vector local destination", {
+              sentence: index + 1
+            });
+          }
           if (isCall) {
             validateProgramletInputCount(action, action.be);
-            if (!action.to?.name || outputType(action) !== signatures.get(action.be)
+            if (!action.to?.name || outputType(action) !== signatures.get(actionNameKey)
               || (targetSlot?.type && targetSlot.type !== outputType(action))) {
               fail(`Pyash programlet call to ${action.be} has an incompatible output signature`, {
                 sentence: index + 1
               });
             }
-            calls.get(activeDefinition).add(action.be);
+            calls.get(programletNameKey(activeDefinition)).add(actionNameKey);
           }
         });
+        if (sentence.consequence?.mood === "ret" && sentence.alternative?.mood === "ret") {
+          activeDefinitionReturns = true;
+        }
       } else if (sentence.mood === "ret") {
-        activeDefinitionReturns = true;
+        activeDefinitionReturns = sentence.consequence && sentence.alternative
+          ? sentence.consequence.mood === "ret" && sentence.alternative.mood === "ret"
+          : !sentence.consequence && !sentence.alternative;
       } else {
         fail(`Pyash programlet ceremony body does not admit ${sentence.mood} sentences`, { sentence: index + 1 });
       }
       continue;
     }
-    if (index === invocationIndex && sentence.mood === "do" && definitions.has(sentence.be)) continue;
+    if (
+      index === invocationIndex
+      && sentence.mood === "do"
+      && definitions.has(programletNameKey(sentence.be))
+    ) continue;
     fail("top-level programlet content must be a ceremony or one final invocation", {
       sentence: index + 1,
       mood: sentence.mood
@@ -333,35 +423,160 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
   }
   if (invocationIndex >= 0) {
     const invocation = sentences[invocationIndex];
-    if (!definitions.has(invocation.be)) {
+    const invocationNameKey = programletNameKey(invocation.be);
+    if (!definitions.has(invocationNameKey)) {
       fail("Pyash programlet final invocation must call a defined ceremony", { be: invocation.be });
     }
     validateProgramletInputCount(invocation, invocation.be);
-    if (!outputType(invocation) || outputType(invocation) !== signatures.get(invocation.be)) {
-      fail("Pyash programlet invocation requires one typed bool or num output name");
+    const invocationOutputType = outputType(invocation);
+    if (!invocationOutputType) {
+      fail("Pyash programlet invocation requires one typed bool or num output name, or another supported float output type");
+    }
+    if (invocationOutputType !== signatures.get(invocationNameKey)) {
+      fail("Pyash programlet invocation output type must match its ceremony");
     }
   }
   const visiting = new Set();
   const depths = new Map();
-  const visitCall = (name) => {
-    if (visiting.has(name)) {
+  const visitCall = (nameKey) => {
+    const name = definitionNamesByKey.get(nameKey) ?? nameKey;
+    if (visiting.has(nameKey)) {
       fail("Pyash programlet does not admit recursive ceremony calls", { ceremony: name });
     }
-    if (depths.has(name)) return depths.get(name);
-    visiting.add(name);
+    if (depths.has(nameKey)) return depths.get(nameKey);
+    visiting.add(nameKey);
     let depth = 1;
-    for (const called of calls.get(name) ?? []) depth = Math.max(depth, 1 + visitCall(called));
-    visiting.delete(name);
+    for (const called of calls.get(nameKey) ?? []) depth = Math.max(depth, 1 + visitCall(called));
+    visiting.delete(nameKey);
     if (depth > MAX_PYASH_PROGRAMLET_CALL_DEPTH) {
       fail(`Pyash programlet call depth exceeds ${MAX_PYASH_PROGRAMLET_CALL_DEPTH}`, { ceremony: name });
     }
-    depths.set(name, depth);
+    depths.set(nameKey, depth);
     return depth;
   };
-  for (const name of definitions) visitCall(name);
+  for (const nameKey of definitions) visitCall(nameKey);
 
   const complexity = programComplexity(sentences);
   return { definitions, complexity };
+}
+
+function isSectionSentence(sentence) {
+  return SECTION_VERBS.has(sentence?.be);
+}
+
+function sectionNameWords(sentence) {
+  const name = sentence?.su?.name;
+  if (typeof name !== "string" || !name.trim()) {
+    fail("PyAC packet section requires a Pyash name in su");
+  }
+  const words = [];
+  for (const token of name.trim().split(/\s+/u)) {
+    const sequence = lookupLegacyWordSequence(token);
+    if (!sequence) {
+      fail(`PyAC packet section name is not HNUC-encodable: ${token}`, { name });
+    }
+    words.push(...sequence.map((entry) => Number.parseInt(entry.hnuc, 16)));
+    if (words.length > MAX_PYASH_SECTION_NAME_WORDS) {
+      fail(`PyAC packet section name exceeds ${MAX_PYASH_SECTION_NAME_WORDS} HNUC words`, { name });
+    }
+  }
+  return words;
+}
+
+function sectionLabelKey(words) {
+  return words.map((word) => word.toString(16).padStart(4, "0")).join(":");
+}
+
+function splitProgramSections(sentences) {
+  const hasSectionMarker = sentences.some(isSectionSentence);
+  if (!hasSectionMarker) return null;
+
+  const sections = [];
+  const names = new Set();
+  let index = 0;
+  while (index < sentences.length) {
+    const header = sentences[index];
+    if (header?.mood !== "def" || !isSectionSentence(header)) {
+      fail("PyAC sectioned packet must begin each top-level block with a myocpfun def sentence", {
+        sentence: index + 1
+      });
+    }
+    const nameWords = sectionNameWords(header);
+    const nameKey = sectionLabelKey(nameWords);
+    if (names.has(nameKey)) fail("PyAC packet section names must be unique", { name: header.su.name });
+    names.add(nameKey);
+
+    let closeIndex = index + 1;
+    while (closeIndex < sentences.length && !isSectionSentence(sentences[closeIndex])) closeIndex += 1;
+    if (closeIndex >= sentences.length) {
+      fail(`PyAC packet section ${header.su.name} is missing its matching paragraph terminator`);
+    }
+    const closer = sentences[closeIndex];
+    if (closer.mood !== "prah") {
+      fail("PyAC packet sections cannot be nested", { sentence: closeIndex + 1 });
+    }
+    const closingNameWords = sectionNameWords(closer);
+    if (sectionLabelKey(closingNameWords) !== nameKey) {
+      fail(`PyAC packet section ${header.su.name} closes with a different Pyash name`, {
+        closingName: closer.su?.name
+      });
+    }
+
+    const body = sentences.slice(index + 1, closeIndex);
+    if (!body.length) fail(`PyAC packet section ${header.su.name} must contain a programlet`);
+    if (sections.length >= MAX_PYASH_PROGRAM_SECTIONS) {
+      fail(`PyAC packet exceeds ${MAX_PYASH_PROGRAM_SECTIONS} independent sections`);
+    }
+    const validation = validatePureProgram(body, { invocationIndex: body.length - 1 });
+    sections.push({
+      index: sections.length,
+      name: header.su.name,
+      nameWords,
+      startSentence: index,
+      endSentence: closeIndex,
+      body,
+      complexity: validation.complexity
+    });
+    index = closeIndex + 1;
+  }
+  return sections;
+}
+
+function sectionCodeletRanges(sections, sentenceCodeletCounts) {
+  const starts = [];
+  let cursor = 0;
+  for (const count of sentenceCodeletCounts) {
+    starts.push(cursor);
+    cursor += count;
+  }
+  return sections.map((section) => {
+    const bodyStart = section.startSentence + 1;
+    const bodyEnd = section.endSentence;
+    const startCodelet = starts[bodyStart];
+    const endCodelet = starts[bodyEnd];
+    const codeletCount = endCodelet - startCodelet;
+    return {
+      index: section.index,
+      name: section.name,
+      nameWords: section.nameWords,
+      codeletStart: startCodelet,
+      codeletCount
+    };
+  });
+}
+
+function decodedSentenceCodeletCounts(codelets) {
+  const counts = [];
+  let current = 0;
+  for (const codelet of codelets) {
+    current += 1;
+    if (codelet[0] & 1) {
+      counts.push(current);
+      current = 0;
+    }
+  }
+  if (current !== 0) fail("PyAC packet ends with an incomplete sentence codelet");
+  return counts;
 }
 
 function normalizeStepBudget(value = DEFAULT_PYASH_PROGRAMLET_STEP_BUDGET) {
@@ -385,23 +600,70 @@ function parseInvocation(invocation) {
   return sentences[0];
 }
 
-export function compilePyashProgramSource(sourceText, { invocation = "" } = {}) {
+export function compilePyashProgramSource(sourceText, { invocation = "", assetRoot = process.cwd() } = {}) {
   const sentences = parseSource(sourceText);
+  const storageDeclarations = sentences.filter((sentence) =>
+    sentence?.mood === "ya" && sentence?.be === "pfun myoc" && sentence?.from?.filename !== undefined
+  );
+  const programSource = sentences.filter((sentence) => !storageDeclarations.includes(sentence));
+  const storage = storageDeclarations.length
+    ? compilePyacStorageSections(storageDeclarations, {
+      assetRoot,
+      lowerSentence: lowerPyashSentence,
+      encodePack: encodePyacPack
+    })
+    : { codelets: [], sections: [], byteLength: 0 };
+  const sections = splitProgramSections(programSource);
+  if (sections) {
+    if (String(invocation ?? "").trim()) {
+      fail("sectioned PyAC packets carry one invocation inside each section; do not append an invocation");
+    }
+  const lowerableSentences = programSource.map((sentence) =>
+    isMutableVectorSentence(sentence) ? normalizeMutableVectorSentence(sentence) : sentence
+  );
+  const lowered = lowerPyashProgram(lowerableSentences);
+    const pack = encodePyacPack([...lowered.vectors, ...storage.codelets]);
+    return {
+      pack,
+      sentences: programSource,
+      sections: sectionCodeletRanges(sections, lowered.sentences.map(({ vectors }) => vectors.length)),
+      storageSections: storage.sections.map(({ data: _data, assetPath: _assetPath, ...section }) => section),
+      storageByteLength: storage.byteLength,
+      vectorCount: lowered.vectors.length + storage.codelets.length,
+      byteLength: pack.byteLength,
+      complexity: sections.reduce((total, section) => total + section.complexity, 0),
+      invocationIndex: -1
+    };
+  }
   const call = String(invocation ?? "").trim() ? parseInvocation(invocation) : null;
-  const program = call ? [...sentences, call] : sentences;
+  const program = call ? [...programSource, call] : programSource;
+  if (!program.length) {
+    if (!storageDeclarations.length) fail("Pyash programlet contains no sentences");
+    return {
+      pack: storage.pack,
+      sentences: [],
+      sections: [],
+      storageSections: storage.sections.map(({ data: _data, assetPath: _assetPath, ...section }) => section),
+      storageByteLength: storage.byteLength,
+      vectorCount: storage.codelets.length,
+      byteLength: storage.pack.byteLength,
+      complexity: 0,
+      invocationIndex: -1
+    };
+  }
   const invocationIndex = call ? program.length - 1 : -1;
   const validation = validatePureProgram(program, { invocationIndex });
-  const lowered = lowerPyashProgram(program);
-  if (lowered.vectors.length > MAX_PYASH_PROGRAMLET_CODELETS) {
-    fail(`Pyash programlet exceeds ${MAX_PYASH_PROGRAMLET_CODELETS} codelets`, {
-      codelets: lowered.vectors.length
-    });
-  }
-  const pack = encodePyacPack(lowered.vectors);
+  const lowerableProgram = program.map((sentence) =>
+    isMutableVectorSentence(sentence) ? normalizeMutableVectorSentence(sentence) : sentence
+  );
+  const lowered = lowerPyashProgram(lowerableProgram);
+  const pack = encodePyacPack([...lowered.vectors, ...storage.codelets]);
   return {
     pack,
     sentences: program,
-    vectorCount: lowered.vectors.length,
+    storageSections: storage.sections.map(({ data: _data, assetPath: _assetPath, ...section }) => section),
+    storageByteLength: storage.byteLength,
+    vectorCount: lowered.vectors.length + storage.codelets.length,
     byteLength: pack.byteLength,
     complexity: validation.complexity,
     invocationIndex
@@ -410,19 +672,51 @@ export function compilePyashProgramSource(sourceText, { invocation = "" } = {}) 
 
 export function decodePyashProgramPack(pack) {
   const decodedPack = decodePyacPack(pack);
-  if (decodedPack.codelets.length > MAX_PYASH_PROGRAMLET_CODELETS) {
-    fail(`Pyash programlet exceeds ${MAX_PYASH_PROGRAMLET_CODELETS} codelets`, {
-      codelets: decodedPack.codelets.length
-    });
+  const { executableCodelets } = splitPyacStoragePack(decodedPack.bytes, {
+    decodePack: decodePyacPack,
+    decodeProgram: decodePyashProgram
+  });
+  const sentences = executableCodelets.length ? decodePyashProgram(executableCodelets) : [];
+  if (!sentences.length) return sentences;
+  const sections = splitProgramSections(sentences);
+  if (!sections) {
+    const invocationIndex = sentences.at(-1)?.mood === "do" ? sentences.length - 1 : -1;
+    validatePureProgram(sentences, { invocationIndex });
+  } else {
+    sectionCodeletRanges(sections, decodedSentenceCodeletCounts(executableCodelets));
   }
-  const sentences = decodePyashProgram(decodedPack.codelets);
-  const invocationIndex = sentences.at(-1)?.mood === "do" ? sentences.length - 1 : -1;
-  validatePureProgram(sentences, { invocationIndex });
+  for (const sentence of sentences) {
+    if (programletLocalDeclaration(sentence)) sentence.exists = true;
+  }
   return sentences;
+}
+
+export function decodePyashStorageSections(pack) {
+  return splitPyacStoragePack(pack, {
+    decodePack: decodePyacPack,
+    decodeProgram: decodePyashProgram
+  }).sections;
+}
+
+export function decodePyashProgramSections(pack) {
+  const sentences = decodePyashProgramPack(pack);
+  const sections = splitProgramSections(sentences);
+  if (!sections) fail("PyAC packet does not contain named myocpfun sections");
+  return sections.map(({ index, name, nameWords, body, complexity }) => ({
+    index,
+    name,
+    nameWords,
+    sentences: body,
+    complexity
+  }));
 }
 
 function defaultOutputFact(invocation) {
   const typeNames = invocation.to?.nameTypeWords ?? [];
+  if (typeNames.length === 2 && typeNames[0] === "vec" && typeNames[1] === "float") {
+    return { be: "vector", ob: { ve: { type: "float32", values: [] } } };
+  }
+  if (typeNames.includes("float")) return { be: "number", ob: { num: 0 } };
   if (typeNames.includes("bool") || typeNames.includes("boolean")) {
     return { be: "bool", ob: { boolean: false } };
   }
@@ -432,19 +726,15 @@ function defaultOutputFact(invocation) {
   fail("Pyash programlet output requires a typed to name (for example `to name bool answer`)");
 }
 
-/** Execute a self-contained .pyac program in a clean reference-interpreter scope. */
-export async function executePyashProgramPack(pack, {
-  outputName = "",
-  stepBudget = DEFAULT_PYASH_PROGRAMLET_STEP_BUDGET
-} = {}) {
+async function executeProgramletSentences(sentences, { outputName = "", stepBudget } = {}) {
+  const limit = normalizeStepBudget(stepBudget);
   if (allRemember().length > 0) {
     fail("Pyash programlet reference execution requires an empty interpreter memory");
   }
-  const limit = normalizeStepBudget(stepBudget);
   forget();
   const previousBudget = bridgeState.programStepBudget;
+  bridgeState.programStepBudget = { limit, remaining: limit };
   try {
-    const sentences = decodePyashProgramPack(pack);
     const invocation = sentences.at(-1);
     if (invocation?.mood !== "do") fail("Pyash programlet pack must end with an invocation");
     const destination = String(outputName || invocation.to?.name || "").trim();
@@ -467,6 +757,37 @@ export async function executePyashProgramPack(pack, {
     bridgeState.programStepBudget = previousBudget;
     forget();
   }
+}
+
+/** Execute a self-contained .pyac program in a clean reference-interpreter scope. */
+export async function executePyashProgramPack(pack, {
+  outputName = "",
+  stepBudget = DEFAULT_PYASH_PROGRAMLET_STEP_BUDGET
+} = {}) {
+  const limit = normalizeStepBudget(stepBudget);
+  const sentences = decodePyashProgramPack(pack);
+  const sections = splitProgramSections(sentences);
+  if (sections) {
+    if (outputName) fail("outputName cannot override outputs in a sectioned PyAC packet");
+    const results = [];
+    for (const section of sections) {
+      const result = await executeProgramletSentences(section.body, { stepBudget: limit });
+      results.push({
+        index: section.index,
+        name: section.name,
+        nameWords: section.nameWords,
+        completionOrder: results.length,
+        output: result.output,
+        execution: result.execution
+      });
+    }
+    return {
+      sections: results,
+      completionOrder: results.map(({ index }) => index),
+      complexity: sections.reduce((total, section) => total + section.complexity, 0)
+    };
+  }
+  return executeProgramletSentences(sentences, { outputName, stepBudget: limit });
 }
 
 function makeRandom(seed) {

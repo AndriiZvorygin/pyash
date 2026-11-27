@@ -67,6 +67,20 @@ fn main() {
     codelets.extend_from_slice(&conditional(3, 5, 0x6c0d));
     codelets.extend_from_slice(&conditional(3, 5, 0x69b3));
     codelets.extend_from_slice(&boolean_conditional(3, 5, 0x6c0d));
+    codelets.extend_from_slice(&[
+        [
+            0x0c05, 0x68b1, 0x24de, 0xd71d, 0, 0x3f80, 0, 0x4000, 0, 0x4040, 0x245e, 0x217e, 0, 0,
+            0, 0,
+        ],
+        [
+            0x0c05, 0x4930, 0x24de, 0xd71d, 0, 0x3f80, 0, 0x4000, 0, 0x4080, 0x245e, 0x217e, 0, 0,
+            0, 0,
+        ],
+        [
+            0x4909, 0x225e, 0x68b1, 0x245e, 0x225e, 0x327e, 0x225e, 0xaa90, 0x243e, 0x225e, 0x4930,
+            0x287e, 0x2a64, 0x896a, 0x295e, 0,
+        ],
+    ]);
 
     let bytes = encode_pack(&codelets).expect("smoke pack encodes");
     io::stdout()

@@ -80,12 +80,14 @@ test("Open English WordNet loader rejects malformed JSON and ignores non-synset 
           definition: ["a bounded sample"],
           members: ["sample"],
           hypernym: ["00000002-n"],
+          ili: "i12345",
           partOfSpeech: "n"
         }
       })
     }
   ]);
   assert.equal(parsed.rows[0].lemma, "sample");
+  assert.equal(parsed.rows[0].ili, "i12345");
   assert.equal(parsed.relations[0].target, "n:00000002-n");
   assert.deepEqual(parsed.sourceFiles, ["noun.sample.json"]);
 });

@@ -8,9 +8,18 @@ import { forget } from "../program/remember/index.mjs";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 
+
+// The artifacts folder is gitignored, so a fresh checkout does not have it.
+// The tests create their own scratch space; they should not depend on it.
+async function makeTempDir(prefix) {
+  const parent = path.join(process.cwd(), "artifacts");
+  await fs.mkdir(parent, { recursive: true });
+  return fs.mkdtemp(path.join(parent, prefix));
+}
+
 test("music say writes opus and metadata", async () => {
   forget();
-  const dir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "music-say-"));
+  const dir = await makeTempDir("music-say-");
   const outputPath = path.join(dir, "song.opus");
   const remember = (name) => {
     if (name === "music host") return { ob: { text: "http://music.local:8188" }, be: "default" };
@@ -42,7 +51,7 @@ test("music say writes opus and metadata", async () => {
 
 test("music say maps with name map options into runner payload", async () => {
   forget();
-  const dir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "music-say-"));
+  const dir = await makeTempDir("music-say-");
   const outputPath = path.join(dir, "song.opus");
   let seenOptions = null;
   const remember = (name) => {

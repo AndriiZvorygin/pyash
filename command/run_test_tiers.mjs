@@ -18,7 +18,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { readPyaTextValues } from "../program/library/pya_config.mjs";
-import { runNodeTestBatches } from "./test_batches.mjs";
+import { CI_TEST_CONCURRENCY, runNodeTestBatches } from "./test_batches.mjs";
 import { classifyQuizFile } from "./quiz_tiers.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -141,6 +141,7 @@ console.log("");
 const result = await runNodeTestBatches(gated.map((entry) => entry.file), {
   cwd: root,
   label: "gated quiz suite",
+  concurrency: CI_TEST_CONCURRENCY,
   env: { ...process.env, PYASH_INCLUDE_HOUSE_TESTS: "0" }
 });
 if (result.signal) process.kill(process.pid, result.signal);

@@ -5,6 +5,7 @@ import { EventEmitter } from "node:events";
 import { renderSaddleSessionHistory } from "../command/pyash_saddle.mjs";
 import {
   createSaddleTerminalUi,
+  createSaddleResizeRedrawHandler,
   renderSaddleMarkdown,
   stripTerminalControlSequences
 } from "../program/agent/coding_saddle_tui.mjs";
@@ -40,6 +41,12 @@ test("coding saddle renders common Markdown as structured terminal text", () => 
   assert.match(rendered, /one\s+│\s+two/u);
 });
 
+test("coding saddle keeps Markdown filenames from becoming HTTP links", () => {
+  const rendered = renderSaddleMarkdown("Append the house MEMORY.md, then update documentation/pyash.md.", { color: false }).join("\n");
+
+  assert.equal(rendered, "Append the house MEMORY.md, then update documentation/pyash.md.");
+});
+
 test("coding saddle Markdown styling is terminal-native and strips model control codes", () => {
   const malicious = "\u001b[2J# Safe\n\n**Bold** and `code`.";
   const lines = renderSaddleMarkdown(malicious, { width: 40, color: true });
@@ -61,12 +68,14 @@ test("coding saddle streams one accumulated Markdown response without duplicatin
   ui.enter();
   ui.writeLine("saddle>");
   const stream = ui.beginMarkdownStream();
-  ui.appendMarkdownStream(stream, "**A streamed ");
-  ui.appendMarkdownStream(stream, "answer**\n\n- item");
-  ui.replaceMarkdownStream(stream, "**A streamed answer**\n\n- item");
-  const output = writes.join("");
-  assert.match(output, /A streamed answer/u);
-  assert.match(output, /• item/u);
+  ui.appendMarkdownStream(stream, "**An de li — 安");
+  ui.appendMarkdownStream(stream, "德里 — peace virtue inside.**\n\n- item");
+  ui.replaceMarkdownStream(stream, "**An de li — 安德里 — peace virtue inside.**\n\n- item");
+  const lastFrame = stripTerminalControlSequences(writes.at(-1));
+  assert.match(lastFrame, /An de li — 安德里 — peace virtue inside\./u);
+  assert.match(lastFrame, /• item/u);
+  assert.equal((lastFrame.match(/peace virtue inside\./gu) ?? []).length, 1,
+    "the final screen frame must contain streamed text exactly once");
   assert.equal(ui.getState().itemCount, 2);
   ui.exit();
 });
@@ -156,6 +165,49 @@ test("coding saddle wraps at an exact-width word boundary without clipping its l
   const lines = renderSaddleMarkdown(`${fullWidthWord} next`, { width: 20, color: false });
   assert.deepEqual(lines, [fullWidthWord, "next"]);
   assert.ok(lines.every((line) => line.length <= 20));
+});
+
+test("coding saddle keeps the active project directory prominent in its status header", () => {
+  const writes = [];
+  const ui = createSaddleTerminalUi({
+    output: { columns: 80, rows: 16, isTTY: true, write(value) { writes.push(String(value)); } },
+    color: false
+  });
+  ui.enter();
+  ui.setStatus("mind: mind | model: qwen3.5:9b | session: coding | cwd: /home/htaf/hpuk/biography | gpu queue: 0 | state: ready");
+
+  const screen = stripTerminalControlSequences(writes.at(-1));
+  assert.ok(screen.includes("project: /home/htaf/hpuk/biography"));
+  ui.exit();
+});
+
+test("coding saddle coalesces tmux resize bursts and redraws at the settled width", async () => {
+  const output = new EventEmitter();
+  output.columns = 80;
+  const redraws = [];
+  const onResize = createSaddleResizeRedrawHandler(() => redraws.push(output.columns), { delayMs: 10 });
+  output.on("resize", onResize);
+
+  output.columns = 44;
+  output.emit("resize");
+  output.columns = 37;
+  output.emit("resize");
+  output.columns = 52;
+  output.emit("resize");
+  await new Promise((resolve) => setTimeout(resolve, 25));
+
+  assert.deepEqual(redraws, [52]);
+  output.off("resize", onResize);
+  onResize.cancel();
+});
+
+test("coding saddle cancels a pending resize redraw during shutdown", async () => {
+  const redraws = [];
+  const onResize = createSaddleResizeRedrawHandler(() => redraws.push("draw"), { delayMs: 10 });
+  onResize();
+  onResize.cancel();
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  assert.deepEqual(redraws, []);
 });
 
 test("coding saddle screen keeps progress fixed, scrolls conversation, resizes, and restores terminal", () => {

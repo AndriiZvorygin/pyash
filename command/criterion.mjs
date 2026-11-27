@@ -18,6 +18,7 @@ import { runPromptAblation } from "../program/runtime/criterion/prompt-ablation.
 import { runMeetingBankJudgePilot, MEETINGBANK_JUDGE_PILOT_MODELS } from "../program/runtime/criterion/judge-pilot.mjs";
 import { runMeetingBankFactualityPilot, MEETINGBANK_FACTUALITY_MODELS, MEETINGBANK_FACTUALITY_RUN_ID, MEETINGBANK_FACTUALITY_SELECTION_SEED, UNIRRM_FACTUALITY_MODEL } from "../program/runtime/criterion/factuality-pilot.mjs";
 import { listCriterionRuns, renderCriterionRuns } from "../program/runtime/criterion/run_index.mjs";
+import { runWsdScore } from "../program/runtime/criterion/wsd.mjs";
 
 function flag(args, name, fallback = null) {
   const prefix = `${name}=`;
@@ -97,6 +98,7 @@ function usage() {
     "criterion inspect --benchmark <name>",
     "criterion run --benchmark <name> --dataset <local.jsonl> [--engine ollama|strata|huggingface] [--base-url <runtime>] [--model <a,b>] [--profile translation_direct|summary_direct|summary_reasoned|summary_reasoned_hidden] [--split train|validation|test] [--smoke] [--resume]",
     "criterion throughput --model <installed-ollama-tag> --host-id <housekeeper-host> [--gpu-id gpu-0] [--run-id <id>]",
+    "criterion wsd-score --gold-dir <Raganato-datasets> --predictions-dir <system-key-files> [--model <label>] [--model-artifact <checkpoint-file>] [--run-id <id>] [--strict]",
     "criterion baseline --benchmark meetingbank --dataset <local.jsonl> --baseline lead-3 [--resume]",
     "criterion fact-audit --dataset <meetingbank.jsonl> --source-runs <run-id,...> --judge-model <external-model> [--limit 5] [--resume]",
     "criterion omnicseval-meeting --dataset <meetingbank.jsonl> --annotations <annotations.jsonl> --source-runs <run-id,...> --judge-model <external-model> [--resume]",
@@ -112,6 +114,37 @@ function usage() {
     "nightmare run|soak|stress --benchmark <name> --dataset <path>",
     "reverie run --benchmark helpos-local --fixtures <path> --response <text>"
   ].join("\n");
+}
+
+async function wsdScoreCommand(args, root) {
+  const goldDirectory = flag(args, "--gold-dir", process.env.PYA_WSD_GOLD_DIR ?? null);
+  const predictionDirectory = flag(args, "--predictions-dir", process.env.PYA_WSD_PREDICTIONS_DIR ?? null);
+  if (!goldDirectory || !predictionDirectory) {
+    throw new Error("criterion wsd-score requires --gold-dir and --predictions-dir (or PYA_WSD_GOLD_DIR / PYA_WSD_PREDICTIONS_DIR)");
+  }
+  const result = await runWsdScore({
+    goldDirectory,
+    predictionDirectory,
+    root,
+    runId: flag(args, "--run-id"),
+    model: flag(args, "--model", "unspecified"),
+    modelArtifactPath: flag(args, "--model-artifact")
+  });
+  print({
+    runId: result.runId,
+    status: result.targetMet ? "target-met" : "below-target",
+    model: result.model,
+    modelArtifactSha256: result.modelArtifactSha256,
+    allF1: result.aggregate.f1,
+    allF1Percent: Number((result.aggregate.f1 * 100).toFixed(2)),
+    acceptanceF1: result.acceptanceF1,
+    goldInstances: result.aggregate.goldCount,
+    predictedInstances: result.aggregate.predictionCount,
+    coverage: result.aggregate.coverage,
+    datasets: result.datasets.map(({ dataset, f1, goldCount, predictionCount }) => ({ dataset, f1, goldCount, predictionCount })),
+    artifacts: result.artifacts
+  }, hasFlag(args, "--json"));
+  return hasFlag(args, "--strict") && !result.targetMet ? 1 : 0;
 }
 
 async function deepSWECommand(args, root) {
@@ -585,6 +618,7 @@ export async function main(argv = process.argv.slice(2), { root = process.cwd() 
   if (command === "criterion" && (subcommand === "deepswe" || subcommand === "deep-swe")) return deepSWECommand(rest, root);
   if (command === "criterion" && subcommand === "run") return runCommand(args, root);
   if (command === "criterion" && subcommand === "throughput") return throughputCommand(args, root);
+  if (command === "criterion" && subcommand === "wsd-score") return wsdScoreCommand(args, root);
   if (command === "criterion" && subcommand === "baseline") return baselineCommand(args, root);
   if (command === "criterion" && (subcommand === "fact-audit" || subcommand === "meetingbank-fact-audit")) return factAuditCommand(args, root);
   if (command === "criterion" && subcommand === "omnicseval-meeting") return factAuditCommand(args, root, FACT_EVALUATION_MODES.exact);
@@ -600,6 +634,7 @@ export async function main(argv = process.argv.slice(2), { root = process.cwd() 
   if (command === "inspect") return inspectCommand([subcommand, ...rest].filter(Boolean));
   if (command === "run") return runCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "throughput") return throughputCommand([subcommand, ...rest].filter(Boolean), root);
+  if (command === "wsd-score") return wsdScoreCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "baseline") return baselineCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "deepswe" || command === "deep-swe") return deepSWECommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "fact-audit" || command === "meetingbank-fact-audit") return factAuditCommand([subcommand, ...rest].filter(Boolean), root);

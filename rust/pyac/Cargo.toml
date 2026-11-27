@@ -8,6 +8,16 @@ publish = false
 [lib]
 path = "src/lib.rs"
 
+[[bin]]
+name = "pyac-dictionary"
+path = "src/bin/pyac-dictionary.rs"
+
+[[bench]]
+name = "dictionary_index"
+harness = false
+
 [dependencies]
 pyac-vliw-core = { path = "../pyac-vliw-core" }
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+unicode-normalization = "0.1"

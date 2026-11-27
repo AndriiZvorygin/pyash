@@ -49,23 +49,25 @@ The current resource is Open English WordNet 2025 JSON under
 `know/wordnet/open-english-wordnet-2025-json/`; the dataset is a local knowledge input,
 kept outside version control, with its upstream archive URL and license recorded in the
 Pyash configuration.
-It supplies part-of-speech, synset, gloss, and same-synset evidence for unresolved terms; it
-does not create vocabulary. A term is auto-resolved only when the existing Pyash inventory and
-sentence context leave one result. Multiple senses or missing inventory evidence remain
-unresolved and can enter the existing bounded Housekeeper verifier, whose response is limited
-to supplied candidate ids. For unresolved WordNet terms, a bounded local sentence window scores
-exact overlap between neighboring words and sense glosses or lemmas before this agreement check;
-a unique positive match narrows the sense set, while tied or unmapped senses remain reviewable.
-The index also accepts optional relation rows in the form `r [source] [target] [relation]`;
-when present, bounded graph relatedness contributes to the context score. The checked-in slice
-currently remains gloss-based, so relation data is additive evidence rather than a hidden
-runtime download.
+WordNet supplies part-of-speech, synset, gloss, and same-synset evidence, never vocabulary.
+Auto-resolve only when inventory and sentence context leave one result; otherwise retain ambiguity
+or send bounded candidate ids to Housekeeper. A local sentence window scores neighboring-word
+overlap with glosses or lemmas; only a unique positive match narrows senses. Optional relation
+rows (`r [source] [target] [relation]`) add bounded graph evidence. The checked-in slice remains
+gloss-based and performs no runtime download.
 Sense-specific lexical bridges are recorded in the native Pyash map
 `program/library/translation/english_wordnet_bridges.pya`. One row represents one
 WordNet sense: `su` is the POS-prefixed sense key, `ob` is an existing English target anchor,
 `as` is the target part of speech, `with` is certainty, and `via` is provenance. The bridge
 provides a bounded candidate after the normal sentence sense selection; it does not add a
 second vocabulary or transcript format.
+WordNet sense IDs, English anchors and glosses, and SUMO links are explanatory
+lexical metadata; they MUST NOT be emitted as executable Pyash sentence tokens
+or VLIW words. Executable sentences use the selected canonical Pyash atoms or
+accepted compounds and their HNUCs. A lexical link can clarify the intended
+concept, but it does not define operation types, numeric precision, or runtime
+failure behavior; those are defined by the VLIW semantic contract and the shared
+Rust runtime.
 The bounded linker workflow is configured in
 `program/library/translation/english_wordnet_linker.pya`. Its JavaScript adapter emits
 one stable record per WordNet sense, builds a bounded inventory from existing Pyash coverage,
@@ -79,33 +81,25 @@ from graph leaves inward; central or multi-sense nodes remain contextual review 
 Use existing atoms and accepted compounds first. Otherwise, derive compounds from covered atoms
 and verify them through Housekeeper. Offer only accepted candidates to sense-link review with the
 WordNet gloss; keep failures per-run and leave the curated lexicon unchanged.
-The current catalog covers all 17 Open English WordNet `feel` senses. Context examples select
-`emotionally` for an emotional state, `experience` for a conscious or passive state,
-`finger` for touch examination, `touch` for physical sensation or palpation, `searching` for
-groping, `appear` for an impression or perceived quality, and `air` for a place's atmosphere.
-A tied context remains a review candidate rather than receiving an arbitrary lexical choice.
-The English `such as` surface is classified as an
-`exemplifier` construction, a subtype of `exemplification`. It lowers to `fluh ga`: the
-`example_` referential head with the space-way case, whose established surface glosses
-are “at” and “via”; the fused form is `fluhga`. The lexical noun form remains `tlam`
-when the source requires the root noun.
+The catalog covers all 17 Open English WordNet `feel` senses. Context examples
+distinguish emotional state (`emotionally`), experience, touch (`finger`,
+`touch`), groping (`searching`), impression (`appear`), and atmosphere (`air`).
+Tied contexts remain review candidates. English `such as` is an
+`exemplifier` subtype of `exemplification`; it lowers to `fluh ga` (`example_`
+with the space-way case), fused as `fluhga`. The lexical noun remains `tlam`.
 
-The English surface `example` now uses the generated `example_` grammar word `fluh`.
-`fluh` is a `CCVh` long grammar form (`0x5367`), selected by the existing
-`pyachso2n` weighted phonetic method after reserving both the checked-in vocabulary
-and the historical `pyachso2n/pyashWords.txt` inventory. The lexical root
-`example_WORD` remains `tlam` for explicit root and compound use; `tfum` is a
-`CCVC` root shape and is therefore not used for this grammar entry.
+The English `example` surface uses generated grammar word `fluh`, a `CCVh`
+long form (`0x5367`) selected by the `pyachso2n` weighted phonetic method after
+reserving checked-in vocabulary and `pyachso2n/pyashWords.txt`. The lexical
+root `example_WORD` remains `tlam`; `tfum` is a `CCVC` root, not a grammar form.
 
-For a lexical gap that needs a new atomic Pyac word, the read-only atom proposal
-path in `atom_word_generation.mjs` reuses the historical
-`pyachso2n/rootWordPhon.js` method. It combines multilingual phonetic evidence
-with the source `NativeWeights`, ranks generated root candidates, and selects
-the first free word from the 16, 19, 24, 28, and 32 glyph inventories. The
-current Pyash vocabulary reserves both word spellings and encoded HNUCs before
-selection. English30k rank is retained as concept evidence and batch order;
-the phonetic profile supplies the candidate score. A proposal is evidence for
-review and does not mutate `pyashWords.json`.
+For an atomic Pyac lexical gap, the read-only proposal path in
+`atom_word_generation.mjs` reuses `pyachso2n/rootWordPhon.js`. It ranks root
+candidates from multilingual phonetic evidence and `NativeWeights`, then picks
+the first free word in the 16/19/24/28/32-glyph inventories after reserving
+vocabulary spellings and HNUCs. English30k rank supplies concept evidence and
+batch order; the phonetic profile scores candidates. Proposals require review
+and do not mutate `pyashWords.json`.
 
 ---
 

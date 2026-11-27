@@ -45,6 +45,109 @@ test("numeric arithmetic preserves its operand case in the codelet", async () =>
   }
 });
 
+test("scalar f32 arithmetic lowers, decodes, and executes with binary32 rounding", async () => {
+  for (const [source, expected, operatorWord] of [
+    ["ob num 0.1 to num 0.2 be plus do", Math.fround(Math.fround(0.1) + Math.fround(0.2)), 0x8a64],
+    ["ob num 5.5 from num 2 be subtract do", Math.fround(Math.fround(5.5) - Math.fround(2)), 0xabd2],
+    ["ob num 1.5 with num 2 be multiply do", Math.fround(Math.fround(1.5) * Math.fround(2)), 0xec90],
+    ["ob num 1.5 with num 4 be divide do", Math.fround(Math.fround(1.5) / Math.fround(4)), 0x8893]
+  ]) {
+    const sentence = parse(source);
+    const [codelet] = lowerSentence(sentence);
+    const decoded = decodeCodelet(codelet.words);
+    assert.equal(decoded.semantic, "numeric-arithmetic");
+    assert.equal(decoded.sentence.be, sentence.be);
+    assert.equal(decoded.sentence.ob.num, Math.fround(sentence.ob.num));
+    assert.equal(codelet.words[1], 0xd01d, "float ob uses legacy float sort, f32 width");
+    assert.equal(codelet.words[5], 0xd01d, "mixed operands are promoted to f32");
+    assert.equal(codelet.words[9], operatorWord);
+    const [result] = await executeCodelets([codelet]);
+    assert.deepEqual(result, {
+      su: { name: "result" },
+      ob: { num: expected },
+      be: "number",
+      mood: "ya"
+    });
+  }
+});
+
+test("rational annotation lowers fixed16 arithmetic through the typed u16 quote", async () => {
+  const sentence = parse("ob num 0.5 as name rational to num 0.25 be plus do");
+  const [codelet] = lowerSentence(sentence);
+  assert.equal(codelet.words[1], 0xc81d);
+  assert.equal(codelet.words[2], 23_328);
+  assert.equal(codelet.words[4], 0xc81d);
+  assert.equal(codelet.words[5], 11_664);
+  assert.equal(decodeCodelet(codelet.words).semantic, "numeric-arithmetic");
+  assert.deepEqual(decodeCodelet(codelet.words).sentence, sentence);
+  assert.deepEqual(await executeCodelets([codelet]), [{
+    su: { name: "result" },
+    ob: { num: 0.75 },
+    as: { name: "rational" },
+    be: "number",
+    mood: "ya"
+  }]);
+});
+
+test("fixed16 arithmetic rounds ties to even and rejects domain errors", async () => {
+  const fixed = (left, right, be) => lowerSentence(parse(
+    `ob num ${left} as name rational to num ${right} be ${be} do`
+  ))[0];
+  const evenTie = fixed(1 / 46_656, 0.5, "multiply");
+  const oddTie = fixed(3 / 46_656, 0.5, "multiply");
+  const [evenResult, oddResult] = await executeCodelets([evenTie, oddTie]);
+  assert.equal(evenResult.ob.num, 0);
+  assert.equal(oddResult.ob.num, 2 / 46_656);
+
+  const underflow = fixed(0, 1 / 46_656, "subtract");
+  await assert.rejects(() => executeCodelets([underflow]), (error) => error.code === "fixed16-underflow");
+  const overflow = fixed(65_535 / 46_656, 1 / 46_656, "plus");
+  await assert.rejects(() => executeCodelets([overflow]), (error) => error.code === "fixed16-overflow");
+  const divisionByZero = fixed(0.5, 0, "divide");
+  await assert.rejects(() => executeCodelets([divisionByZero]), (error) => error.code === "division-by-zero");
+});
+
+test("rational numeric literals retain the fixed16 quote type", async () => {
+  const source = parse("ob num 0.125 as name rational be number ya");
+  const [codelet] = lowerSentence(source);
+  assert.equal(codelet.words[1], 0xc81d);
+  assert.equal(codelet.words[2], 5_832);
+  assert.deepEqual(decodeCodelet(codelet.words).sentence, source);
+  assert.deepEqual(await executeCodelets([codelet]), [{
+    mood: "ya",
+    ob: { num: 0.125 },
+    as: { name: "rational" },
+    be: "number"
+  }]);
+});
+
+test("numeric literals retain f32 values and reject non-finite float arithmetic", async () => {
+  const inline = lowerSentence(parse("ob num 0.125 be number ya"))[0];
+  assert.deepEqual(decodeCodelet(inline.words).sentence.ob, { num: 0.125 });
+
+  const literal = lowerSentence(parse("su name weight ob num 0.125 be number ya"))[0];
+  const decodedLiteral = decodeCodelet(literal.words);
+  assert.equal(decodedLiteral.semantic, "named-literal");
+  assert.deepEqual(decodedLiteral.sentence.ob, { num: 0.125 });
+  assert.deepEqual(await executeCodelets([literal]), [
+    { mood: "ya", su: { name: "weight" }, ob: { num: 0.125 }, be: "number" }
+  ]);
+
+  const negativeZero = lowerSentence(parse("ob num -0 be number ya"))[0];
+  assert.equal(negativeZero.words[1], 0xd01d);
+  assert.ok(Object.is(decodeCodelet(negativeZero.words).sentence.ob.num, -0));
+
+  const [division] = lowerSentence(parse("ob num 1.5 with num 0 be divide do"));
+  await assert.rejects(
+    () => executeCodelets([division]),
+    (error) => error.code === "division-by-zero"
+  );
+  assert.throws(
+    () => lowerSentence(parse("ob num 1e100 with num 2 be multiply do")),
+    (error) => error.code === "non-finite-float"
+  );
+});
+
 test("numeric arithmetic preserves legacy saturation and integer division", async () => {
   const [subtraction] = lowerSentence(parse("ob num 2 from num 9 be subtract do"));
   const [division] = lowerSentence(parse("ob num 5 with num 2 be divide do"));

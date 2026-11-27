@@ -1,0 +1,43 @@
+exists su name pset gjat from filename "iwsp-attention-embedding-table.bin" by ve num 48 0 as name float with ve num 3 4 be pfun myoc ya
+exists su name lwat txik from filename "iwsp-attention-token-ids.bin" by ve num 4 0 as name number_ with ve num 2 be pfun myoc ya
+
+su name candidate prediction to name vec float answer be ceremony def
+exists su name features first via state "vector float32" by num 4 be variable ya
+exists su name features second via state "vector float32" by num 4 be variable ya
+exists su name hwas via state "vector float32" by num 2 be variable ya
+exists su name htis hsek via state "vector float32" by num 2 be variable ya
+exists su name htis hsek second via state "vector float32" by num 2 be variable ya
+exists su name hnuc gjat via state "vector float32" by num 2 be variable ya
+exists su name hnuc gjat second via state "vector float32" by num 2 be variable ya
+exists su name prediction via state "vector float32" by num 2 be variable ya
+
+from name pset gjat at name lwat txik fromindex num 0 to name features first be tsoc hsat do
+from name pset gjat at name lwat txik fromindex num 1 to name features second be tsoc hsat do
+
+ob name features first by ve float32 1 0 0 0 to name hwas at num 0 be kl6m psas do
+ob name features first by ve float32 1 0 0 0 to name hwas at num 1 be kl6m psas do
+ob name features first by ve float32 1 0 0 0 to name htis hsek at num 0 be kl6m psas do
+ob name features first by ve float32 0 1 0 0 to name htis hsek at num 1 be kl6m psas do
+ob name features second by ve float32 1 0 0 0 to name htis hsek second at num 0 be kl6m psas do
+ob name features second by ve float32 0 1 0 0 to name htis hsek second at num 1 be kl6m psas do
+ob name features first by ve float32 0 0 1 0 to name hnuc gjat at num 0 be kl6m psas do
+ob name features first by ve float32 0 0 0 1 to name hnuc gjat at num 1 be kl6m psas do
+ob name features second by ve float32 0 0 1 0 to name hnuc gjat second at num 0 be kl6m psas do
+ob name features second by ve float32 0 0 0 1 to name hnuc gjat second at num 1 be kl6m psas do
+
+ob name hwas by name htis hsek to name prediction at num 0 be kl6m psas do
+ob name hwas by name htis hsek second to name prediction at num 1 be kl6m psas do
+from name prediction to name float count be gjat bwit do
+from name prediction with name count to name vec float prediction be subtract do
+from name prediction to name vec float prediction be exponential do
+from name prediction to name float count be tfo2t do
+from name prediction with name count to name vec float prediction be dvis do
+from name prediction at num 0 to name float weight first be choose do
+from name prediction at num 1 to name float weight second be choose do
+from name hnuc gjat with name weight first to name vec float hnuc gjat be multiply do
+from name hnuc gjat second with name weight second to name vec float hnuc gjat second be multiply do
+from name hnuc gjat with name hnuc gjat second to name vec float hnuc gjat be plus do
+su name hnuc gjat ret
+su name candidate prediction be ceremony prah
+
+to name vec float answer be candidate prediction do

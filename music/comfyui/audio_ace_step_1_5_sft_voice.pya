@@ -1,0 +1,26 @@
+su name lyrics path ob text "47.inputs.lyrics" ya
+su name style path ob text "47.inputs.caption" ya
+su name duration path ob text "47.inputs.duration" ya
+su name max duration path ob text "47.inputs.duration" ya
+su name bpm path ob text "47.inputs.bpm" ya
+su name timesignature path ob text "47.inputs.timesignature" ya
+su name language path ob text "47.inputs.language" ya
+su name keyscale path ob text "47.inputs.keyscale" ya
+su name seed path ob text "109.inputs.value" ya
+su name steps path ob text "3.inputs.steps" ya
+su name cfg path ob text "3.inputs.cfg" ya
+su name sampler name path ob text "3.inputs.sampler_name" ya
+su name scheduler path ob text "3.inputs.scheduler" ya
+su name denoise path ob text "3.inputs.denoise" ya
+su name cfg scale path ob text "47.inputs.lm_cfg_scale" ya
+su name temperature path ob text "47.inputs.lm_temperature" ya
+su name top p path ob text "47.inputs.lm_top_p" ya
+su name top k path ob text "47.inputs.lm_top_k" ya
+su name min p path ob text "47.inputs.lm_min_p" ya
+su name voice boost path ob text "3.inputs.voice_boost" ya
+su name reference guidance path ob text "3.inputs.reference_guidance_scale" ya
+su name reference timbre repeats path ob text "3.inputs.reference_timbre_repeats" ya
+su name reference audio path ob text "110.inputs.audio" ya
+su name reference enabled path ob text "110.inputs.enabled" ya
+su name quality path ob text "107.inputs.quality" ya
+su name save audio prefix path ob text "107.inputs.filename_prefix" ya

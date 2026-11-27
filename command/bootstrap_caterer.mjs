@@ -43,7 +43,10 @@ const WHISPER = {
 // The source URL, license, and the loader's own content hash are recorded in
 // program/library/translation/english_wordnet.pya.
 const WORDNET = {
-  url: "https://en-word.net/static/english-wordnet-2025-json.zip",
+  urls: [
+    "https://en-word.net/static/english-wordnet-2025-json.zip",
+    "https://github.com/globalwordnet/english-wordnet/releases/download/2025-edition/english-wordnet-2025-json.zip"
+  ],
   sha256: "7d749f6e2c39e6970e4997839dcf6e42fd281f3c2fae0171d2192bae8cfa4b51",
   dir: join("know", "wordnet", "open-english-wordnet-2025-json")
 };
@@ -91,6 +94,22 @@ export async function fetchChecksumed(url, expectedSha256, { attempts = 3, backo
       await new Promise((resolve) => setTimeout(resolve, waitMs));
     }
   }
+  throw lastError;
+}
+
+export async function fetchChecksumedFromSources(urls, expectedSha256, options = {}) {
+  let lastError;
+  for (const [index, url] of urls.entries()) {
+    try {
+      return await fetchChecksumed(url, expectedSha256, options);
+    } catch (error) {
+      lastError = error;
+      if (index < urls.length - 1) {
+        console.warn(`download source failed; trying the next verified source: ${error?.message ?? error}`);
+      }
+    }
+  }
+  if (!lastError) throw new Error("no download sources configured");
   throw lastError;
 }
 
@@ -158,7 +177,7 @@ async function bootstrapWordnet({ force }) {
     return;
   }
   console.log("Open English WordNet 2025: downloading...");
-  const bytes = await fetchChecksumed(WORDNET.url, WORDNET.sha256);
+  const bytes = await fetchChecksumedFromSources(WORDNET.urls, WORDNET.sha256);
   const archive = writeTempArchive("wordnet.zip", bytes);
   rmSync(dest, { recursive: true, force: true });
   mkdirSync(dest, { recursive: true });

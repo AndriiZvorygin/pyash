@@ -1,0 +1,56 @@
+su name candidate prediction ob name vec float features from name vec float features first by name vec float features second to name vec float answer be ceremony def
+exists su name hwas via state "vector float32" by num 2 be variable ya
+exists su name htis hsek via state "vector float32" by num 2 be variable ya
+exists su name htis hsek second via state "vector float32" by num 2 be variable ya
+exists su name hnuc gjat via state "vector float32" by num 2 be variable ya
+exists su name hnuc gjat second via state "vector float32" by num 2 be variable ya
+exists su name prediction via state "vector float32" by num 2 be variable ya
+exists su name zero via state "vector float32" by num 2 be variable ya
+
+ob name features by ve float32 1 2 to name hwas at num 0 be kl6m psas do
+ob name features by ve float32 2 1 to name hwas at num 1 be kl6m psas do
+ob name features by ve float32 2 1 to name htis hsek at num 0 be kl6m psas do
+ob name features by ve float32 1 1.5 to name htis hsek at num 1 be kl6m psas do
+ob name features first by ve float32 1 5 to name hnuc gjat at num 0 be kl6m psas do
+ob name features first by ve float32 3 7 to name hnuc gjat at num 1 be kl6m psas do
+ob name features second by ve float32 1 5 to name hnuc gjat second at num 0 be kl6m psas do
+ob name features second by ve float32 3 7 to name hnuc gjat second at num 1 be kl6m psas do
+
+ob name hwas by name htis hsek to name prediction at num 0 be kl6m psas do
+ob name hwas by name htis hsek second to name prediction at num 1 be kl6m psas do
+from name prediction to name float count be gjat bwit do
+from name prediction with name count to name vec float htis hsek be subtract do
+from name htis hsek to name vec float htis hsek second be exponential do
+from name htis hsek second to name float count be tfo2t do
+from name htis hsek second with name count to name vec float prediction be dvis do
+from name prediction at num 0 to name float weight first be choose do
+from name prediction at num 1 to name float weight second be choose do
+from name hnuc gjat with name weight first to name vec float hnuc gjat be multiply do
+from name hnuc gjat second with name weight second to name vec float hnuc gjat second be multiply do
+from name hnuc gjat with name hnuc gjat second to name vec float hnuc gjat be plus do
+from name hnuc gjat with name features to name vec float hnuc gjat be plus do
+
+ob name hnuc gjat by ve float32 0.5 0.5 to name float count be kl6m psas do
+from name hnuc gjat with name count to name vec float hwas be subtract do
+from name hwas with num 0.5 to name vec float htis hsek be multiply do
+ob name htis hsek by name hwas to name float count be kl6m psas do
+from name float count with num 0.00000001 to name float weight first be dwic kwap do
+from name hwas with name weight first to name vec float htis hsek be dvis do
+
+ob name htis hsek by ve float32 1 -0.5 to name prediction at num 0 be kl6m psas do
+ob name htis hsek by ve float32 0.25 1 to name prediction at num 1 be kl6m psas do
+from name prediction with name zero to name vec float prediction be gjat bwit do
+ob name prediction by ve float32 0.5 0.25 to name htis hsek second at num 0 be kl6m psas do
+ob name prediction by ve float32 0.25 0.5 to name htis hsek second at num 1 be kl6m psas do
+from name htis hsek second with name htis hsek to name vec float htis hsek second be plus do
+
+ob name htis hsek second by ve float32 0.5 0.5 to name float count be kl6m psas do
+from name htis hsek second with name count to name vec float hwas be subtract do
+from name hwas with num 0.5 to name vec float htis hsek be multiply do
+ob name htis hsek by name hwas to name float count be kl6m psas do
+from name float count with num 0.00000001 to name float weight first be dwic kwap do
+from name hwas with name weight first to name vec float htis hsek be dvis do
+su name htis hsek ret
+su name candidate prediction be ceremony prah
+
+ob ve float32 1 0 from ve float32 1 0 by ve float32 0 1 to name vec float answer be candidate prediction do

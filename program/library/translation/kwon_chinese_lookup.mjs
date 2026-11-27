@@ -4,45 +4,89 @@ import {
   acceptedChineseCharacterAtomRows,
   parseChineseCharacterAtomLinks
 } from "./chinese_character_atom_refinery.mjs";
+import {
+  lookupCowChineseFormsByWordNetSenses,
+  lookupCowWordNetSensesByChineseForms,
+  parseCowWordNetCrosswalkPya
+} from "./cow_wordnet_crosswalk.mjs";
+import { loadEnglishGrammarCatalog } from "./english_grammar.mjs";
 
 const KWON_CHINESE_URL = new URL("../../../caterer/pyac/lyac/kwon_zh.json", import.meta.url);
 const PINYIN_INDEX_URL = new URL("./kwon_chinese_pinyin.pya", import.meta.url);
 const ACCEPTED_LINKS_URL = new URL("./chinese_character_atom_links.pya", import.meta.url);
+const COW_WORDNET_CROSSWALK_URL = new URL("./cow_wordnet_crosswalk.pya", import.meta.url);
 
-let kwonChinesePromise = null;
+let chineseIndexPromise = null;
 let pinyinIndexPromise = null;
+let cowWordNetIndexPromise = null;
 
 function normalize(value) {
   return String(value ?? "").trim().normalize("NFC").toLowerCase();
 }
 
-async function loadKwonChineseIndex() {
-  if (!kwonChinesePromise) {
-    kwonChinesePromise = Promise.all([
+async function loadChineseIndex() {
+  if (!chineseIndexPromise) {
+    chineseIndexPromise = Promise.all([
       fs.readFile(KWON_CHINESE_URL, "utf8"),
-      fs.readFile(ACCEPTED_LINKS_URL, "utf8")
-    ]).then(([source, linksSource]) => {
+      fs.readFile(ACCEPTED_LINKS_URL, "utf8"),
+      loadEnglishGrammarCatalog()
+    ]).then(([source, linksSource, grammarCatalog]) => {
       const sourceRows = JSON.parse(source);
       if (!Array.isArray(sourceRows)) throw new Error("Kwon Chinese vocabulary must be an array");
-      const rows = acceptedChineseCharacterAtomRows(sourceRows, parseChineseCharacterAtomLinks(linksSource));
+      const rootRows = acceptedChineseCharacterAtomRows(sourceRows, parseChineseCharacterAtomLinks(linksSource));
+      const rootTargetsByCharacter = new Map();
+      const rootCharactersByPyash = new Map();
+      for (const row of rootRows) {
+        const characterTargets = rootTargetsByCharacter.get(row.character) ?? new Set();
+        characterTargets.add(normalize(row.pya));
+        rootTargetsByCharacter.set(row.character, characterTargets);
+        const pyashCharacters = rootCharactersByPyash.get(normalize(row.pya)) ?? new Set();
+        pyashCharacters.add(row.character);
+        rootCharactersByPyash.set(normalize(row.pya), pyashCharacters);
+      }
+      const grammarRows = grammarCatalog.chineseCharacterLinks
+        .filter((link) => {
+          const characterTargets = rootTargetsByCharacter.get(link.character);
+          if (characterTargets?.size > 0 && !characterTargets.has(normalize(link.pya))) return false;
+          const pyashCharacters = rootCharactersByPyash.get(normalize(link.pya));
+          return !pyashCharacters?.size || pyashCharacters.has(link.character);
+        })
+        .map((link) => ({
+          character: link.character,
+          english: link.english,
+          pya: link.pya,
+          source: "pyash-grammar"
+        }));
+      const seenMappings = new Set();
+      const rows = [...rootRows, ...grammarRows].filter((row) => {
+        const key = `${normalize(row.pya)}\u0000${row.character}`;
+        if (seenMappings.has(key)) return false;
+        seenMappings.add(key);
+        return true;
+      });
       const byPyash = new Map();
+      const byChinese = new Map();
       for (const row of rows) {
         const pyash = normalize(row?.pya);
         const chinese = String(row?.character ?? "").trim().normalize("NFC");
         const english = String(row?.english ?? "").trim();
         if (!pyash || !chinese || !english) continue;
-        const matches = byPyash.get(pyash) ?? [];
-        matches.push({ pyash, chinese, english });
-        byPyash.set(pyash, matches);
+        const entry = { pyash, chinese, english, source: row.source ?? "kwon-chinese" };
+        const pyashMatches = byPyash.get(pyash) ?? [];
+        pyashMatches.push(entry);
+        byPyash.set(pyash, pyashMatches);
+        const chineseMatches = byChinese.get(normalize(chinese)) ?? [];
+        chineseMatches.push(entry);
+        byChinese.set(normalize(chinese), chineseMatches);
       }
-      for (const matches of byPyash.values()) {
+      for (const matches of [...byPyash.values(), ...byChinese.values()]) {
         matches.sort((left, right) => left.english.localeCompare(right.english)
           || left.chinese.localeCompare(right.chinese));
       }
-      return byPyash;
+      return { byPyash, byChinese };
     });
   }
-  return kwonChinesePromise;
+  return chineseIndexPromise;
 }
 
 async function loadPinyinIndex() {
@@ -69,9 +113,34 @@ async function loadPinyinIndex() {
   return pinyinIndexPromise;
 }
 
-export async function lookupKwonChineseByPyash(pyash) {
-  const index = await loadKwonChineseIndex();
-  return [...(index.get(normalize(pyash)) ?? [])];
+async function loadCowWordNetIndex() {
+  if (!cowWordNetIndexPromise) {
+    cowWordNetIndexPromise = fs.readFile(COW_WORDNET_CROSSWALK_URL, "utf8")
+      .then(parseCowWordNetCrosswalkPya);
+  }
+  return cowWordNetIndexPromise;
+}
+
+export async function lookupChineseByPyash(pyash) {
+  const index = await loadChineseIndex();
+  return [...(index.byPyash.get(normalize(pyash)) ?? [])];
+}
+
+export async function lookupPyashByChinese(chinese) {
+  const index = await loadChineseIndex();
+  return [...(index.byChinese.get(normalize(chinese)) ?? [])];
+}
+
+export async function lookupChineseByWordNetSenses(senseIds) {
+  if (!Array.isArray(senseIds) || senseIds.length === 0) return [];
+  const crosswalk = await loadCowWordNetIndex();
+  return lookupCowChineseFormsByWordNetSenses(crosswalk, senseIds);
+}
+
+export async function lookupWordNetSensesByChinese(chineseForms) {
+  if (!Array.isArray(chineseForms) || chineseForms.length === 0) return [];
+  const crosswalk = await loadCowWordNetIndex();
+  return lookupCowWordNetSensesByChineseForms(crosswalk, chineseForms);
 }
 
 export async function lookupChinesePinyin(chinese) {

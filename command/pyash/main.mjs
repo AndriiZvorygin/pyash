@@ -76,7 +76,7 @@ import { createConfigureMindCommand } from "./configure_mind_command.mjs";
 import { createVerifyCommand } from "./verify_command.mjs";
 import { createAgentCommand } from "./agent_command.mjs";
 import { resolvePyashCommand } from "./command_names.mjs";
-import { compileInvocation, translatePyacToPyash } from "./file_commands.mjs";
+import { compileInvocation, translatePyac } from "./file_commands.mjs";
 import { projectCodexRunToPyash } from "./agent_codex_projection.mjs";
 import {
   MIND_BACKEND_CHOICES,
@@ -147,6 +147,7 @@ const runProgramPath = path.join(installRoot, "command", "run_pya_program.mjs");
 const saddlePath = path.join(installRoot, "command", "pyash_saddle.mjs");
 const compileLanguagePath = path.join(installRoot, "command", "cli_language.mjs");
 const vocabSuggestPath = path.join(installRoot, "command", "vocab_suggest.mjs");
+const pyacDictionaryPath = path.join(installRoot, "command", "pyac_dictionary.mjs");
 const replPath = path.join(installRoot, "program", "main.mjs");
 const codexAccountPath = path.join(installRoot, "command", "codex_account.mjs");
 
@@ -518,15 +519,24 @@ export async function main() {
   }
   if (command === "translate") {
     try {
-      const result = await translatePyacToPyash("translate", args.slice(1));
-      textOut(`translated ${result.codeletCount} PyAC codelets: ${result.source} -> ${result.destination}`);
+      const result = await translatePyac("translate", args.slice(1));
+      const description = result.format === "pyac" ? "Pyac VLIW codelets" : "PyAC codelets to Pyash";
+      textOut(`translated ${result.codeletCount} ${description}: ${result.source} -> ${result.destination}`);
     } catch (error) {
       console.error(error.message);
       process.exitCode = 1;
     }
     return;
   }
-  if (command === "dictionary") return void process.exit(await runNodeScript(vocabSuggestPath, args.slice(1)));
+  if (command === "dictionary" && args[1] === "volume") {
+    return void process.exit(await runNodeScript(pyacDictionaryPath, args.slice(2)));
+  }
+  if (command === "dictionary" && args[1] === "suggest") {
+    return void process.exit(await runNodeScript(vocabSuggestPath, args.slice(2)));
+  }
+  if (command === "dictionary") {
+    return void process.exit(await runNodeScript(pyacDictionaryPath, ["reference", ...args.slice(1)]));
+  }
   const code=await runNodeScript(runProgramPath,args);
   process.exit(code);
 }

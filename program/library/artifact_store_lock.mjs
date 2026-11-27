@@ -5,6 +5,12 @@ import crypto from "node:crypto";
 
 const LOCK_DIRECTORY = ".maintenance-lock";
 const ACTIVE_RUNS_DIRECTORY = ".active-runs";
+const LOCK_WAIT_MS = 30 * 1000;
+const LOCK_POLL_MS = 25;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+}
 
 function processIsAlive(pid) {
   if (!Number.isInteger(pid) || pid < 1) return false;
@@ -22,12 +28,22 @@ function parseLockOwner(text) {
   return { pid: Number(pid), token };
 }
 
-export async function acquireArtifactStoreLock(root) {
+/**
+ * Take the artifact store lock.
+ *
+ * The lock is held for moments at a time, while a run registers itself. Runs
+ * that start together — the learn pipeline runs four children at once — would
+ * otherwise race for it and the loser would die over a lock that was free a
+ * millisecond later. So a lock held by a living process is waited for, and
+ * only a lock that is still held when the wait is over is a failure.
+ */
+export async function acquireArtifactStoreLock(root, { waitMs = LOCK_WAIT_MS, pollMs = LOCK_POLL_MS } = {}) {
   const artifactsRoot = path.resolve(root, "artifacts");
   await fs.mkdir(artifactsRoot, { recursive: true });
   const lockPath = path.join(artifactsRoot, LOCK_DIRECTORY);
+  const deadline = Date.now() + Math.max(0, waitMs);
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (;;) {
     try {
       await fs.mkdir(lockPath);
       const token = crypto.randomBytes(12).toString("hex");
@@ -59,15 +75,20 @@ export async function acquireArtifactStoreLock(root) {
       try {
         owner = parseLockOwner(await fs.readFile(path.join(lockPath, "owner.pya"), "utf8"));
       } catch {
-        throw new Error(`artifact store is locked or has an incomplete lock: ${lockPath}`);
+        // The lock is there but its owner is not written yet: the run that
+        // holds it is still starting up.
+        owner = null;
       }
-      if (processIsAlive(owner.pid)) {
-        throw new Error(`artifact store is locked by process ${owner.pid}: ${lockPath}`);
+      if (owner && !processIsAlive(owner.pid)) {
+        await fs.rm(lockPath, { recursive: true, force: true });
+        continue;
       }
-      await fs.rm(lockPath, { recursive: true, force: true });
+      if (Date.now() >= deadline) {
+        throw new Error(`artifact store is locked by process ${owner?.pid ?? "unknown"}: ${lockPath}`);
+      }
+      await sleep(pollMs);
     }
   }
-  throw new Error(`could not acquire artifact store lock: ${lockPath}`);
 }
 
 export async function registerArtifactRun({ root, runId, onExitCleanup = true } = {}) {

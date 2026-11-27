@@ -53,23 +53,10 @@ pub struct DateInstruction {
     pub epoch_ms: u64,
 }
 
-/// The elements of a vector literal, in the order the codelet holds them.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum VectorElements {
-    /// The unsigned integer sort: each element is a 16-bit number.
-    Numbers(Vec<u16>),
-    /// A numeric vector result promoted to 32 bits by multiplication.
-    Numbers32(Vec<u32>),
-    /// The signed integer sort: each element is a truth or a lie.
-    Booleans(Vec<bool>),
-    /// The letter sort: one region per element, each holding a text.
-    Texts(Vec<String>),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VectorInstruction {
-    pub elements: VectorElements,
-}
+mod vector;
+pub use vector::{
+    VectorElements, VectorInstruction, decode_vector, execute_vector, execute_vector_codelet,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct QuoteHeader {
@@ -110,35 +97,6 @@ pub fn decode_quote_header(word: u16) -> Option<QuoteHeader> {
         vector_words,
         explicit_vector_length: vector_thickness == VECTOR_THICK_LONG,
     })
-}
-
-fn is_uint_vector_quote(word: u16) -> bool {
-    match decode_quote_header(word) {
-        Some(header) => {
-            header.sort == UINT_SORT_DENOTE
-                && header.scalar_bytes == 2
-                && header.vector_thickness != 0
-        }
-        None => false,
-    }
-}
-
-fn is_int_vector_quote(word: u16) -> bool {
-    match decode_quote_header(word) {
-        Some(header) => {
-            header.sort == INT_SORT_DENOTE
-                && header.scalar_bytes == 2
-                && header.vector_thickness != 0
-        }
-        None => false,
-    }
-}
-
-fn is_letter_quote(word: u16) -> bool {
-    match decode_quote_header(word) {
-        Some(header) => header.sort == LETTER_SORT_DENOTE,
-        None => false,
-    }
 }
 
 /// One quote region of a literal codelet.
@@ -321,67 +279,6 @@ pub fn execute_date_codelet(words: &[u16; WORDS_PER_CODELET]) -> Result<u64, Sem
     Ok(execute_date(&instruction))
 }
 
-/// The text of a letter region: each payload word is one character.
-fn region_text(words: &[u16; WORDS_PER_CODELET], region: &LiteralRegion) -> String {
-    let units: Vec<u16> =
-        words[region.payload_start..region.payload_start + region.payload_length].to_vec();
-    String::from_utf16_lossy(&units)
-}
-
-pub fn decode_vector(words: &[u16; WORDS_PER_CODELET]) -> Result<VectorInstruction, SemanticError> {
-    let layout = read_regions(words, &|word: u16| {
-        is_uint_vector_quote(word) || is_int_vector_quote(word) || is_letter_quote(word)
-    })?;
-    let first = &layout.regions[0];
-    let elements = match first.header.sort {
-        UINT_SORT_DENOTE => {
-            let values =
-                words[first.payload_start..first.payload_start + first.payload_length].to_vec();
-            VectorElements::Numbers(values)
-        }
-        INT_SORT_DENOTE => {
-            let values = words[first.payload_start..first.payload_start + first.payload_length]
-                .iter()
-                .map(|word| *word as i16 != 0)
-                .collect();
-            VectorElements::Booleans(values)
-        }
-        LETTER_SORT_DENOTE => {
-            let mut texts = Vec::new();
-            for region in &layout.regions {
-                if region.header.sort != LETTER_SORT_DENOTE {
-                    return Err(SemanticError::InvalidShape {
-                        index: region.payload_start,
-                        expected: LETTER_SORT_DENOTE,
-                        actual: region.header.sort,
-                    });
-                }
-                texts.push(region_text(words, region));
-            }
-            VectorElements::Texts(texts)
-        }
-        other => {
-            return Err(SemanticError::InvalidShape {
-                index: first.payload_start,
-                expected: UINT_SORT_DENOTE,
-                actual: other,
-            });
-        }
-    };
-    Ok(VectorInstruction { elements })
-}
-
-pub fn execute_vector(instruction: &VectorInstruction) -> VectorElements {
-    instruction.elements.clone()
-}
-
-pub fn execute_vector_codelet(
-    words: &[u16; WORDS_PER_CODELET],
-) -> Result<VectorElements, SemanticError> {
-    let instruction = decode_vector(words)?;
-    Ok(execute_vector(&instruction))
-}
-
 /// The canonical Pyash rendering of a date: a plain day when the value is
 /// midnight UTC, and the full ISO form otherwise.
 pub fn format_date(epoch_ms: u64) -> String {
@@ -455,6 +352,39 @@ mod tests {
             execute_vector_codelet(&VECTOR_CODELET),
             Ok(VectorElements::Numbers(vec![1, 2, 3]))
         );
+    }
+
+    #[test]
+    fn decodes_ieee_float_vectors_in_little_endian_word_order() {
+        let f32_vector: [u16; WORDS_PER_CODELET] = [
+            0x00c1, 0xd11d, 0x0000, 0x3fa0, 0x0000, 0xbf00, 0x245e, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        let f64_vector: [u16; WORDS_PER_CODELET] = [
+            0x0c01, 0xd91d, 0x2d18, 0x5444, 0x21fb, 0x4009, 0x0000, 0x0000, 0x0000, 0x8000, 0x245e,
+            0x217e, 0, 0, 0, 0,
+        ];
+        assert_eq!(
+            execute_vector_codelet(&f32_vector),
+            Ok(VectorElements::Float32(vec![
+                1.25f32.to_bits(),
+                (-0.5f32).to_bits()
+            ]))
+        );
+        assert_eq!(
+            execute_vector_codelet(&f64_vector),
+            Ok(VectorElements::Float64(vec![
+                std::f64::consts::PI.to_bits(),
+                (-0.0f64).to_bits(),
+            ]))
+        );
+    }
+
+    #[test]
+    fn rejects_non_finite_float_vector_elements() {
+        let codelet: [u16; WORDS_PER_CODELET] = [
+            0x00c1, 0xd11d, 0, 0x7f80, 0, 0, 0x245e, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        assert_eq!(decode_vector(&codelet), Err(SemanticError::NonFiniteFloat));
     }
 
     #[test]

@@ -108,3 +108,13 @@ container/criterion-huggingface/cache/
 container/gpu-housekeeper/service/state/
 __pycache__/
 *.pyc
+
+# zvorygin radio: the topic lanes are tracked, the generated songs are not
+radio/lyrics/
+radio/audio/
+radio/lyrics-experiments/
+radio/audio-experiments/
+/.commandcode/
+
+# Rust compiler crash dumps
+rustc-ice-*.txt

@@ -6,72 +6,61 @@ import {
 import {
   decodeNumericPlusCodelet,
   executeNumericPlusCodelet,
-  lowerNumericPlusSentence,
   VliwEncodingError
 } from "./plus.mjs";
 import {
   decodeTypedLiteralCodelet,
   executeTypedLiteralCodelet,
-  isTypedLiteralSentence,
-  lowerTypedLiteralSentence,
   typedLiteralCompatibility
 } from "./literal.mjs";
 import {
   decodeNamedLiteralCodelet,
   executeNamedLiteralCodelet,
-  isNamedLiteralSentence,
-  lowerNamedLiteralSentence,
   namedLiteralCompatibility
 } from "./named_literal.mjs";
 import {
   booleanLiteralCompatibility,
   decodeBooleanLiteralCodelet,
-  executeBooleanLiteralCodelet,
-  isBooleanLiteralSentence,
-  lowerBooleanLiteralSentence
+  executeBooleanLiteralCodelet
 } from "./boolean_literal.mjs";
 import {
   decodeNumericArithmeticCodelet,
   executeNumericArithmeticCodelet,
   isNumericArithmeticCodelet,
-  isNumericArithmeticSentence,
-  lowerNumericArithmeticSentence,
   numericArithmeticCompatibility
 } from "./arithmetic.mjs";
 import {
   decodeNamedQueryCodelet,
   executeNamedQueryCodelet,
-  isNamedQuerySentence,
-  lowerNamedQuerySentence,
   namedQueryCompatibility
 } from "./named_query.mjs";
 import {
   decodeNumericInvertCodelet,
   executeNumericInvertCodelet,
-  isNumericInvertSentence,
-  lowerNumericInvertSentence,
   numericInvertCompatibility
 } from "./invert.mjs";
 import {
   dateCompatibility,
   decodeDateCodelet,
-  executeDateCodelet,
-  isDateSentence,
-  lowerDateSentence
+  executeDateCodelet
 } from "./date.mjs";
 import {
   decodeVectorCodelet,
-  executeVectorCodelet,
-  isVectorSentence,
-  lowerVectorSentence
+  executeVectorCodelet
 } from "./vector.mjs";
+import { decodeVectorSequence } from "./vector_sequence.mjs";
 import {
   isIntVectorQuoteWord,
+  isFloatVectorQuoteWord,
   isLetterQuoteWord,
   isUintVectorQuoteWord
 } from "./quotes.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
+import { decodePyashProgram } from "./sentence.mjs";
 import { deriveSentenceEffects, scheduleCodeletDependencies } from "./effects.mjs";
+import { executeVectorProgram, hasVectorCodelets } from "./vector_program.mjs";
+
+const TYPED_LITERAL_QUOTE_FAMILIES = new Set(["number", "letter", "paragraph-letter", "float32", "fixed16"]);
 
 function semanticDecode(decoded, semantic, sentence) {
   return {
@@ -82,40 +71,7 @@ function semanticDecode(decoded, semantic, sentence) {
   };
 }
 
-export function lowerSentence(sentence) {
-  if (isNamedQuerySentence(sentence)) {
-    return [lowerNamedQuerySentence(sentence)];
-  }
-  if (isDateSentence(sentence)) {
-    return [lowerDateSentence(sentence)];
-  }
-  if (isVectorSentence(sentence)) {
-    return [lowerVectorSentence(sentence)];
-  }
-  if (isBooleanLiteralSentence(sentence)) {
-    return [lowerBooleanLiteralSentence(sentence)];
-  }
-  if (isNamedLiteralSentence(sentence)) {
-    return [lowerNamedLiteralSentence(sentence)];
-  }
-  if (isTypedLiteralSentence(sentence)) {
-    return [lowerTypedLiteralSentence(sentence)];
-  }
-  if (isNumericInvertSentence(sentence)) {
-    return [lowerNumericInvertSentence(sentence)];
-  }
-  if (isNumericArithmeticSentence(sentence) && (sentence.be !== "plus" || sentence.ob?.ve !== undefined)) {
-    return [lowerNumericArithmeticSentence(sentence)];
-  }
-  return [lowerNumericPlusSentence(sentence)];
-}
-
-export function lowerParagraph(paragraph) {
-  if (!Array.isArray(paragraph)) {
-    throw new VliwEncodingError("invalid-paragraph", "VLIW paragraph must be an array of sentences");
-  }
-  return paragraph.flatMap((sentence) => lowerSentence(sentence));
-}
+export { lowerSentence, lowerParagraph } from "./lower_sentence.mjs";
 
 export function decodeCodelet(input) {
   const decoded = decodeLegacyCodelet(input);
@@ -139,7 +95,7 @@ export function decodeCodelet(input) {
       throw error;
     }
   }
-  if (quoteItem && isUintVectorQuoteWord(quoteItem.quote.word) &&
+  if (quoteItem && (isUintVectorQuoteWord(quoteItem.quote.word) || isFloatVectorQuoteWord(quoteItem.quote.word)) &&
       isNumericArithmeticCodelet(decoded.words, decoded.usedWords)) {
     try {
       return semanticDecode(
@@ -162,6 +118,8 @@ export function decodeCodelet(input) {
     quoteItem &&
     (isUintVectorQuoteWord(quoteItem.quote.word) ||
       isIntVectorQuoteWord(quoteItem.quote.word) ||
+      isFloatVectorQuoteWord(quoteItem.quote.word) ||
+      quoteItem.quote.family === "text-array" ||
       (quoteItems.length > 1 && isLetterQuoteWord(quoteItem.quote.word)))
   ) {
     try {
@@ -259,7 +217,22 @@ export function decodeCodelet(input) {
       throw error;
     }
   }
-  if (decoded.words[0] === typedLiteralCompatibility.head) {
+  const literalQuote = decoded.items.find((candidate) => candidate.offset === 1);
+  const typedLiteralCaseOffset = literalQuote?.quote?.nextOffset;
+  const hasTypedLiteralBoundaries = decoded.items.some((item) => (
+    item.offset === typedLiteralCaseOffset
+    && item.kind === "word"
+    && item.word === typedLiteralCompatibility.accusativeCase
+  )) && decoded.items.some((item) => (
+    item.offset === typedLiteralCaseOffset + 1
+    && item.kind === "word"
+    && item.word === typedLiteralCompatibility.realisMood
+  ));
+  if (
+    literalQuote?.kind === "quote"
+    && TYPED_LITERAL_QUOTE_FAMILIES.has(literalQuote.quote.family)
+    && hasTypedLiteralBoundaries
+  ) {
     try {
       return semanticDecode(
         decoded,
@@ -339,42 +312,49 @@ export function renderPyashCodelet(input) {
   return sentenceToPyash(decoded.sentence);
 }
 
+async function executeOneCodelet(codelet, state) {
+  const words = codelet?.words ?? codelet;
+  const decoded = decodeCodelet(words);
+  if (decoded.semantic === "named-literal") {
+    const result = await executeNamedLiteralCodelet(words);
+    state.set(result.su.name, structuredClone(result));
+    return result;
+  }
+  if (decoded.semantic === "named-query") return executeNamedQueryCodelet(words, state);
+  if (decoded.semantic === "boolean-literal") return executeBooleanLiteralCodelet(words);
+  if (decoded.semantic === "typed-literal") return executeTypedLiteralCodelet(words);
+  if (decoded.semantic === "numeric-arithmetic") {
+    return executeNumericArithmeticCodelet(words, { state });
+  }
+  if (decoded.semantic === "numeric-invert") return executeNumericInvertCodelet(words);
+  if (decoded.semantic === "date") return executeDateCodelet(words);
+  if (decoded.semantic === "vector") return executeVectorCodelet(words);
+  return executeNumericPlusCodelet(words);
+}
+
+async function executeScheduledCodelets(codelets, state) {
+  const scheduled = scheduleCodeletDependencies(codelets);
+  const results = new Array(codelets.length);
+  for (const entry of scheduled) {
+    results[entry.index] = await executeOneCodelet(entry.instruction, state);
+  }
+  return results;
+}
+
 export async function executeCodelets(codelets) {
   if (!Array.isArray(codelets)) {
     throw new VliwEncodingError("invalid-program", "VLIW execution requires an array of codelets");
   }
 
-  const scheduled = scheduleCodeletDependencies(codelets);
-  const results = new Array(codelets.length);
-  const state = new Map();
-  for (const entry of scheduled) {
-    const codelet = entry.instruction;
-    const words = codelet?.words ?? codelet;
-    const decoded = decodeCodelet(words);
-    let result;
-    if (decoded.semantic === "named-literal") {
-      result = await executeNamedLiteralCodelet(words);
-      state.set(result.su.name, structuredClone(result));
-    } else if (decoded.semantic === "named-query") {
-      result = await executeNamedQueryCodelet(words, state);
-    } else if (decoded.semantic === "boolean-literal") {
-      result = await executeBooleanLiteralCodelet(words);
-    } else if (decoded.semantic === "typed-literal") {
-      result = await executeTypedLiteralCodelet(words);
-    } else if (decoded.semantic === "numeric-arithmetic") {
-      result = await executeNumericArithmeticCodelet(words, { state });
-    } else if (decoded.semantic === "numeric-invert") {
-      result = await executeNumericInvertCodelet(words);
-    } else if (decoded.semantic === "date") {
-      result = await executeDateCodelet(words);
-    } else if (decoded.semantic === "vector") {
-      result = await executeVectorCodelet(words);
-    } else {
-      result = await executeNumericPlusCodelet(words);
-    }
-    results[entry.index] = result;
+  if (hasVectorCodelets(codelets)) {
+    return executeVectorProgram(codelets, {
+      executeOneCodelet,
+      decodePyashProgram,
+      decodeVectorSequence
+    });
   }
-  return results;
+
+  return executeScheduledCodelets(codelets, new Map());
 }
 
 export {
@@ -382,6 +362,13 @@ export {
   decodeLegacyCodeletSequence,
   VliwCodeletError
 };
+export {
+  decodeVectorCodelet,
+  lowerVectorSentence,
+  normalizeVectorSentence,
+  vectorCompatibility
+} from "./vector.mjs";
+export { decodeVectorSequence, lowerVectorSequence } from "./vector_sequence.mjs";
 export {
   analyzeCodeletDependencies,
   deriveSentenceEffects,
@@ -404,6 +391,8 @@ export {
   MAX_PYASH_PROGRAMLET_STEP_BUDGET,
   compilePyashProgramSource,
   decodePyashProgramPack,
+  decodePyashProgramSections,
+  decodePyashStorageSections,
   executePyashProgramPack,
   evolvePyashProgramSource,
   mutatePyashProgramSource

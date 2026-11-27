@@ -62,6 +62,41 @@ test("pyash translate decodes a PyAC pack to readable Pyash using from/to paths"
   });
 });
 
+test("pyash translate as pyac preserves Pyac word order and round-trips every codelet word", async () => {
+  await withTempDirectory(async (directory) => {
+    const sourcePath = path.join(directory, "source.pyac");
+    const textPath = path.join(directory, "source.pya");
+    const roundTripPath = path.join(directory, "round-trip.pyac");
+    const sourcePack = encodePyacPack([
+      Uint16Array.from([0x245e, 0x245e, 0x803e, 0x881d, 42, ...new Array(11).fill(0)]),
+      Uint16Array.from([0, 0x229e, 0x0e1d, 0x0004, 0xffff, ...new Array(11).fill(0)])
+    ]);
+    await fs.writeFile(sourcePath, sourcePack);
+
+    const decode = runCli(["translate", "from", sourcePath, "to", textPath, "as", "pyac"]);
+    assert.equal(decode.status, 0, decode.stderr);
+    const text = await fs.readFile(textPath, "utf8");
+    assert.match(text, /0x245e ka 0x803e Qyis 0x002a/);
+
+    const encode = runCli(["translate", "from", textPath, "to", roundTripPath, "as", "pyac"]);
+    assert.equal(encode.status, 0, encode.stderr);
+    assert.deepEqual(Buffer.from(await fs.readFile(roundTripPath)), Buffer.from(sourcePack));
+  });
+});
+
+test("pyash translate as pyac rejects malformed word-dump rows without writing output", async () => {
+  await withTempDirectory(async (directory) => {
+    const sourcePath = path.join(directory, "malformed.pya");
+    const outputPath = path.join(directory, "malformed.pyac");
+    await fs.writeFile(sourcePath, "# Pyac VLIW word dump v1; each row is one 16-word codelet in slot order.\nka ob\n");
+
+    const result = runCli(["translate", "from", sourcePath, "to", outputPath, "as", "pyac"]);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /has 2 words; expected 16/);
+    assert.equal(await fs.stat(outputPath).then(() => true, () => false), false);
+  });
+});
+
 test("pyash translate accepts its unique prefix and does not leave partial output on unsupported input", async () => {
   await withTempDirectory(async (directory) => {
     const sourcePath = path.join(directory, "invalid.pyac");
@@ -106,16 +141,41 @@ test("pyash compile infers JavaScript output for Pyash source", async () => {
   });
 });
 
-test("pyash dictionary forwards existing Kwon arguments", () => {
+test("pyash dictionary suggest forwards existing Kwon arguments", () => {
   const direct = spawnSync(process.execPath, [path.join(repoRoot, "command/vocab_suggest.mjs"), "love"], {
     cwd: repoRoot,
     encoding: "utf8",
     timeout: 30000
   });
-  const routed = runCli(["d", "love"]);
+  const routed = runCli(["dictionary", "suggest", "love"]);
   assert.equal(routed.status, direct.status, routed.stderr);
   assert.equal(routed.stdout, direct.stdout);
   assert.equal(routed.stderr, direct.stderr);
+});
+
+test("pyash dictionary short prefix selects the Pyac reference lookup", () => {
+  const full = runCli(["dictionary", "love"]);
+  const routed = runCli(["d", "love"]);
+  assert.equal(routed.status, full.status, routed.stderr);
+  assert.equal(routed.stdout, full.stdout);
+  assert.equal(routed.stderr, full.stderr);
+  assert.match(routed.stdout, /love:/u);
+});
+
+test("pyash dictionary resolves the promoted SUMO concept senses", () => {
+  const companionate = runCli(["dictionary", "sumo:CompanionateLove"]);
+  assert.equal(companionate.status, 0, companionate.stderr);
+  assert.match(companionate.stdout, /SUMO CompanionateLove \(superclass-of\)/u);
+  assert.match(companionate.stdout, /SUMO Love \(equivalent-to\)/u);
+
+  const passionate = runCli(["dictionary", "sumo:PassionateLove"]);
+  assert.equal(passionate.status, 0, passionate.stderr);
+  assert.match(passionate.stdout, /SUMO PassionateLove \(superclass-of\)/u);
+
+  // A concept that only the promoted catalog carries resolves the same way.
+  const aariya = runCli(["dictionary", "sumo:AariyaLanguage"]);
+  assert.equal(aariya.status, 0, aariya.stderr);
+  assert.match(aariya.stdout, /SUMO AariyaLanguage \(superclass-of\)/u);
 });
 
 test("ambiguous prefixes report choices and direct Pyash file execution remains available", async () => {
@@ -136,7 +196,7 @@ test("pyash help lists the new commands and shortest unique forms", () => {
   const result = runCli(["--help"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /pyash compile from <source> to <destination>/);
-  assert.match(result.stdout, /pyash translate from <source\.pyac> to <destination\.pya>/);
+  assert.match(result.stdout, /pyash translate from <source> to <destination> \[as pyac\]/);
   assert.match(result.stdout, /pyash dictionary/);
   assert.match(result.stdout, /PyAC to \.c\/\.asm/);
   assert.match(result.stdout, /com=compile/);

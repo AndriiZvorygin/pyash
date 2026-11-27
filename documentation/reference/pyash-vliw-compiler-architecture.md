@@ -12,6 +12,22 @@ sectioned VLIW program whose code consists of full Pyash action sentences
 encoded as legacy codelets, and whose named data is also described with Pyash
 vocabulary and sentences.
 
+### Three representations
+
+The same program exists in three stages, and each is authoritative for a
+different question:
+
+| Layer | Artifact | Authority |
+| --- | --- | --- |
+| Sentence | `.pya`, per language (`.en.pya`, `.fr.pya`, `.zh.pya`) | Semantic truth: what the program means. |
+| Codelet | `.pyac`, sixteen 16-bit words | Interlingua encoding: exact bytes, fixed width, lossless with respect to the canonical sentence. The pivot for cross-language round-trip. |
+| Control word | Decoded, host `Vec` or GPU packed `[u32]` | Execution: what runs next. Derived and disposable; never authoritative over the codelet bytes. |
+
+The head bitmap is the bridge between the second and third layers: bits 1..15
+mark phrase boundaries, so a decoder can read the field map instead of walking
+the payload. See
+[`pyash-vliw-decode-and-dispatch.md`](pyash-vliw-decode-and-dispatch.md).
+
 The `.data`, `.symtab`, and `.text` names are useful assembly-format analogies;
 they are not directives to add to Pyash source. Pyash atoms and compounds name
 the concepts, and compilation derives the machine-oriented symbol index.
@@ -126,10 +142,10 @@ senses and the canonical Pyash vocabulary before assigning them VLIW meaning.
 
 | Surface | Role | Current status |
 | --- | --- | --- |
-| Pyash `.pya` source | Canonical sentence and paragraph semantics | Implemented language/interpreter surface |
+| Pyash `.pya` source | Canonical sentence and paragraph semantics | Canonical source language contract, independent of the VLIW execution backend |
 | Searchable `.pya` VLIW catalog | Semantic identity, provenance, and query/replay view | Separate from a program's source file and from its packed bytes |
-| `.pyac` pack | Header plus deterministic fixed-width codelet bytes | Version 1 is a flat codelet sequence; no embedded data/code sections or mutable variable store; the interpreter allocates implemented numeric locals per invocation |
-| JavaScript VLIW facade | Reference lowering, decoding, effects, and supported execution | Partial semantic coverage, including the canonical Pyash programlet v1 slice below |
+| `.pyac` pack | Header plus deterministic fixed-width codelet bytes | Interlingua encoding and executable pack; the pivot for round-tripping canonical sentences across natural-language surfaces. Version 1 is a flat codelet sequence; no embedded data/code sections or mutable variable store; the interpreter allocates implemented numeric locals per invocation |
+| JavaScript VLIW tools | Source lowering, codelet encoding/decoding, and compatibility helpers | Not the semantic authority; execution behavior is defined by the shared Rust runtime |
 | C output from `.pyac` | Compile supported codelets to C, then use the host C compiler | Verified arithmetic and invert subset; not a general Pyash-to-C replacement |
 | Shared VLIW semantics runtime | `rust/pyac-vliw-core/src/semantics_runtime.rs`, compiled as a `no_std` Rust library and called by the CPU pack interpreter and GPU kernels | Canonical codelet families plus bounded scalar programlets with nested calls, branches, loops, signed/unsigned numbers, and booleans; not full Pyash interpreter parity |
 | Rust-GPU native | Rust-GPU compiles that same semantics runtime to Vulkan SPIR-V for the native Housekeeper worker | Requires an NVIDIA discrete GPU and Vulkan; execution is explicitly bounded to the supported operations |
@@ -140,8 +156,9 @@ does not mean arbitrary Pyash programs already pass through VLIW. Likewise,
 the searchable `.pya` catalog is a semantic/provenance projection; `.pyac` is
 the executable byte projection.
 
-The JavaScript programlet is the semantic reference for pure functions. The
-Rust inventory and per-feature parity status are maintained in
+The JavaScript programlet interpreter is deprecated and is not the semantic
+reference for pure functions. The shared Rust runtime is authoritative for the
+supported VLIW semantics. Its inventory and per-feature status are maintained in
 [`pyac-vliw-semantic-slices.md`](pyac-vliw-semantic-slices.md). The shared Rust
 runtime now covers bounded nested calls, typed scalar locals and arguments,
 comparison branches, and indexed loops on the CPU, Vulkan, and generated WGSL
@@ -239,8 +256,9 @@ The current implementation is one shared VLIW semantics runtime with CPU,
 native Vulkan, and browser WGSL targets. Ordinary codelet packs still execute
 as sentence groups. A recognized programlet selects a separate whole-program
 entrypoint with bounded caller-owned frames and one typed result. Programlets
-are bounded to 64 codelets, 64 local slots per frame, 8 arguments, call depth
-8, and the 65,536-step default budget. This is a correctness slice, not yet a
+have no fixed codelet-count ceiling; packet size and the 65,536-step default
+budget bound their input and execution. Other limits remain 64 local slots per
+frame, 8 arguments, and call depth 8. This is a correctness slice, not yet a
 batched evolutionary-candidate kernel.
 
 | Capability | Current WebGPU support | Remaining work for broader VLIW coverage |
@@ -344,6 +362,30 @@ wins: each must meet the semantic and measured-cost checks above. Small
 FizzBuzz runs are useful for correctness and control-flow conformance, not as
 a representative GPU throughput benchmark.
 
+### Rust VLIW CPU/GPU Optimization Goal
+
+Correctness is the gate for optimization: first pass the complete supported GPU
+conformance matrix through Housekeeper, with exact typed outputs and explicit
+backend/device identity. Keep that matrix as the regression baseline while
+measuring the Rust CPU executor and native Vulkan path on the same canonical
+`.pyac` inputs.
+
+Measurements must separate cold startup and pipeline creation, warm execution,
+host/device transfers, dispatch and synchronization, and Housekeeper queue
+wait. A single tiny pack primarily measures fixed overhead; throughput claims
+must also use repeatable batches of independent packs or programlet invocations
+large enough to amortize that overhead. Report end-to-end latency alongside
+those component timings so a faster kernel is not mistaken for a faster job.
+
+The conformance runner uses a resident Vulkan device and cached pipelines so
+the correctness matrix does not repeatedly load and unload GPU state. After
+that correctness gate, evaluate further optimizations such as batching packs
+within a dispatch and reducing transfers or scratch-state traffic. Keep the
+semantic step budget and supported cases intact; do not count CPU fallback as
+GPU success. An optimization is accepted only when the full conformance matrix
+still passes and repeated measurements show a benefit on a representative
+workload, with any small-workload regression made explicit.
+
 ## Evolutionary Function Workloads
 
 **Status:** the contract remains normative. A bounded numeric-function
@@ -390,7 +432,7 @@ An accepted candidate has a closed, versioned function contract:
 | Effects | Deterministic and side-effect-free during evaluation. Random mutation is seeded and performed by the host evolution process, not by the candidate. No I/O, network, clock, model call, or undeclared memory access. |
 | State | Locals and writable state are declared with fixed extents. Invocation-local unsigned 16-bit numeric slots are implemented in the Pyash programlet; target evaluators must account for their per-work-item state and preserve frame isolation. Other types and bulk pages remain future work. |
 | Control flow | Finite branches, bounded `fromindex`/`toindex` loops, and acyclic ceremony calls. Recursion is rejected. Complexity at most 9 is a seed-quality target, not a language ceiling. |
-| Work bound | A per-invocation step budget, default 65,536 and configurable up to 10,000,000. The reference interpreter enforces it at runtime; straight-line candidates are also checked against the declared budget before dispatch. |
+| Work bound | A per-invocation step budget, default 65,536 and configurable up to 10,000,000. The shared Rust VLIW runtime enforces it; straight-line candidates are also checked against the declared budget before dispatch. |
 | VLIW representation | A function body may span multiple codelets. The 16-word codelet is an encoding unit, not a function-size limit or a register file. Grammatical cases describe operand roles; the target ABI maps values to virtual/physical registers or memory. |
 
 Define cyclomatic complexity from the candidate CFG itself as `M = E - N + 2P`

@@ -9,6 +9,7 @@ At its core, a Pyash sentence is a **verb plus a bundle of typed noun phrases** 
 ### GI-OS storage model
 
 - The Pyash root is the system volume: runtime code and shared libraries are installed once. `program/library/` is the shared library tree; model workers should read it in place, with changes made through trusted, versioned system maintenance.
+- Published multilingual VLIW dictionary volumes belong under `program/library/dictionary/`. Vocabulary agents maintain them through trusted, version-controlled updates; runtime consumers use the published `.pyac` volumes read-only. The workbook-to-volume authoring importer is not implemented yet.
 - `world/` is the writable home/data volume for sessions, memories, artifacts, queues, and shared world knowledge. The GI-OS model calls the per-user home root `world/home/`.
 - The current agent-house runtime stores agent homes at `world/house/<agent>/`. That is the implemented path today; `world/home/` describes the OS-level home-drive model and does not claim that the runtime directory has already migrated.
 - `world/library/` is a writable world-knowledge and artifact place. It is distinct from the installed shared code libraries in `program/library/`.

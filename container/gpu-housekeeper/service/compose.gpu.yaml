@@ -41,6 +41,7 @@ services:
       - GPU_HOUSEKEEPER_RUNTIME_REGISTRY=${GPU_HOUSEKEEPER_RUNTIME_REGISTRY:-}
       - OLLAMA_RUNTIME_URL=${OLLAMA_RUNTIME_URL:-http://ollama:11434}
       - GPU_HOUSEKEEPER_STRATA_RUNTIME_URL=${GPU_HOUSEKEEPER_STRATA_RUNTIME_URL:-}
+      - GPU_HOUSEKEEPER_VLIW_RUNTIME_URL=${GPU_HOUSEKEEPER_VLIW_RUNTIME_URL:-http://pyac-vliw-runtime:18887}
       - GPU_HOUSEKEEPER_STRATA_HELPER_IMAGE=${GPU_HOUSEKEEPER_STRATA_HELPER_IMAGE:-liberit/gpu-housekeeper:latest}
       - GPU_HOUSEKEEPER_STRATA_CONTEXT_CONFIG_PATH=${GPU_HOUSEKEEPER_STRATA_CONTEXT_CONFIG_PATH:-}
       - GPU_HOUSEKEEPER_STRATA_CONTEXT_SYSTEMD_UNIT=${GPU_HOUSEKEEPER_STRATA_CONTEXT_SYSTEMD_UNIT:-}
@@ -63,6 +64,7 @@ services:
       - GPU_HOUSEKEEPER_OLLAMA_MIN_GPU_MODEL_FRACTION=${GPU_HOUSEKEEPER_OLLAMA_MIN_GPU_MODEL_FRACTION:-0.99}
       - GPU_HOUSEKEEPER_SOFT_QUEUE_CAP=${GPU_HOUSEKEEPER_SOFT_QUEUE_CAP:-500}
       - GPU_HOUSEKEEPER_PYA_DIR=/var/lib/pyash/gpu-housekeeper
+      - GPU_HOUSEKEEPER_SECRET_PYA_PATH=/run/pyash/configure/secret.pya
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - type: bind
@@ -72,6 +74,12 @@ services:
         bind:
           create_host_path: false
       - ${GPU_HOUSEKEEPER_DATA_DIR:-./state}:/var/lib/pyash/gpu-housekeeper
+      - type: bind
+        source: ../../../configure
+        target: /run/pyash/configure
+        read_only: true
+        bind:
+          create_host_path: false
       - ${GPU_HOUSEKEEPER_KUBERNETES_CREDENTIALS_DIR:-./state/kubernetes}:/run/kubernetes:ro
     extra_hosts:
       - host.docker.internal:host-gateway

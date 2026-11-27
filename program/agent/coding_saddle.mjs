@@ -1,4 +1,6 @@
 import path from "node:path";
+import { StringDecoder } from "node:string_decoder";
+import { splitTerminalGraphemes, terminalGraphemeWidth } from "./terminal_width.mjs";
 import {
   DEFAULT_ZAI_CODING_REASONING_EFFORT,
   fetchZaiCodingPlanModels
@@ -132,13 +134,14 @@ export const DEFAULT_CODING_SADDLE_SYSTEM_PROMPT = [
   "For substantial multi-step repository, research, or operational work, maintain a concise session plan with the update session plan tool; update step states as work proceeds and mark a step done only after recording concrete verification evidence. Keep plans to the necessary steps and skip them for simple questions or one-step edits.",
   "After the final edit, use command to run the narrowest relevant test, build, syntax check, or execution check. A check run before the final edit does not count.",
   "After a coding task passes its final verification, record only durable project decisions or constraints in the active agent house's absolute memory/MEMORY.md path shown in context (not a project-relative path), with the validation command and a session or artifact evidence reference. Do not store routine task logs, temporary findings, or unverified claims; if no durable decision was made, do not write a memory entry.",
-  "Do not commit or push unless the user explicitly requests it. The harness will show the current worktree status and bounded diff for review before the completion evidence.",
+  "Do not commit or push unless the user explicitly requests it. After code changes, the harness shows at most 20 changed paths from the shared worktree, which may include pre-existing changes; it does not print file contents automatically.",
   "Before reporting completion, state the changed file paths, summarize the change, and give the exact check command and its result. If work or verification is incomplete, say so plainly instead of saying done.",
   "Respond concisely with the result and any remaining blocker."
 ].join(" ");
 
 const SADDLE_CHANGE_ACTION = /\b(?:add|build|change|create|edit|fix|generate|implement|make|modify|patch|refactor|remove|rewrite|update|write)\b/iu;
 const SADDLE_CODE_TARGET = /\b(?:code|program|script|source|file|function|class|module|test|bug|tool|harness|command|repository|repo|pipeline|variable|package|configuration|config)\b|\.(?:mjs|js|cjs|ts|py|pya|json|sh|md)\b/iu;
+const SADDLE_CONTINUATION_REPLY = /^(?:(?:please\s+)?(?:continue|keep going|carry on|resume|finish(?: it)?)(?:\s+please)?)[.!]?$/iu;
 const SADDLE_TOOL_ACTION = /^(?:check|compare|confirm|create|delete|edit|execute|find|fix|generate|implement|inspect|install|list|look\s+up|make|modify|move|open|read|remove|rename|research|restart|run|search|start|stop|test|update|verify|write)\b/iu;
 const SADDLE_ALWAYS_TOOL_ACTION = /^(?:compare|execute|find|inspect|list|look\s+up|open|read|research|restart|run|search|start|stop|test|verify)\b/iu;
 const SADDLE_MUTATING_ACTION = /^(?:create|delete|edit|fix|generate|implement|install|make|modify|move|remove|rename|update|write)\b/iu;
@@ -146,9 +149,13 @@ const SADDLE_ACTION_TARGET = /\b(?:artifact|branch|cache|code|command|config|con
 
 export function isSaddleAffirmativeReply(input = "") {
   const text = String(input ?? "").trim().toLowerCase();
-  const match = text.match(/^(?:yes|yeah|yep|okay|ok|sure|go ahead|do it|please do|proceed|sounds good|that works)\b/u);
+  const match = text.match(/^(?:yes|yeah|yep|okay|ok|sure|go ahead|do it|please do|proceed|continue|keep going|carry on|resume|finish(?: it)?|sounds good|that works)\b/u);
   if (!match) return false;
   return !/^\s*(?:,?\s*but\s+)?(?:no|not|don't|do not|never|cancel|stop|instead)\b/u.test(text.slice(match[0].length));
+}
+
+export function isSaddleContinuationReply(input = "") {
+  return SADDLE_CONTINUATION_REPLY.test(String(input ?? "").trim());
 }
 
 export function buildSaddleSteeringInput({ originalInput = "", assistantResponse = "", additions = "" } = {}) {
@@ -161,6 +168,18 @@ export function buildSaddleSteeringInput({ originalInput = "", assistantResponse
     sections.push(`Interrupted assistant response:\n${response}`);
   }
   sections.push(`Additional context:\n${String(additions ?? "").trim()}`);
+  return sections.join("\n\n");
+}
+
+export function buildSaddleContinuationInput({ originalInput = "", assistantResponse = "", additions = "", actionable = false } = {}) {
+  const sections = [
+    "The user is continuing the previous exchange. Resume its active task or discussion using the context below; do not treat this as an unrelated request.",
+    `Previous user request:\n${String(originalInput ?? "").trim()}`,
+    `Previous assistant response:\n${String(assistantResponse ?? "").trim()}`
+  ];
+  sections.push(actionable
+    ? `Additional context:\n${String(additions ?? "").trim()}`
+    : `Current user message:\n${String(additions ?? "").trim()}`);
   return sections.join("\n\n");
 }
 
@@ -178,6 +197,26 @@ export function isSaddleCodeChangeRequest(input = "") {
   if (!SADDLE_CHANGE_ACTION.test(text)) return false;
   if (/\b(?:fix|implement|patch|refactor)\b/iu.test(text)) return true;
   return SADDLE_CODE_TARGET.test(text);
+}
+
+export function isSaddleActionOffer(input = "") {
+  const text = String(input ?? "");
+  const offers = text.matchAll(/\b(?:i can|i could|i will|i'll|shall i|want me to|would you like me to)\s+([^.!?\n]{1,160})/giu);
+  for (const offer of offers) {
+    const actionText = `${offer[1]}\n${text}`;
+    const action = resolveRequestedSaddleAction(offer[1]);
+    if (action && (SADDLE_ALWAYS_TOOL_ACTION.test(action) || SADDLE_ACTION_TARGET.test(actionText))) return true;
+    if (isSaddleCodeChangeRequest(actionText)) return true;
+  }
+  return false;
+}
+
+export function isSaddleActionableContinuation({ originalInput = "", assistantResponse = "", previousAssessment = null } = {}) {
+  const context = `${String(originalInput ?? "")}\n${String(assistantResponse ?? "")}`;
+  return previousAssessment?.required === true && previousAssessment.complete === false
+    || isSaddleCodeChangeRequest(context)
+    || isSaddleToolActionRequest(originalInput)
+    || isSaddleActionOffer(assistantResponse);
 }
 
 function resolveRequestedSaddleAction(input = "") {
@@ -417,18 +456,7 @@ export function formatSaddleCompletionEvidence(assessment = {}) {
   return `[saddle evidence] changed: ${changed}; validation: ${assessment.validation.command}; exit: ${assessment.validation.exitCode}${output}`;
 }
 
-export function buildSaddleWorktreeReviewCommand({
-  trackedDiffLimit = 16000,
-  untrackedDiffLimit = 10000,
-  untrackedFileLimit = 2500
-} = {}) {
-  const bounded = (value, fallback, maximum) => {
-    const number = Number(value);
-    return Number.isSafeInteger(number) ? Math.max(1000, Math.min(maximum, number)) : fallback;
-  };
-  const trackedLimit = bounded(trackedDiffLimit, 16000, 24000);
-  const untrackedLimit = bounded(untrackedDiffLimit, 10000, 16000);
-  const fileLimit = bounded(untrackedFileLimit, 2500, 5000);
+export function buildSaddleWorktreeReviewCommand() {
   const excludedPathspecs = [
     ".",
     "':(exclude,glob)**/.env'",
@@ -437,20 +465,47 @@ export function buildSaddleWorktreeReviewCommand({
     "':(exclude,glob)**/*.pem'",
     "':(exclude,glob)**/*.key'",
     "':(exclude,glob)**/*credentials*'",
-    "':(exclude,glob)**/*token*'"
+    "':(exclude,glob)**/*token*'",
+    "':(exclude,glob)**/artifacts/session/**'",
+    "':(exclude,glob)**/artifacts/manual/ollama/usage/**'"
   ].join(" ");
   return [
     "set -e; printf '%s\\n' '[worktree root]'; git rev-parse --show-toplevel",
     "printf '%s\\n' '[worktree status]'",
-    "git -c core.quotePath=true status --short --untracked-files=all",
-    "printf '%s\\n' '[tracked diff summary against HEAD]'",
-    `git diff --stat HEAD -- ${excludedPathspecs}`,
-    "printf '%s\\n' '[tracked diff excerpt; sensitive config paths omitted]'",
-    `git diff --no-ext-diff --unified=3 HEAD -- ${excludedPathspecs} | head -c ${trackedLimit} || true`,
-    "printf '%s\\n' '[untracked text diff excerpts; sensitive paths omitted]'",
-    `git ls-files -z --others --exclude-standard | while IFS= read -r -d '' file; do case "$file" in .env|.env.*|*/.env|*/.env.*|secret.pya|*/secret.pya|*.pem|*.key|*credentials*|*token*) printf '[sensitive untracked path omitted]\\n' ;; *) printf '\\n--- untracked: %q ---\\n' "$file"; git diff --no-index --no-ext-diff --unified=3 /dev/null "$file" | head -c ${fileLimit} || true ;; esac; done | head -c ${untrackedLimit} || true`,
-    "printf '%s\\n' '[diff excerpts are bounded; review includes any pre-existing worktree changes]'"
+    `git -c core.quotePath=true status --short --untracked-files=all -- ${excludedPathspecs} | awk 'NR < 21 { print } NR == 21 { print "[additional paths omitted]"; exit } END { if (NR == 0) print "(clean)" }'`,
+    "printf '%s\\n' '[summary shows paths only; pre-existing worktree paths may be included]'"
   ].join("; ");
+}
+
+export function formatSaddleWorktreeReviewFailure(error = "") {
+  const text = String(error?.message ?? error ?? "").trim();
+  const stderr = text.match(/(?:^|\n)stderr:\s*([\s\S]*)$/u)?.[1]
+    ?.split(/\r?\n/u)
+    .map((line) => line.trim())
+    .find((line) => line && line !== "<empty>");
+  const status = text.match(/command defective:\s*status=(\d+)/u)?.[1];
+  const detail = stderr || (status ? `review command exited ${status}` : "review command failed");
+  return detail.replace(/\x1b\[[0-?]*[ -/]*[@-~]/gu, "")
+    .replace(/\p{Cc}/gu, " ")
+    .replace(/\s+/gu, " ")
+    .slice(0, 240);
+}
+
+function hasCommittedFileChangePromise(input = "", response = "") {
+  const requestedAction = resolveRequestedSaddleAction(input);
+  if (!SADDLE_MUTATING_ACTION.test(requestedAction)) return false;
+  const text = String(response ?? "");
+  const commitments = text.matchAll(/\b(?:i will|i'll|let me)\s+([^.!?\n]{1,240})/giu);
+  for (const commitment of commitments) {
+    const action = resolveRequestedSaddleAction(commitment[1]);
+    if (!SADDLE_MUTATING_ACTION.test(action)) continue;
+    if (isSaddleCodeChangeRequest(`${String(input ?? "")}\n${text}`)) return true;
+  }
+  return false;
+}
+
+function saddleResponseText(result = {}) {
+  return String(result?.ob?.text ?? result?.fromstate?.text ?? result?.value?.text ?? "");
 }
 
 export async function runSaddleTurnWithEvidence({ input, runTurn, onToolCall, onAssistantDelta, onTurnStart, onFollowup, onReview } = {}) {
@@ -468,7 +523,10 @@ export async function runSaddleTurnWithEvidence({ input, runTurn, onToolCall, on
     });
   };
   let result = await invoke(input);
-  let assessment = assessSaddleCompletion(input, events);
+  const completionInput = hasCommittedFileChangePromise(input, saddleResponseText(result))
+    ? `${String(input ?? "")}\n\nAssistant commitment:\n${saddleResponseText(result).trim()}`
+    : input;
+  let assessment = assessSaddleCompletion(completionInput, events);
   let retried = false;
   let completionPasses = 0;
   let retryError = "";
@@ -477,12 +535,12 @@ export async function runSaddleTurnWithEvidence({ input, runTurn, onToolCall, on
     completionPasses += 1;
     await onFollowup?.(assessment);
     try {
-      result = await invoke(buildSaddleCompletionFollowup(input, assessment));
+      result = await invoke(buildSaddleCompletionFollowup(completionInput, assessment));
     } catch (error) {
       retryError = String(error?.message ?? error);
       break;
     }
-    assessment = assessSaddleCompletion(input, events);
+    assessment = assessSaddleCompletion(completionInput, events);
   }
   let worktreeReview = null;
   let worktreeReviewError = "";
@@ -513,24 +571,26 @@ export function layoutSaddleInput({ value = "", cursor, label = "pyash> ", colum
   const rendered = `${prefix}${text}`;
   const renderedCursor = prefix.length + cursorIndex;
 
-  for (let index = 0; index < rendered.length; index += 1) {
-    const character = rendered[index];
-    if (character === "\n") {
-      if (index === renderedCursor) cursorPosition = { row, column };
+  for (const { segment, index } of splitTerminalGraphemes(rendered)) {
+    const endIndex = index + segment.length;
+    if (renderedCursor >= index && renderedCursor < endIndex) cursorPosition = { row, column };
+    if (segment === "\n") {
       lines.push("");
       row += 1;
       column = 0;
-      if (index + 1 === renderedCursor) cursorPosition = { row, column };
+      if (endIndex === renderedCursor) cursorPosition = { row, column };
       continue;
     }
-    if (column >= maxColumn) {
+    const width = terminalGraphemeWidth(segment);
+    if (column + width > maxColumn && column > 0) {
       lines.push("");
       row += 1;
       column = 0;
     }
-    if (index === renderedCursor) cursorPosition = { row, column };
-    lines[row] += character;
-    column += 1;
+    if (renderedCursor === index) cursorPosition = { row, column };
+    lines[row] += segment;
+    column += width;
+    if (endIndex === renderedCursor) cursorPosition = { row, column };
   }
 
   if (renderedCursor === rendered.length) cursorPosition = { row, column };
@@ -1011,6 +1071,7 @@ export function createSaddleInputDecoder({
   let pasting = false;
   let pasteBuffer = "";
   let completion = null;
+  const utf8Decoder = new StringDecoder("utf8");
 
   const resetCompletion = () => { completion = null; };
 
@@ -1203,7 +1264,8 @@ export function createSaddleInputDecoder({
 
   return {
     feed(chunk) {
-      for (const char of String(chunk ?? "")) handleChar(char);
+      const text = Buffer.isBuffer(chunk) ? utf8Decoder.write(chunk) : String(chunk ?? "");
+      for (const char of text) handleChar(char);
     },
     getState() {
       return { ...state };

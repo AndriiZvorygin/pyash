@@ -17,7 +17,7 @@ import {
 import { sentenceToPyash } from "../beautiful.mjs";
 import { handleCondition } from "./conditions.mjs";
 import { handleThisBinding, handleReturn } from "./returns.mjs";
-import { handleImperative } from "./imperative.mjs";
+import { handleImperative, resolveTypedGenitives } from "./imperative.mjs";
 import { state } from "./state.mjs";
 import { startRefinery, recordPlatform, endRefinery, isInsideRefinery } from "./refinery.mjs";
 import { deriveSignatureFromDefinition, registerSignature, registerSignatureHandler } from "./signature.mjs";
@@ -31,6 +31,7 @@ import {
   namedNumericSlotKind,
   namedNumericSlotWriteError
 } from "../library/named_numeric_slot.mjs";
+import { expandVectorInitializer } from "../library/vliw/vector_shape.mjs";
 
 function resolveFillCount(by, remember) {
   if (!by) return null;
@@ -189,6 +190,9 @@ export async function interpret(sentence, { runtimeContext = null } = {}) {
   }
   applyEnvDefaults({ rememberFn: remember, doRememberFn: doRemember });
   applyDynamicDefaults(sentence);
+  if (sentence.mood === "ya" && sentence.ob?.genitive?.chain?.[0] === "this") {
+    resolveTypedGenitives(sentence, { state, memory: { remember } });
+  }
   if (sentence.subj && !sentence.su) sentence.su = sentence.subj;
   if (sentence.obj && !sentence.ob) sentence.ob = sentence.obj;
   if (sentence.subj) delete sentence.subj;
@@ -452,18 +456,20 @@ export async function interpret(sentence, { runtimeContext = null } = {}) {
       }
     }
 
-    // Vector fill sugar: "ob ve <type> <value> by num N be vector ya"
-    if (mood === "ya" && be === "vector" && sentence?.ob?.ve?.values?.length === 1) {
-      const resolved = resolveFillCount(sentence.by, remember);
-      const n = resolved == null ? null : Math.trunc(resolved);
-      if (n > 0) {
-        const elem = sentence.ob.ve.values[0];
-        const filled = { ...sentence, ob: { ...(sentence.ob || {}), ve: { ...(sentence.ob.ve || {}), values: Array(n).fill(elem) } } };
-        // Avoid persisting the fill-count as part of the stored fact.
-        delete filled.by;
-        doRemember(filled);
-        return { stored: su?.name };
-      }
+    if (mood === "ya" && be === "vector" && Array.isArray(sentence?.ob?.ve?.values)) {
+      const type = sentence.ob.ve.type ?? "num";
+      const requested = sentence.by ? resolveFillCount(sentence.by, remember) : null;
+      if (sentence.by && requested == null) throw new Error("vector width could not be resolved");
+      const values = expandVectorInitializer(
+        type,
+        sentence.ob.ve.values,
+        requested,
+        Number.MAX_SAFE_INTEGER
+      );
+      const normalized = { ...sentence, ob: { ...sentence.ob, ve: { ...sentence.ob.ve, type, values } } };
+      delete normalized.by;
+      doRemember(normalized);
+      return { stored: su?.name };
     }
 
     doRemember(sentence);

@@ -1,0 +1,72 @@
+# syntax=docker/dockerfile:1.7
+
+# The cubin and runtime binary are built here, at image-build time. The runtime
+# stage below copies only compiled artifacts; service startup never compiles.
+#
+# `ptxas` comes from the named build context `cuda-tools`, normally
+# /usr/local/cuda/bin on the build host:
+#   docker build --build-context cuda-tools=/usr/local/cuda/bin ...
+FROM ubuntu:24.04 AS kernel-builder
+ARG SOURCE_REVISION=unknown
+ARG SOURCE_CHECKOUT=unknown
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get -o Acquire::ForceIPv4=true update \
+    && apt-get -o Acquire::ForceIPv4=true install -y --no-install-recommends \
+       build-essential ca-certificates curl git \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=cuda-tools /ptxas /usr/local/bin/ptxas
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+    | sh -s -- -y --profile minimal --default-toolchain none
+ENV PATH=/root/.cargo/bin:$PATH
+RUN rustup toolchain install nightly-2026-08-15 --profile minimal \
+      --component rust-src \
+      --component llvm-tools \
+      --component llvm-bitcode-linker
+WORKDIR /src
+COPY rust-toolchain.toml ./
+COPY rust/ ./rust/
+RUN --mount=type=cache,target=/root/.cargo/registry \
+    --mount=type=cache,target=/src/rust/pyac-gpu/cuda-kernel/target \
+    RUSTFLAGS="-C target-cpu=sm_86" \
+    cargo +nightly-2026-08-15 rustc --locked --release \
+      --manifest-path rust/pyac-gpu/cuda-kernel/Cargo.toml \
+      --target nvptx64-nvidia-cuda \
+      -Z build-std=core -Z build-std-features=compiler-builtins-mem \
+ && mkdir -p /out \
+ && ptxas -v -arch=sm_86 \
+      rust/pyac-gpu/cuda-kernel/target/nvptx64-nvidia-cuda/release/pyac_vliw_cuda_kernel.ptx \
+      -o /out/pyac_vliw_gpu_kernel.cubin \
+ && sha256sum /out/pyac_vliw_gpu_kernel.cubin | cut -d' ' -f1 > /out/cubin.sha256
+RUN --mount=type=cache,target=/root/.cargo/registry \
+    --mount=type=cache,target=/src/rust/pyac-gpu/worker/target \
+    digest="$(cat /out/cubin.sha256)" \
+ && export PYAC_VLIW_BUILD_CUBIN_SHA256="$digest" \
+ && cargo build --locked --release --features cuda \
+      --manifest-path rust/pyac-gpu/worker/Cargo.toml \
+      --bin pyac-vliw-runtime \
+ && install -m 0755 rust/pyac-gpu/worker/target/release/pyac-vliw-runtime /out/ \
+ && compiler="$(rustc +nightly-2026-08-15 --version)" \
+ && assembler="$(ptxas --version | sed -n 's/^Cuda compilation tools, //p')" \
+ && { \
+      printf 'su name source revision ob text "%s" be text ya\n' "$SOURCE_REVISION"; \
+      printf 'su name source checkout ob text "%s" be text ya\n' "$SOURCE_CHECKOUT"; \
+      printf 'su name kernel abi ob num 1 be number ya\n'; \
+      printf 'su name device target ob text "sm_86" be text ya\n'; \
+      printf 'su name cubin sha256 ob text "%s" be text ya\n' "$digest"; \
+      printf 'su name rust compiler ob text "%s" be text ya\n' "$compiler"; \
+      printf 'su name cuda assembler ob text "%s" be text ya\n' "$assembler"; \
+    } > /out/cubin.metadata.pya
+
+FROM ubuntu:24.04 AS runtime
+WORKDIR /service
+ENV PYAC_VLIW_BACKEND=cuda \
+    CUDA_DISABLE_PTX_JIT=1 \
+    CUDA_MODULE_LOADING=EAGER \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility
+COPY --from=kernel-builder \
+     /out/pyac-vliw-runtime \
+     /out/pyac_vliw_gpu_kernel.cubin \
+     /out/cubin.metadata.pya \
+     /service/
+EXPOSE 18887
+ENTRYPOINT ["/service/pyac-vliw-runtime"]

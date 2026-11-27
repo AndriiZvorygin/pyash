@@ -226,6 +226,7 @@ async function waitForManagedJob({
   timeoutMs,
   pollIntervalMs,
   signal,
+  onStatus,
   jobLabel = "gpu-managed job",
 } = {}) {
 
@@ -239,6 +240,7 @@ async function waitForManagedJob({
       signal,
     });
     const terminal = terminalStatus(status?.status);
+    if (terminal) onStatus?.(status);
     if (terminal === "success") return resultContent(status);
     if (terminal === "fail") {
       const error = new Error(`${jobLabel} failed: ${text(status?.error?.message || status?.error || status?.message || "unknown error")}`);
@@ -288,6 +290,7 @@ export async function submitManagedGpuJob({
   handleId = "",
   fetchImpl = globalThis.fetch,
   signal,
+  onStatus,
   timeoutMs = Number.parseInt(String(process.env.PYA_GPU_MANAGER_TIMEOUT_MS || "3600000"), 10) || 3600000,
   pollIntervalMs = Number.parseInt(String(process.env.PYA_GPU_MANAGER_POLL_MS || "500"), 10) || 500,
   vramRequiredMb,
@@ -359,6 +362,7 @@ export async function submitManagedGpuJob({
         timeoutMs,
         pollIntervalMs,
         signal,
+        onStatus,
         jobLabel: `gpu-managed ${normalizedRuntime} job`,
       });
       return { ...result, remoteJobId: id };

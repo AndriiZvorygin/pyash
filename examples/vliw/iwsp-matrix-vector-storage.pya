@@ -1,0 +1,6 @@
+exists su name hwas from filename "iwsp-matrix-vector-input.bin" by ve num 16 0 as name float with ve num 4 be pfun myoc ya
+exists su name htis hsek from filename "iwsp-matrix-vector-weights.bin" by ve num 48 0 as name float with ve num 3 4 be pfun myoc ya
+
+ob name hwas to name prediction at num 0 by name htis hsek be kl6m psas do
+ob name hwas to name prediction at num 1 by name htis hsek be kl6m psas do
+ob name hwas to name prediction at num 2 by name htis hsek be kl6m psas do

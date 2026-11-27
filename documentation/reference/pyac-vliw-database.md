@@ -5,6 +5,8 @@ the searchable catalog and compiled VLIW container built on the sentence-first
 lowering contract in `documentation/specifications/27-pyash-vliw-isa.md`.
 For the wider compiler flow and backend status, see
 [`pyash-vliw-compiler-architecture.md`](pyash-vliw-compiler-architecture.md).
+The proposed in-band dictionary profile is specified in
+[`pyac-vliw-dictionary.md`](pyac-vliw-dictionary.md).
 
 ## 1. Purpose and boundary
 
@@ -26,6 +28,12 @@ The catalog carries semantic identity, provenance, compatibility status,
 source text references, codelet hashes, and replay expectations. The `.pyac`
 pack carries exact legacy VLIW words. The catalog is the searchable semantic
 index; the pack is the executable byte projection.
+
+That builder remains an executable-codelet corpus with a searchable `.pya`
+catalog. A dictionary volume is a distinct in-band content profile: its own
+TOC, lookup indexes, lexical records, and semantic definitions are all VLIW
+sentences. It does not change this builder or the frozen v1 pack layout; see
+[`pyac-vliw-dictionary.md`](pyac-vliw-dictionary.md).
 
 Human-language input enters this boundary through an existing or future
 translation adapter. It becomes executable after the adapter produces a
@@ -63,16 +71,31 @@ the header in source order. The file width equals the header width plus
 `count * 32`; trailing bytes are invalid. A reader rejects an unknown magic,
 version, word layout, reserved field, truncation, or extra data.
 
-This v1 layout remains frozen as a flat codelet stream. It has no contents
-directory, symbol table, data section, quote-kind descriptor, or embedded
-mutable variable store. The hosted programlet interpreter currently allocates
-its narrow invocation-local numeric slots at execution time; that runtime
-behavior does not add a storage section to this container. Do not reinterpret
-its reserved header field or codelet words to add those features.
+This v1 layout remains a flat codelet stream with no contents directory or
+symbol table. Its reserved header field remains zero. The inline immutable
+storage profile uses ordinary Pyash descriptor sentences followed immediately
+by opaque payload codelets in the same stream; it does not introduce a second
+header or sidecar. The header codelet count includes those payload codelets.
+Executable sentences precede storage descriptors, and consumers must recognize
+the full section signature and skip the declared payload extent rather than
+interpreting payload words as instructions. The current syntax, exact length
+encoding, validation, and runtime support boundary are normative in
+[`the VLIW ISA specification`](../specifications/27-pyash-vliw-isa.md#inline-immutable-storage-sections).
+
+The hosted programlet interpreter also allocates narrow invocation-local
+numeric slots at execution time; that separate runtime behavior does not alter
+the v1 header. Do not reinterpret its reserved field.
+
+Independent named program sections use `myocpfun` boundary sentences encoded
+as ordinary codelets in this stream; they do not alter the v1 container. Their
+source ordinal and HNUC name identify each result, while parallel executors
+return result records in completion order rather than sorting them back into
+source order. See the independent-section contract in the
+[`VLIW ISA specification`](../specifications/27-pyash-vliw-isa.md#independent-named-sections).
 
 ### Future indexed program image
 
-A later, explicitly versioned `.pyac` image may use a book-like contents
+A later, explicitly versioned `.pyac` image may add a book-like contents
 directory and symbol index to locate code, immutable constants, quote payloads,
 and initialization records for invocation-local writable pages. The directory
 may include quote-kind metadata external to each payload, preserving
@@ -556,7 +579,8 @@ Rust now reads the existing generated catalog subset with
 required metadata rows, optional pack locator, and JSON-shaped codelet rows;
 it does not define a second catalog schema. The shared fixture is
 `rust/pyac/tests/fixture_catalog.pya`, and the JavaScript renderer remains the
-authority for producing parser-backed `.pya` text and semantic replay.
+authority for producing parser-backed `.pya` text; execution semantics are
+defined by the shared Rust runtime.
 
 The Rust boundary also decodes and executes the proven numeric arithmetic
 codelets through `decode_numeric_arithmetic_codelet`. Its marker layout,
@@ -564,7 +588,8 @@ zero-tail check, operator words, saturation/floor/division rules, and explicit
 divide-by-zero error match the JavaScript facade. The shared one-plus fixture
 continues to cover the public `decode_numeric_plus_codelet` adapter. Rust
 semantic coverage remains deliberately limited to proven adapters; the
-JavaScript facade remains the broader reference executor.
+JavaScript facade is a lowering and compatibility producer, not the semantic
+authority.
 
 The recovered legacy C arithmetic boundary is also preserved: plus saturates
 as a `uint16_t`, while subtract, multiply, divide, and xor produce `uint64_t`
@@ -592,13 +617,15 @@ without the build noticing.
 
 ## 7. Backend status
 
-The current executable reference backend is the JavaScript semantic facade.
-The archived pre-October `lwonprom` source contains an OpenCL VM design and
-hardware helpers, but the current repository has no PyAC OpenCL compiler,
-kernel, or device execution contract. `program/runtime/gpu` owns provider and
-queue lifecycle for model work; it does not execute PyAC codelets. Adding an
-OpenCL backend therefore waits for a kernel ABI, codelet result ABI, device
-admission, and conformance fixtures.
+The executable semantic authority is the shared Rust runtime
+(`rust/pyac-vliw-core`), used by the CPU pack executor and the GPU kernels. The
+JavaScript facade remains a lowering and compatibility producer. The archived
+pre-October `lwonprom` source contains an OpenCL VM design and hardware helpers,
+but the current repository has no PyAC OpenCL compiler, kernel, or device
+execution contract. `program/runtime/gpu` owns provider and queue lifecycle for
+model work; it does not execute PyAC codelets. Adding an OpenCL backend
+therefore waits for a kernel ABI, codelet result ABI, device admission, and
+conformance fixtures.
 
 For supported semantic codelets, `renderPyashCodelet(words)` performs the
 reverse projection from fixed-width PyAC VLIW to canonical Pyash text by

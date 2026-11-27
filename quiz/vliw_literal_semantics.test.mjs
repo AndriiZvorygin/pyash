@@ -53,6 +53,19 @@ test("typed numeric literals preserve the exact legacy result vector", () => {
   assert.deepEqual(decodeCodelet(lowered.words).sentence, lowered.sentence);
 });
 
+test("typed float32 literals index both payload words before their cases", () => {
+  const [lowered] = lowerSentence(parse("ob num 0.125 be number ya"));
+
+  assert.deepEqual(Array.from(lowered.words.slice(0, 6)), [
+    0x0031, 0xd01d, 0x0000, 0x3e00, 0x245e, 0x217e
+  ]);
+  assert.deepEqual(decodeTypedLiteralCodelet(lowered.words), {
+    mood: "ya",
+    ob: { num: 0.125 },
+    be: "number"
+  });
+});
+
 test("typed letter literals preserve the legacy letter quote vector", async () => {
   const lowered = lowerTypedLiteralSentence(parse('ob text "A" be text ya'));
 
@@ -110,7 +123,7 @@ test("PyAC catalogs index, pack, and replay typed literal codelets", async () =>
   assert.equal(database.catalog.records[2].error.code, "unrepresentable-name");
 });
 
-test("typed literal lowering keeps unsupported names and widths explicit", () => {
+test("typed literal lowering keeps unsupported names, widths, and f32 range explicit", () => {
   assert.equal(
     errorCode(() => lowerTypedLiteralSentence(parse("su name answer ob num 7 be number ya"))),
     "unrepresentable-name"
@@ -119,9 +132,15 @@ test("typed literal lowering keeps unsupported names and widths explicit", () =>
     errorCode(() => lowerTypedLiteralSentence(parse('ob text "ABCDEFGHIJK" be text ya'))),
     "literal-width"
   );
+  const widerInteger = lowerTypedLiteralSentence({ mood: "ya", ob: { num: 65536 }, be: "number" });
+  assert.deepEqual(decodeTypedLiteralCodelet(widerInteger.words), {
+    mood: "ya",
+    ob: { num: 65536 },
+    be: "number"
+  });
   assert.equal(
-    errorCode(() => lowerTypedLiteralSentence({ mood: "ya", ob: { num: 65536 }, be: "number" })),
-    "literal-range"
+    errorCode(() => lowerTypedLiteralSentence({ mood: "ya", ob: { num: Number.MAX_VALUE }, be: "number" })),
+    "non-finite-float"
   );
 });
 

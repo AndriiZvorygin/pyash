@@ -94,25 +94,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install the pinned Rust toolchain
-        run: |
-          rustup show active-toolchain || rustup toolchain install
-          rustup component add rustfmt
-      - name: Check formatting
-        run: |
-          cargo fmt --manifest-path rust/pyac/Cargo.toml -- --check
-          cargo fmt --manifest-path rust/pyac-riscv/Cargo.toml -- --check
-          cargo fmt --manifest-path rust/pyac-browser/Cargo.toml -- --check
-      - name: Run the crate tests
-        run: cargo test --manifest-path rust/pyac/Cargo.toml
-      - name: Run the browser host tests
-        run: cargo test --manifest-path rust/pyac-browser/Cargo.toml
-      - name: Add cross-compilation targets
-        run: rustup target add riscv64gc-unknown-none-elf wasm32-unknown-unknown
-      - name: Check the browser WebAssembly build
-        run: cargo check --manifest-path rust/pyac-browser/Cargo.toml --target wasm32-unknown-unknown
-      - name: Build the RISC-V image
-        run: cargo build --manifest-path rust/pyac-riscv/Cargo.toml --release --target riscv64gc-unknown-none-elf
+        with:
+          lfs: true
+      - name: Run Rust formatting, tests, and target builds
+        run: bash command/run_rust_ci_checks.sh
 
   zim-toolchain:
     name: Optional ZIM toolchain

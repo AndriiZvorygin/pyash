@@ -187,6 +187,7 @@ export async function loadCuratedCompoundDecompositions({
     return true;
   }).map((entry) => ({
     target: entry.target,
+    gloss: entry.gloss ?? entry.target,
     ...(Array.isArray(entry.aliases) && entry.aliases.length > 0
       ? { aliases: entry.aliases }
       : {}),
@@ -418,6 +419,9 @@ function curatedMap(curatedDecompositions) {
     if (result.has(target)) throw invalid("curated compound target is duplicated", { index, target });
     result.set(target, {
       target,
+      gloss: typeof decomposition.gloss === "string" && decomposition.gloss.trim()
+        ? decomposition.gloss.trim()
+        : target,
       ...(aliases.length > 0 ? { aliases } : {}),
       componentGlosses,
       ...(Array.isArray(decomposition.pyashSequence) ? { pyashSequence: [...decomposition.pyashSequence] } : {}),
@@ -448,6 +452,7 @@ function recordId(record) {
 
 function makeRecord({
   target,
+  gloss,
   aliases,
   sourceMorphemes,
   componentGlosses,
@@ -485,6 +490,7 @@ function makeRecord({
     language: "canonical",
     surface: target,
     target,
+    gloss: typeof gloss === "string" && gloss.trim() ? gloss.trim() : target,
     ...(Array.isArray(aliases) && aliases.length > 0 ? { aliases: [...aliases] } : {}),
     sourceMorphemes: [...sourceMorphemes],
     morphemes: [...sourceMorphemes],
@@ -545,6 +551,7 @@ export function buildDerivedCompoundCoverage({
     if (curatedEntry) {
       const record = makeRecord({
         target,
+        gloss: curatedEntry.gloss,
         aliases: curatedEntry.aliases,
         sourceMorphemes: curatedEntry.sourceMorphemes,
         componentGlosses: curatedEntry.componentGlosses,
@@ -659,7 +666,7 @@ function renderDerivedCompoundCoverageRow(entry) {
     morphemes: entry.sourceMorphemes,
     sourceMorphemes: entry.sourceMorphemes,
     target: entry.target,
-    gloss: entry.target,
+    gloss: entry.gloss ?? entry.target,
     componentGlosses: entry.componentGlosses,
     specificAtom: entry.specificAtom,
     pyashSequence: entry.pyashSequence,

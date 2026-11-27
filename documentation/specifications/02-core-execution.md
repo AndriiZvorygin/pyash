@@ -128,25 +128,23 @@ The lowering is intentionally limited to direct top-level ceremony definitions w
 Define official conditionals and loop semantics.
 
 ## 2. Terms
-- conditional: `tiny`/`giant`/`equally` with an inline `then` consequence.
+- conditional: a boolean-producing predicate with an inline `then` consequence.
 - loop: invocation with `fromindex` (and optional `toindex`).
 
 ## 3. Rules (normative)
-- Conditional form is `ob … be tiny/giant/equally from … then <sentence>` and executes the inline consequence immediately when true.
-- If the consequence needs to be a `ret`, both inline and two-line forms are valid:
+- Conditional form places a boolean-producing predicate before `then` and executes the inline consequence immediately when true. Scalar predicates include `ob … be tiny/giant/equally from …`; composed predicates may use the boolean-composition forms below, including named/local comparisons.
+- An optional `else <sentence>` is the false branch. If the consequence needs to be a `ret`, both inline and two-line forms are valid:
   - inline: `ob … be tiny/giant/equally from … then <ret sentence>`
   - two-line: `ob … be tiny/giant/equally from … then` followed by `<ret sentence>`
 - Loop semantics:
-  - `fromindex <start> [toindex <bound>] be <ceremony> do` runs the body and stops when `fromindex === toindex` (or `fromindex === 0` if `toindex` is absent).
-  - When `toindex` is present, the supervisor steps `fromindex` toward `toindex` by +/- 1 each iteration.
-  - The supervisor reads progression state from the final evoker sentence. Target facts may retain payload/result data, but their `fromindex`, `toindex`, `atindex`, and register-form `by` fields are not loop state.
-  - A named `ret` cannot redirect or shorten a loop through stale target registers; explicit role returns remain the supported control update.
-  - Indexing is 0-based.
+  - An explicit `toindex` is an exclusive bound; equal endpoints skip the body. Without it, countdown runs from a positive `fromindex` to zero, excluding zero (`0` to `1` runs once).
+  - Each step moves +/- 1 toward the bound. Progress comes from the final evoker, never target registers; named `ret` changes control only when it returns a role explicitly. Indexing is 0-based.
 - Boolean composition:
   - Negation: `be not ob la <sentence> ko` inverts a boolean-producing sentence.
   - Conjunction: `be and ob la <sentence> ko with la <sentence> ko` yields truth only if both are truth.
   - Disjunction: `be or ob la <sentence> ko with la <sentence> ko` yields truth if either is truth.
   - These forms return `ob bool truth|lie`.
+- A boolean composition can itself be the predicate of `then`/`else`; each leaf is evaluated by the same runtime in the active frame, so named arguments and local variables resolve in that frame.
 
 ## 3.1 Result facts (normative)
 

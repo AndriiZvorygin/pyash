@@ -100,6 +100,33 @@ test("gpu worker claims oldest envelope, submits to housekeeper, and writes succ
   assert.equal(depth.total, 0);
 });
 
+test("GPU worker preserves negative zero in durable Housekeeper results", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-gpu-worker-negative-zero-"));
+  const worldRoot = path.join(root, "world");
+
+  await enqueueMind(worldRoot);
+  await runGpuWorkerOnce({
+    worldRoot,
+    pollIntervalMs: 1,
+    maxPolls: 5,
+    adapter: {
+      async submitJob() {
+        return { remoteJobId: "remote-negative-zero" };
+      },
+      async getJobStatus() {
+        return {
+          status: "success",
+          result: { values: [{ type: "vector", elementType: "float64", values: [Math.PI, -0] }] }
+        };
+      }
+    }
+  });
+
+  const status = await readGpuHandleStatus(worldRoot, "mind-job-one");
+  const result = JSON.parse(status.result);
+  assert.ok(Object.is(result.values[0].values[1], -0));
+});
+
 test("gpu worker requeues predictably when the gpu lease is busy", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-gpu-worker-busy-"));
   const worldRoot = path.join(root, "world");
