@@ -13,3 +13,15 @@ test("learn internal filename examples call the intended module stages", async (
   assert.match(mergeRefine, /from text of ob of merged card with text of ob of learning_focus to name text refined card be learn refine card do/u);
   assert.match(mergeRefine, /learning source support defective/u);
 });
+
+test("learn radio examples call the radio card stages", async () => {
+  const direct = await fs.readFile(new URL("../examples/pyash/learn-radio-direct-from-filename.pya", import.meta.url), "utf8");
+  const extract = await fs.readFile(new URL("../examples/pyash/learn-radio-extract-card-from-filename.pya", import.meta.url), "utf8");
+  const mergeRefine = await fs.readFile(new URL("../examples/pyash/learn-radio-merge-refine-cards-from-filename.pya", import.meta.url), "utf8");
+
+  assert.match(direct, /from text of ob of learn source text with text of ob of learning_focus to name text teaching final be learn radio do/u);
+  assert.match(extract, /from text of ob of learn source text with text of ob of learning_focus to name text teaching final be learn radio extract card do/u);
+  assert.match(mergeRefine, /from text of ob of learn cards text with text of ob of learning_focus to name text merged card be learn radio merge cards do/u);
+  assert.match(mergeRefine, /from text of ob of merged card with text of ob of learning_focus to name text refined card be learn radio refine card do/u);
+  assert.match(mergeRefine, /learning source support defective/u);
+});

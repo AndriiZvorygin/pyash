@@ -75,12 +75,60 @@ test("learn module exports text and filename learning ceremonies", async () => {
   assert.match(text, /node command\/validate_learn_card\.mjs" fromtext name teaching out to name text learning card valid be command do[\s\S]*su name learn from filename/u);
   assert.match(text, /su name learn from text source with text learning focus to name text teaching out be ceremony def/u);
   assert.match(text, /su name learn from filename source with text learning focus to name text teaching out be ceremony def/u);
-  assert.equal((text.match(/su name mind discharge stage as wo mind be discharge do/gu) ?? []).length, 1);
+  assert.equal((text.match(/su name mind discharge stage as wo mind be discharge do/gu) ?? []).length, 2);
   assert.match(text, /learning source support defective/u);
   assert.match(text, /exists su name learn extract card be export ya/u);
   assert.match(text, /exists su name learn merge cards be export ya/u);
   assert.match(text, /exists su name learn refine card be export ya/u);
   assert.match(text, /exists su name learn be export ya/u);
+});
+
+test("learn module carries the radio card ceremonies", async () => {
+  const text = await fs.readFile(new URL("../module/learn.pya", import.meta.url), "utf8");
+
+  assert.match(text, /exists su name learning radio distillation prompt ob text quoted\.text\./u);
+  assert.match(text, /exists su name learning radio merge prompt ob text quoted\.text\./u);
+  assert.match(text, /exists su name learning radio refine prompt ob text quoted\.text\./u);
+  assert.match(text, /su name learn radio extract card from text source with text learning focus to name text teaching out be ceremony def/u);
+  assert.match(text, /su name learn radio merge cards from text cards with text learning focus to name text teaching out be ceremony def/u);
+  assert.match(text, /su name learn radio refine card from text card with text learning focus to name text teaching out be ceremony def/u);
+  assert.match(text, /su name learn radio from text source with text learning focus to name text teaching out be ceremony def/u);
+  assert.match(text, /fromtext name learning radio distillation prompt for name mind to name text teaching raw by num 0 atmost num 1400 be write do/u);
+  assert.match(text, /fromtext name learning radio merge prompt for name mind to name text teaching raw by num 0 atmost num 1800 be write do/u);
+  assert.match(text, /fromtext name learning radio refine prompt for name mind to name text teaching raw by num 0 atmost num 1800 be write do/u);
+  assert.match(text, /node command\/normalize_learn_card\.mjs --headings radio" fromtext name teaching out to name text teaching out be command do/u);
+  assert.match(text, /node command\/validate_learn_card\.mjs --headings radio" fromtext name teaching out to name text learning card valid be command do/u);
+  assert.match(text, /exists su name learn radio extract card be export ya/u);
+  assert.match(text, /exists su name learn radio merge cards be export ya/u);
+  assert.match(text, /exists su name learn radio refine card be export ya/u);
+  assert.match(text, /exists su name learn radio be export ya/u);
+});
+
+test("the radio card prompt asks for the headings a song uses", async () => {
+  const text = await fs.readFile(new URL("../module/learn.pya", import.meta.url), "utf8");
+
+  const radioPrompt = text.slice(
+    text.indexOf("exists su name learning radio distillation prompt"),
+    text.indexOf("exists su name learning radio merge prompt")
+  );
+  for (const heading of [
+    "SEED CONCEPT",
+    "CARDINAL TRAINING SENTENCE",
+    "TEACHING PROGRESSION",
+    "CAUSATIVE AND CONSEQUENCE",
+    "CARDINAL SCENES AND IDIOMS",
+    "BRIEF MEMORY PHRASES"
+  ]) {
+    assert.ok(radioPrompt.includes(heading), `the radio card carries ${heading}`);
+  }
+  for (const heading of [
+    "ORTHOGONAL FEATURES",
+    "SURPRISES AND MISUNDERSTANDINGS",
+    "AFFAIRS OR ACTIVITIES",
+    "CONCEPT RELATIONS"
+  ]) {
+    assert.ok(!radioPrompt.includes(heading), `the radio card leaves ${heading} out`);
+  }
 });
 
 test("learn example imports module and forwards source plus focus", async () => {

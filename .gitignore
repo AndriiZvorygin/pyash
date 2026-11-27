@@ -109,7 +109,7 @@ container/gpu-housekeeper/service/state/
 __pycache__/
 *.pyc
 
-# yiniana radio: the topic lanes are tracked, the generated songs are not
+# zvorygin radio: the topic lanes are tracked, the generated songs are not
 radio/lyrics/
 radio/audio/
 radio/lyrics-experiments/
