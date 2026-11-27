@@ -33,6 +33,25 @@ const CURATED_GLOSS_RELEASE = "pyash authored";
 const WIKTIONARY_DATASET = "wiktionary";
 const WIKTIONARY_RELEASE = "en_all_nopic_2026-08";
 const WIKTIONARY_SITE = "https://zim.zvorygin.ca";
+/**
+ * How many bridge senses the build is allowed to drop, by reason.
+ *
+ * These were silent `continue`s until the counts were made visible. The
+ * `ambiguousTarget` figure dominates because a compound may declare the same
+ * English target as an atom and as its sibling compounds (`death` is `mwan` plus
+ * five compounds), so the surface no longer names one sequence. Resolving that is
+ * a vocabulary decision, not something the builder may guess.
+ *
+ * The baseline is a ceiling, not a target: raising it is a deliberate edit that
+ * says "we know more senses are now unplaceable, and we accept it".
+ */
+const DROPPED_SENSE_BASELINE = Object.freeze({
+  ambiguousTarget: 4741,
+  absentTarget: 20,
+  malformedSense: 0,
+  compoundNoSequence: 6,
+  compoundNoDefinition: 0
+});
 const ACCEPTED_CURATED_STATUSES = new Set(["accepted-curated", "accepted-delimited", "accepted-deterministic"]);
 const ACCEPTED_WORDNET_STATUSES = new Set(["accepted-llm", "repaired-llm", "accepted-deterministic"]);
 const LANGUAGE_FILES = Object.freeze({
@@ -209,12 +228,22 @@ function buildUniqueTargetIndex(entries, atomRows = pyashWords) {
     for (const alias of entry.aliases ?? []) add(alias, entry.pyashSequence);
   }
   return {
+    /**
+     * Resolve a surface to its one canonical sequence.
+     *
+     * Returns a discriminated result rather than `null` so the caller can say
+     * *why* a target failed. An ambiguous target (`name` matches `cyik hnim`,
+     * `hwum hnim`, `txif hnim`) and an absent one are different problems: the
+     * first needs a vocabulary decision, the second needs a new entry.
+     */
     resolve(surface) {
       const matches = new Map();
       for (const variant of english30kLookupVariants(surface)) {
         for (const [key, sequence] of variants.get(variant) ?? []) matches.set(key, sequence);
       }
-      return matches.size === 1 ? [...matches.values()][0] : null;
+      if (matches.size === 0) return { kind: "none" };
+      if (matches.size > 1) return { kind: "ambiguous", sequences: [...matches.values()] };
+      return { kind: "one", sequence: [...matches.values()][0] };
     }
   };
 }
@@ -271,10 +300,44 @@ function reviewedSenseSequences(vocabularyReviews, bridgeEntries) {
 function chooseSenseWinners(bridgeEntries, compoundGlosses, targetIndex, rankForEnglish, tagCounts, vocabularyReviews = []) {
   const candidates = [];
   const reviewedSequences = reviewedSenseSequences(vocabularyReviews, bridgeEntries);
+  // Every skip is counted with a reason. These used to be bare `continue`s, so
+  // thousands of bridge senses could vanish without the build mentioning it.
+  const drops = {
+    ambiguousTarget: { count: 0, examples: [] },
+    absentTarget: { count: 0, examples: [] },
+    malformedSense: { count: 0, examples: [] },
+    compoundNoSequence: { count: 0, examples: [] },
+    compoundNoDefinition: { count: 0, examples: [] }
+  };
+  const recordDrop = (reason, detail) => {
+    const bucket = drops[reason];
+    bucket.count += 1;
+    if (bucket.examples.length < 5) bucket.examples.push(detail);
+  };
   for (const row of bridgeEntries) {
     const senseId = String(row.source ?? "").toLowerCase();
-    const sequence = reviewedSequences.get(senseId) ?? targetIndex.resolve(row.target);
-    if (!sequence || !/^[anrvs]:\d{8}-[anrvs]$/u.test(senseId) || !row.gloss) continue;
+    const reviewed = reviewedSequences.get(senseId);
+    let sequence = reviewed;
+    if (!sequence) {
+      const resolved = targetIndex.resolve(row.target);
+      if (resolved.kind === "ambiguous") {
+        recordDrop("ambiguousTarget", {
+          target: row.target,
+          candidates: resolved.sequences.map(sequenceKey),
+          senseId
+        });
+        continue;
+      }
+      if (resolved.kind === "none") {
+        recordDrop("absentTarget", { target: row.target });
+        continue;
+      }
+      sequence = resolved.sequence;
+    }
+    if (!/^[anrvs]:\d{8}-[anrvs]$/u.test(senseId) || !row.gloss) {
+      recordDrop("malformedSense", { senseId, target: row.target, hasGloss: Boolean(row.gloss) });
+      continue;
+    }
     candidates.push({
       senseId,
       target: row.target,
@@ -290,11 +353,20 @@ function chooseSenseWinners(bridgeEntries, compoundGlosses, targetIndex, rankFor
     const sequence = Array.isArray(row.pyashSequence) ? canonicalizeSequence(row.pyashSequence) : [];
     const senseId = String(row.senseId ?? "").toLowerCase();
     const reviewedSequence = reviewedSequences.get(senseId);
-    if (reviewedSequence && sequenceKey(sequence) !== sequenceKey(reviewedSequence)) continue;
+    if (reviewedSequence && sequenceKey(sequence) !== sequenceKey(reviewedSequence)) {
+      recordDrop("compoundNoSequence", { senseId, reason: "reviewed sequence disagrees", target: row.target });
+      continue;
+    }
     const rawPartOfSpeech = String(row.partOfSpeech ?? senseId[0] ?? "").toLowerCase();
     const partOfSpeech = rawPartOfSpeech === "s" ? "a" : rawPartOfSpeech;
-    if (sequence.length < 2 || !/^[anrvs]:\d{8}-[anrvs]$/u.test(senseId)
-      || !POS.has(partOfSpeech) || !row.definition) continue;
+    if (sequence.length < 2 || !/^[anrvs]:\d{8}-[anrvs]$/u.test(senseId) || !POS.has(partOfSpeech)) {
+      recordDrop("compoundNoSequence", { senseId, target: row.target });
+      continue;
+    }
+    if (!row.definition) {
+      recordDrop("compoundNoDefinition", { senseId, target: row.target });
+      continue;
+    }
     candidates.push({
       senseId,
       target: row.target,
@@ -347,7 +419,7 @@ function chooseSenseWinners(bridgeEntries, compoundGlosses, targetIndex, rankFor
     if (rows.length > 1) collisionGroups += 1;
     winners.push(...(equivalence ? rows : rows.slice(0, 1)));
   }
-  return { winners, collisionGroups, candidateCount: candidates.length };
+  return { winners, collisionGroups, candidateCount: candidates.length, drops };
 }
 
 function addChineseForms(entriesByKey, activeSenseToSequence, cowIndex, directChineseByCharacter, pinyinBySurface, jyutpingByCharacter) {
@@ -777,10 +849,27 @@ export function buildAcceptedReferenceSource({
     acceptedWordNetSenseCandidates: selectedSenses.candidateCount,
     selectedWordNetSenses: selectedSenses.winners.length,
     resolvedSenseCollisionGroups: selectedSenses.collisionGroups,
+    droppedSenseRows: Object.fromEntries(
+      Object.entries(selectedSenses.drops).map(([reason, bucket]) => [reason, bucket.count])
+    ),
+    droppedSenseExamples: Object.fromEntries(
+      Object.entries(selectedSenses.drops)
+        .filter(([, bucket]) => bucket.count > 0)
+        .map(([reason, bucket]) => [reason, bucket.examples])
+    ),
     chineseSingleCharacterForms,
     languages
   };
   if (!render) return { entries, summary };
+  for (const [reason, count] of Object.entries(selectedSenses.drops)) {
+    const ceiling = DROPPED_SENSE_BASELINE[reason] ?? 0;
+    if (count > ceiling) {
+      throw new Error(
+        `the reference build now drops ${count} sense rows for ${reason}, up from ${ceiling}. `
+        + `Either fix the target or raise DROPPED_SENSE_BASELINE deliberately.`
+      );
+    }
+  }
   const lines = [
     'su name lyin kwon ob text "Pyash accepted vocabulary reference dictionary" be text ya',
     `su name lyin kwon ob text "Pyash accepted vocabulary reference" as num 1 from text ${JSON.stringify(languages.join(","))} to text "NFC" with text "pyac-vliw-dictionary/3" be text ya`

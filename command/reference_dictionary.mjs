@@ -63,6 +63,10 @@ async function rebuild() {
     volumeBytes: build.volumeBytes,
     entries: build.entries,
     codelets: build.codeletCount,
+    // Dropped sense rows are reported, not swallowed: the build refuses to
+    // exceed its recorded ceiling, and this surfaces what it dropped below it.
+    droppedSenseRows: summary.droppedSenseRows,
+    droppedSenseExamples: summary.droppedSenseExamples,
     sourceSha256: await digest(SOURCE),
     volumeSha256: await digest(VOLUME)
   };
