@@ -226,11 +226,59 @@ const STYLE_NODE_TYPES = ["AceStepSFTTextEncode", "YuE2GenerateMusic", "TextEnco
 const SAMPLER_NODE_TYPES = ["AceStepSFTGenerate", "KSampler"];
 const LATENT_NODE_TYPES = ["EmptyYuE2LatentAudio", "EmptyAceStep1.5LatentAudio"];
 const SAVE_NODE_TYPES = ["AceStepSFTSaveAudio", "SaveAudioMP3", "SaveAudioOpus", "SaveAudio"];
+const OPTION_ALIASES = new Map([
+  ["bpm", ["bpm"]],
+  ["timesignature", ["timesignature", "time signature"]],
+  ["language", ["language", "langauge"]],
+  ["keyscale", ["keyscale", "key scale"]],
+  ["duration", ["duration"]],
+  ["seconds", ["seconds"]],
+  ["seed", ["seed"]],
+  ["steps", ["steps"]],
+  ["cfg", ["cfg"]],
+  ["cfgScale", ["cfgScale", "cfg_scale", "cfg scale", "lmCfgScale", "lm_cfg_scale", "lm cfg scale"]],
+  ["cfgscale", ["cfgscale", "cfg_scale", "cfg scale"]],
+  ["temperature", ["temperature", "lmTemperature", "lm_temperature", "lm temperature"]],
+  ["topP", ["topP", "top_p", "top p"]],
+  ["topp", ["topp", "top_p", "top p"]],
+  ["topK", ["topK", "top_k", "top k"]],
+  ["topk", ["topk", "top_k", "top k"]],
+  ["minP", ["minP", "min_p", "min p"]],
+  ["minp", ["minp", "min_p", "min p"]],
+  ["samplerName", ["samplerName", "sampler_name", "sampler", "sampler name"]],
+  ["samplername", ["samplername", "sampler_name", "sampler", "sampler name"]],
+  ["scheduler", ["scheduler"]],
+  ["denoise", ["denoise"]],
+  ["quality", ["quality"]],
+  ["maxDuration", ["maxDuration", "max_duration", "max duration"]],
+  ["voiceBoost", ["voiceBoost", "voice_boost", "voice boost"]],
+  ["repetitionPenalty", ["repetitionPenalty", "repetition_penalty", "repetition penalty"]],
+  ["referenceGuidance", ["referenceGuidance", "reference_guidance", "reference guidance"]],
+  ["referenceTimbreRepeats", ["referenceTimbreRepeats", "reference_timbre_repeats", "reference timbre repeats"]]
+]);
 // A workflow may take the voice it sings in from a recording of that voice.
 const REFERENCE_NODE_TYPES = ["AceStepSFTLoadReferenceAudio"];
 
 // A save node may name its format outright or fix it in the node type.
 const SAVE_NODE_FORMATS = { SaveAudioMP3: "mp3", SaveAudioOpus: "opus" };
+
+function applyWorkflowOption(workflow, promptObject, mapping, canonical, value) {
+  const aliases = OPTION_ALIASES.get(canonical);
+  if (!aliases) return;
+
+  let resolvedPath = mappingLookup(mapping, `${canonical}Path`);
+  if (!resolvedPath) {
+    for (const alias of aliases) {
+      resolvedPath =
+        detectInputPath(workflow, promptObject, alias, STYLE_NODE_TYPES) ||
+        detectInputPath(workflow, promptObject, alias, SAMPLER_NODE_TYPES) ||
+        detectInputPath(workflow, promptObject, alias, LATENT_NODE_TYPES) ||
+        detectInputPath(workflow, promptObject, alias, SAVE_NODE_TYPES);
+      if (resolvedPath) break;
+    }
+  }
+  if (resolvedPath) setAtPath(promptObject, resolvedPath, value);
+}
 
 // The save node knows which container it will write. The output file must
 // carry that extension, because Icecast is handed the bytes as they are.
@@ -478,37 +526,6 @@ async function main() {
     if (enabledPath) setAtPath(promptObject, enabledPath, true);
   }
 
-  const keyAliases = new Map([
-    ["bpm", ["bpm"]],
-    ["timesignature", ["timesignature", "time signature"]],
-    ["language", ["language", "langauge"]],
-    ["keyscale", ["keyscale", "key scale"]],
-    ["duration", ["duration"]],
-    ["seconds", ["seconds"]],
-    ["seed", ["seed"]],
-    ["steps", ["steps"]],
-    ["cfg", ["cfg"]],
-    ["cfgScale", ["cfgScale", "cfg_scale", "cfg scale", "lmCfgScale", "lm_cfg_scale", "lm cfg scale"]],
-    ["cfgscale", ["cfgscale", "cfg_scale", "cfg scale"]],
-    ["temperature", ["temperature", "lmTemperature", "lm_temperature", "lm temperature"]],
-    ["topP", ["topP", "top_p", "top p"]],
-    ["topp", ["topp", "top_p", "top p"]],
-    ["topK", ["topK", "top_k", "top k"]],
-    ["topk", ["topk", "top_k", "top k"]],
-    ["minP", ["minP", "min_p", "min p"]],
-    ["minp", ["minp", "min_p", "min p"]],
-    ["samplerName", ["samplerName", "sampler_name", "sampler", "sampler name"]],
-    ["samplername", ["samplername", "sampler_name", "sampler", "sampler name"]],
-    ["scheduler", ["scheduler"]],
-    ["denoise", ["denoise"]],
-    ["quality", ["quality"]],
-    ["maxDuration", ["maxDuration", "max_duration", "max duration"]],
-    ["voiceBoost", ["voiceBoost", "voice_boost", "voice boost"]],
-    ["repetitionPenalty", ["repetitionPenalty", "repetition_penalty", "repetition penalty"]],
-    ["referenceGuidance", ["referenceGuidance", "reference_guidance", "reference guidance"]],
-    ["referenceTimbreRepeats", ["referenceTimbreRepeats", "reference_timbre_repeats", "reference timbre repeats"]]
-  ]);
-
   const optionsByCanonical = {};
   for (const [rawKey, rawValue] of Object.entries(options)) {
     const canonical = camelize(rawKey);
@@ -516,24 +533,11 @@ async function main() {
     optionsByCanonical[canonical] = parsePrimitive(rawValue);
   }
 
-  for (const [canonical, aliases] of keyAliases.entries()) {
+  for (const canonical of OPTION_ALIASES.keys()) {
     let value = optionsByCanonical[canonical];
     if (value === undefined) value = optionsByCanonical[String(canonical).toLowerCase()];
     if (value === undefined) continue;
-    const pathKey = `${canonical}Path`;
-    let resolvedPath = mappingLookup(mapping, pathKey);
-    if (!resolvedPath) {
-      for (const alias of aliases) {
-        const aliasName = String(alias);
-        resolvedPath =
-          detectInputPath(workflow, promptObject, aliasName, STYLE_NODE_TYPES) ||
-          detectInputPath(workflow, promptObject, aliasName, SAMPLER_NODE_TYPES) ||
-          detectInputPath(workflow, promptObject, aliasName, LATENT_NODE_TYPES) ||
-          detectInputPath(workflow, promptObject, aliasName, SAVE_NODE_TYPES);
-        if (resolvedPath) break;
-      }
-    }
-    if (resolvedPath) setAtPath(promptObject, resolvedPath, value);
+    applyWorkflowOption(workflow, promptObject, mapping, canonical, value);
   }
 
   // The text encoder, the latent and the sampler each carry a length of their
@@ -655,6 +659,7 @@ async function main() {
 }
 
 export {
+  applyWorkflowOption,
   camelize,
   detectInputPath,
   detectSaveFormat,

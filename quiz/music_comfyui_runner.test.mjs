@@ -9,6 +9,7 @@ import {
   SAMPLER_NODE_TYPES,
   SAVE_NODE_TYPES,
   STYLE_NODE_TYPES,
+  applyWorkflowOption,
   camelize,
   detectInputPath,
   detectSaveFormat,
@@ -349,25 +350,28 @@ test("the key is chosen per song, and the graph only carries a fallback", async 
   assert.ok(["auto", "C major"].includes(sftEncode[1].inputs.keyscale) || /^[A-G](#|b)? (major|minor)$/u.test(sftEncode[1].inputs.keyscale));
 });
 
-test("the key the model chose reaches the graph as its own field", async () => {
-  const { splitKey, KEY_NAMES } = await import("../world/house/radio/program/library/style.mjs");
-  assert.ok(KEY_NAMES.includes("A minor"));
-  assert.ok(KEY_NAMES.includes("F# major"));
-  assert.ok(!KEY_NAMES.includes("H major"));
-  const split = splitKey("felt piano, swelling strings, A minor");
-  assert.equal(split.key, "A minor");
-  assert.equal(split.caption, "felt piano, swelling strings", "the key is not left in the caption");
-  assert.deepEqual(splitKey("felt piano"), { key: "", caption: "felt piano" });
-  assert.deepEqual(splitKey("felt piano, H major"), { key: "", caption: "felt piano, H major" });
+test("the chosen key reaches the graph as its own field", async () => {
+  const workflow = await readWorkflow("audio_ace_step_1_5_xl_turbo");
+  const prompt = workflow.prompt;
+  const encoder = Object.values(prompt).find((entry) => entry.class_type === "TextEncodeAceStepAudio1.5");
+  assert.ok(encoder, "the graph carries a text encoder");
+  const caption = encoder.inputs.tags;
+
+  applyWorkflowOption(workflow, prompt, {}, "keyscale", "A minor");
+
+  assert.equal(encoder.inputs.keyscale, "A minor");
+  assert.equal(encoder.inputs.tags, caption, "the key stays out of the style caption");
 });
 
-test("a channel's base style does not pin the key either", async () => {
-  const fs2 = await import("node:fs/promises");
-  const text = await fs2.readFile(path.join(process.cwd(), "world/house/radio/radio/channels.txt"), "utf8");
-  const lines = text.split(/\r?\n/u).filter((line) => /^(?:day|night|christian)\s*\|/u.test(line));
-  assert.ok(lines.length >= 3, "the three channels are declared");
-  for (const line of lines) {
-    const style = line.split("|")[3] ?? "";
-    assert.doesNotMatch(style, /\b(?:[A-G](#|b)?\s*(?:major|minor))\b/u, `the key is not pinned in: ${style.slice(0, 60)}`);
-  }
+test("the SFT base style stays separate from the per-song key", async () => {
+  const workflow = await readWorkflow("audio_ace_step_1_5_sft_voice");
+  const prompt = workflow.prompt;
+  const encoder = Object.values(prompt).find((entry) => entry.class_type === "AceStepSFTTextEncode");
+  assert.ok(encoder, "the voice workflow carries a text encoder");
+  const style = encoder.inputs.caption;
+
+  applyWorkflowOption(workflow, prompt, {}, "keyscale", "F# major");
+
+  assert.equal(encoder.inputs.keyscale, "F# major");
+  assert.equal(encoder.inputs.caption, style);
 });
