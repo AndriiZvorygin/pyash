@@ -190,6 +190,10 @@ exists su name radio host ob text "::" be default ya
 exists su name radio port ob num 8090 be default ya
 exists su name radio catalogue ob text "radio/audio" be default ya
 exists su name radio station name ob text "Zvorygin Radio" be default ya
+# The address the station is reached at, for the canonical link of a song page.
+# A page without one is still readable; a page with one tells a search engine
+# which address is the real one.
+exists su name radio station url ob text "https://radio.zvorygin.ca" be default ya
 exists su name radio station command ob text "node world/house/radio/command/yiniana_radio.mjs" be default ya
 exists su name radio rotation ob text "world/house/radio/radio/rotation.txt" be default ya
 exists su name radio channels ob text "world/house/radio/radio/channels.txt" be default ya
