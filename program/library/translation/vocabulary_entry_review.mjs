@@ -166,7 +166,15 @@ function emptyReviewSource() {
   ].join("\n");
 }
 
-function parseReviewCatalog(source) {
+/**
+ * Parse and validate a review catalog.
+ *
+ * Exported so a quiz can check the catalog that ships in the tree. The shipped
+ * file and the writer share these rules, and 12 rows once carried a review
+ * status in the `modelStatus` slot — a catalog its own tool refused to open, but
+ * which the build happily consumed because nothing validated the file itself.
+ */
+export function parseReviewCatalog(source) {
   const sentences = buildProgram(source).sentences;
   const header = sentences.find((sentence) => sentence?.mood === "def"
     && sentence?.be === "map"
