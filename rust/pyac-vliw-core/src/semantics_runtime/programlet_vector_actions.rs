@@ -7,8 +7,13 @@ const SUBTRACT_VERB: u32 = 0xabd2;
 const EXPONENTIAL_VERB: u32 = 0x8c29;
 const DIVIDE_VERB: u32 = 0x8893;
 const SUM_VERB: u32 = 0xbc8a;
-const MAXIMUM_FIRST: u32 = 0xa9b2;
-const MAXIMUM_SECOND: u32 = 0xa831;
+/// `gjat` = magnitude and `bwit` = boundary: the phrase `gjat bwit` is
+/// "maximum". The atom names say what the words mean; the local aliases say
+/// what this reader does with them.
+const MAGNITUDE: u32 = 0xa9b2;
+const BOUNDARY: u32 = 0xa831;
+const MAXIMUM_FIRST: u32 = MAGNITUDE;
+const MAXIMUM_SECOND: u32 = BOUNDARY;
 
 fn exp_f32(value: f32) -> Result<f32, u32> {
     if value.to_bits() == 0xff80_0000 || value < -104.0 {

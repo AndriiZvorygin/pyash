@@ -5,7 +5,7 @@ use super::canonical_signature::{
 use super::embedding_lookup::{LOOKUP_FIRST, LOOKUP_SECOND};
 use super::iwsp_vector_ops::{MAXIMUM_VERB_FIRST, MAXIMUM_VERB_SECOND, SUM_VERB};
 use super::numeric::quote_header;
-use super::pluk_tlas::{PLUK, TLAS};
+use super::pluk_tlas::{ASSESS, WORTH};
 use super::scalar_product::{PRODUCE_WORD, SCALAR_WORD};
 use super::vector_group::VECTOR_VERB;
 use super::*;
@@ -58,7 +58,7 @@ fn classify_verb(
     start: usize,
     group_len: usize,
 ) -> u32 {
-    if verb_is(signature, words, start, group_len, PLUK, Some(TLAS)) {
+    if verb_is(signature, words, start, group_len, ASSESS, Some(WORTH)) {
         return VERB_PLUK_TLAS;
     }
     if verb_is(
@@ -178,7 +178,7 @@ fn other_operand_type(signature: &SignatureView, primary_case: u32) -> Option<u3
     while index < signature.case_count {
         if array_at!(signature.cases, index).case == primary_case {
             let other = 1 - index;
-            return Some(array_at!(signature.cases, other).value_type);
+            return Some(array_at!(signature.cases, other).noun_class);
         }
         index += 1;
     }
@@ -219,7 +219,7 @@ fn arithmetic_route(signature: &SignatureView) -> Result<u32, u32> {
     }
     let mut index = 0;
     while index < signature.case_count {
-        if array_at!(signature.cases, index).value_type == TYPE_VECTOR_UINT16 {
+        if array_at!(signature.cases, index).noun_class == TYPE_VECTOR_UINT16 {
             return Ok(ROUTE_VECTOR_ARITHMETIC);
         }
         index += 1;
@@ -287,14 +287,16 @@ pub(super) fn select_signature_route(
         }
         VERB_EMBEDDING_LOOKUP
             if signature.mood == DEONTIC
-                && has_cases(
-                    &signature,
-                    &[
-                        (SOURCE, TYPE_NAME),
-                        (DESTINATION, TYPE_NAME),
-                        (LOCATIVE, TYPE_UINT16),
-                    ],
-                ) =>
+                && ((signature.case_count == 3
+                    && matches!(
+                        case_type(&signature, LOCATIVE),
+                        Some(TYPE_UINT16) | Some(TYPE_NAME)
+                    ))
+                    || (signature.case_count == 4
+                        && case_type(&signature, LOCATIVE) == Some(TYPE_NAME)
+                        && case_type(&signature, MULTIPLICATIVE) == Some(TYPE_UINT16)))
+                && case_type(&signature, SOURCE) == Some(TYPE_NAME)
+                && case_type(&signature, DESTINATION) == Some(TYPE_NAME) =>
         {
             Ok(ROUTE_EMBEDDING_LOOKUP)
         }
@@ -363,7 +365,7 @@ pub(super) fn select_signature_route(
 fn all_case_types(signature: &SignatureView, expected: u32) -> bool {
     let mut index = 0;
     while index < signature.case_count {
-        if array_at!(signature.cases, index).value_type != expected {
+        if array_at!(signature.cases, index).noun_class != expected {
             return false;
         }
         index += 1;

@@ -579,7 +579,8 @@ Rust now reads the existing generated catalog subset with
 required metadata rows, optional pack locator, and JSON-shaped codelet rows;
 it does not define a second catalog schema. The shared fixture is
 `rust/pyac/tests/fixture_catalog.pya`, and the JavaScript renderer remains the
-authority for producing parser-backed `.pya` text and semantic replay.
+authority for producing parser-backed `.pya` text; execution semantics are
+defined by the shared Rust runtime.
 
 The Rust boundary also decodes and executes the proven numeric arithmetic
 codelets through `decode_numeric_arithmetic_codelet`. Its marker layout,
@@ -587,7 +588,8 @@ zero-tail check, operator words, saturation/floor/division rules, and explicit
 divide-by-zero error match the JavaScript facade. The shared one-plus fixture
 continues to cover the public `decode_numeric_plus_codelet` adapter. Rust
 semantic coverage remains deliberately limited to proven adapters; the
-JavaScript facade remains the broader reference executor.
+JavaScript facade is a lowering and compatibility producer, not the semantic
+authority.
 
 The recovered legacy C arithmetic boundary is also preserved: plus saturates
 as a `uint16_t`, while subtract, multiply, divide, and xor produce `uint64_t`
@@ -615,13 +617,15 @@ without the build noticing.
 
 ## 7. Backend status
 
-The current executable reference backend is the JavaScript semantic facade.
-The archived pre-October `lwonprom` source contains an OpenCL VM design and
-hardware helpers, but the current repository has no PyAC OpenCL compiler,
-kernel, or device execution contract. `program/runtime/gpu` owns provider and
-queue lifecycle for model work; it does not execute PyAC codelets. Adding an
-OpenCL backend therefore waits for a kernel ABI, codelet result ABI, device
-admission, and conformance fixtures.
+The executable semantic authority is the shared Rust runtime
+(`rust/pyac-vliw-core`), used by the CPU pack executor and the GPU kernels. The
+JavaScript facade remains a lowering and compatibility producer. The archived
+pre-October `lwonprom` source contains an OpenCL VM design and hardware helpers,
+but the current repository has no PyAC OpenCL compiler, kernel, or device
+execution contract. `program/runtime/gpu` owns provider and queue lifecycle for
+model work; it does not execute PyAC codelets. Adding an OpenCL backend
+therefore waits for a kernel ABI, codelet result ABI, device admission, and
+conformance fixtures.
 
 For supported semantic codelets, `renderPyashCodelet(words)` performs the
 reverse projection from fixed-width PyAC VLIW to canonical Pyash text by

@@ -44,8 +44,8 @@ fn resolves_exact_numeric_and_evaluation_signatures() {
             NAME_TYPE,
             0x4930,
             INSTRUMENTAL,
-            PLUK,
-            TLAS,
+            ASSESS,
+            WORTH,
             DEONTIC,
         ],
         &[2, 7, 10, 13],
@@ -54,6 +54,26 @@ fn resolves_exact_numeric_and_evaluation_signatures() {
         select_signature_route(&evaluation, 0, 1),
         Ok(ROUTE_PLUK_TLAS)
     );
+}
+
+#[test]
+fn scalar_product_route_accepts_a_name_matching_the_vector_type_word() {
+    let dot = codelet(
+        &[
+            NAME_TYPE,
+            VECTOR_TYPE,
+            ACCUSATIVE,
+            NAME_TYPE,
+            0xab44,
+            INSTRUMENTAL,
+            SCALAR_WORD,
+            PRODUCE_WORD,
+            DEONTIC,
+        ],
+        &[2, 5, 8],
+    );
+
+    assert_eq!(select_signature_route(&dot, 0, 1), Ok(ROUTE_SCALAR_PRODUCT));
 }
 
 #[test]

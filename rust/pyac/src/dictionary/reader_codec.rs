@@ -4,25 +4,14 @@ use super::volume_records::{
     CONTENTS_SUBJECT, INDEX_SUBJECT, PROFILE_SUBJECT, PROFILE_VERSION, PROFILE_VERSION_V2,
     PROFILE_VERSION_V3, TOC_ROLES, TOC_ROLES_V4,
 };
+use super::words::{
+    ACCUSATIVE, COMITATIVE, DESTINATION, ESSIVE, INSTRUMENTAL, LOCATIVE, NAME_MARKER, NOMINATIVE,
+    NUMBER_QUOTE, REALIS, SOURCE, TEXT_QUOTE, TEXT_VERB, UINT32_QUOTE,
+};
 use crate::literal::decode_quote_header;
 use crate::{CODELET_BYTES, FORMAT_VERSION, HEADER_BYTES, MAGIC, PyacError, WORDS_PER_CODELET};
 use std::io::{Read, Seek, SeekFrom};
 use std::ops::Range;
-
-const NAME_TYPE: u16 = 0x225e;
-const SU: u16 = 0x24de;
-const OB: u16 = 0x245e;
-const AS: u16 = 0x414f;
-const FROM: u16 = 0x313e;
-const TO: u16 = 0x243e;
-const BY: u16 = 0x287e;
-const WITH: u16 = 0x490f;
-const AT: u16 = 0x615f;
-const UINT16: u16 = 0x881d;
-const UINT32: u16 = 0x901d;
-const TEXT: u16 = 0x0e1d;
-const TEXT_VERB: u16 = 0x8a28;
-const REALIS: u16 = 0x217e;
 
 #[derive(Default)]
 struct QuoteScan {
@@ -106,11 +95,22 @@ pub(super) fn read_codelet<R: Read + Seek>(
     Ok(words)
 }
 
+/// A decoded sentence: its words, and for each word whether a grammatical case
+/// boundary follows it. The boundary flags come from the codelet header bitmap,
+/// so a decoder never has to look for a delimiter that could also appear inside
+/// a value — which is what broke keys such as `na`, whose word is itself the
+/// nominative marker `0x24DE`.
+pub(crate) struct Sentence {
+    pub words: Vec<u16>,
+    pub boundaries: Vec<bool>,
+    pub consumed: u32,
+}
+
 pub(super) fn read_sentence<R: Read + Seek>(
     source: &mut R,
     start: u32,
     limit: u32,
-) -> Result<(Vec<u16>, u32), DictionaryReadError> {
+) -> Result<Sentence, DictionaryReadError> {
     read_sentence_with_raw_width(source, start, limit, WORDS_PER_CODELET, false)
 }
 
@@ -118,8 +118,18 @@ pub(super) fn read_sentence_v4<R: Read + Seek>(
     source: &mut R,
     start: u32,
     limit: u32,
-) -> Result<(Vec<u16>, u32), DictionaryReadError> {
+) -> Result<Sentence, DictionaryReadError> {
     read_sentence_with_raw_width(source, start, limit, WORDS_PER_CODELET - 1, true)
+}
+
+/// Whether slot `slot` of `codelet` holds the last word of a case.
+///
+/// The writer marks boundaries positively in a sentence's final codelet and
+/// negatively in earlier ones (`pack_words` sets a bit when
+/// `boundary == complete`), so the polarity depends on the completion bit.
+fn slot_is_boundary(codelet: &[u16; WORDS_PER_CODELET], slot: usize, complete: bool) -> bool {
+    let set = (codelet[0] >> slot) & 1 == 1;
+    if complete { set } else { !set }
 }
 
 fn read_sentence_with_raw_width<R: Read + Seek>(
@@ -128,8 +138,9 @@ fn read_sentence_with_raw_width<R: Read + Seek>(
     limit: u32,
     raw_width: usize,
     indexed_raw: bool,
-) -> Result<(Vec<u16>, u32), DictionaryReadError> {
+) -> Result<Sentence, DictionaryReadError> {
     let mut words = Vec::new();
+    let mut boundaries = Vec::new();
     let mut scan = QuoteScan::default();
     let mut ordinal = start;
     loop {
@@ -140,7 +151,11 @@ fn read_sentence_with_raw_width<R: Read + Seek>(
         ordinal += 1;
         let raw = scan_raw_text(&codelet, &mut scan);
         let used_slots = raw.map_or(WORDS_PER_CODELET - 1, |(_, slot)| slot);
-        words.extend_from_slice(&codelet[1..=used_slots]);
+        let complete = codelet[0] & 1 != 0;
+        for slot in 1..=used_slots {
+            words.push(codelet[slot]);
+            boundaries.push(slot_is_boundary(&codelet, slot, complete));
+        }
         if let Some((length, _)) = raw {
             let mut remaining = length;
             for _ in 0..length.div_ceil(raw_width) {
@@ -158,14 +173,23 @@ fn read_sentence_with_raw_width<R: Read + Seek>(
                 }
                 let payload_start = usize::from(indexed_raw);
                 let used = remaining.min(raw_width);
-                words.extend_from_slice(&raw_codelet[payload_start..payload_start + used]);
+                for slot in payload_start..payload_start + used {
+                    words.push(raw_codelet[slot]);
+                    // Continuation payload is literal text, never a case boundary.
+                    boundaries.push(false);
+                }
                 remaining -= used;
             }
-        } else if codelet[0] & 1 != 0 {
+        } else if complete {
             while words.last() == Some(&0) {
                 words.pop();
+                boundaries.pop();
             }
-            return Ok((words, ordinal - start));
+            return Ok(Sentence {
+                words,
+                boundaries,
+                consumed: ordinal - start,
+            });
         }
     }
 }
@@ -201,15 +225,18 @@ fn scan_raw_text(
 
 pub(super) fn subject_end(words: &[u16], expected: &[u16]) -> Result<usize, DictionaryReadError> {
     if words.len() < expected.len() + 2
-        || words[0] != NAME_TYPE
+        || words[0] != NAME_MARKER
         || words[1..1 + expected.len()] != *expected
     {
         return Err(DictionaryReadError::InvalidRecord(
             "sentence has an unexpected Pyash subject",
         ));
     }
+    // `expected` is a fixed constant that never contains a structural marker, so
+    // the value check is unambiguous here. Variable dict keys go through
+    // `take_record_subject`, which uses the boundary flags instead.
     let case = 1 + expected.len();
-    if words[case] != SU {
+    if words[case] != NOMINATIVE {
         return Err(DictionaryReadError::InvalidRecord(
             "subject is missing its nominative case boundary",
         ));
@@ -218,7 +245,7 @@ pub(super) fn subject_end(words: &[u16], expected: &[u16]) -> Result<usize, Dict
 }
 
 pub(super) fn take_text(words: &[u16], cursor: &mut usize) -> Result<String, DictionaryReadError> {
-    if words.get(*cursor) != Some(&TEXT) {
+    if words.get(*cursor) != Some(&TEXT_QUOTE) {
         return Err(DictionaryReadError::InvalidRecord(
             "expected a typed text quote",
         ));
@@ -283,7 +310,7 @@ pub(super) fn take_vector(
 }
 
 pub(super) fn take_uint32(words: &[u16], cursor: &mut usize) -> Result<u32, DictionaryReadError> {
-    expect_word(words, cursor, UINT32)?;
+    expect_word(words, cursor, UINT32_QUOTE)?;
     let low = *words
         .get(*cursor)
         .ok_or(DictionaryReadError::InvalidRecord("truncated uint32 quote"))?;
@@ -358,29 +385,41 @@ pub(super) enum RecordSubject {
 }
 
 pub(super) fn take_record_subject(
-    words: &[u16],
+    sentence: &Sentence,
     cursor: &mut usize,
 ) -> Result<RecordSubject, DictionaryReadError> {
+    let words = &sentence.words;
     match words.get(*cursor).copied() {
-        Some(NAME_TYPE) => {
+        Some(NAME_MARKER) => {
+            // The key runs from after NAME_MARKER to the first word whose boundary
+            // flag is set. Scanning for the NOMINATIVE *value* is wrong: a key word may
+            // itself be NOMINATIVE, which is exactly the `na` case (0x24DE).
             *cursor += 1;
             let start = *cursor;
-            let end = words
-                .get(start..)
-                .and_then(|tail| tail.iter().position(|word| *word == SU))
-                .map(|index| start + index)
+            let end = sentence
+                .boundaries
+                .iter()
+                .enumerate()
+                .skip(start)
+                .find(|(_, boundary)| **boundary)
+                .map(|(index, _)| index)
                 .ok_or(DictionaryReadError::InvalidRecord(
-                    "name subject has no nominative boundary",
+                    "name subject has no case boundary",
                 ))?;
             if end == start {
                 return Err(DictionaryReadError::InvalidRecord("empty name subject"));
             }
+            if words.get(end) != Some(&NOMINATIVE) {
+                return Err(DictionaryReadError::InvalidRecord(
+                    "name subject does not end at a nominative boundary",
+                ));
+            }
             *cursor = end + 1;
             Ok(RecordSubject::Name(words[start..end].to_vec()))
         }
-        Some(TEXT) => {
+        Some(TEXT_QUOTE) => {
             let value = take_text(words, cursor)?;
-            expect_word(words, cursor, SU)?;
+            expect_word(words, cursor, NOMINATIVE)?;
             Ok(RecordSubject::Text(value))
         }
         Some(header)
@@ -388,7 +427,7 @@ pub(super) fn take_record_subject(
                 .is_some_and(|item| item.sort == 4 && item.scalar_bytes == 2) =>
         {
             let value = take_vector(words, cursor)?;
-            expect_word(words, cursor, SU)?;
+            expect_word(words, cursor, NOMINATIVE)?;
             Ok(RecordSubject::Uint16Vector(value))
         }
         _ => Err(DictionaryReadError::InvalidRecord(
@@ -427,13 +466,13 @@ pub(super) fn expect_end(words: &[u16], cursor: &mut usize) -> Result<(), Dictio
 pub(super) fn parse_marker(words: &[u16]) -> Result<String, DictionaryReadError> {
     let mut cursor = subject_end(words, &PROFILE_SUBJECT)?;
     let kind = take_text(words, &mut cursor)?;
-    expect_word(words, &mut cursor, OB)?;
+    expect_word(words, &mut cursor, ACCUSATIVE)?;
     expect_end(words, &mut cursor)?;
     Ok(kind)
 }
 
 fn take_number(words: &[u16], cursor: &mut usize) -> Result<u16, DictionaryReadError> {
-    expect_word(words, cursor, UINT16)?;
+    expect_word(words, cursor, NUMBER_QUOTE)?;
     let value = *words
         .get(*cursor)
         .ok_or(DictionaryReadError::InvalidRecord("truncated uint16 quote"))?;
@@ -446,29 +485,29 @@ pub(super) fn parse_metadata(
 ) -> Result<(DictionaryMetadata, usize, String, Option<u32>), DictionaryReadError> {
     let mut cursor = subject_end(words, &PROFILE_SUBJECT)?;
     let title = take_text(words, &mut cursor)?;
-    expect_word(words, &mut cursor, OB)?;
+    expect_word(words, &mut cursor, ACCUSATIVE)?;
     let revision_words = take_vector(words, &mut cursor)?;
     if revision_words.len() != 2 {
         return Err(DictionaryReadError::InvalidRecord(
             "revision must be a uint32 pair",
         ));
     }
-    expect_word(words, &mut cursor, AS)?;
+    expect_word(words, &mut cursor, ESSIVE)?;
     let language_text = take_text(words, &mut cursor)?;
-    expect_word(words, &mut cursor, FROM)?;
+    expect_word(words, &mut cursor, SOURCE)?;
     let languages = language_text
         .split(',')
         .map(str::to_owned)
         .collect::<Vec<_>>();
     let normalization_policy = take_text(words, &mut cursor)?;
-    expect_word(words, &mut cursor, TO)?;
+    expect_word(words, &mut cursor, DESTINATION)?;
     let toc_count = take_number(words, &mut cursor)? as usize;
-    expect_word(words, &mut cursor, BY)?;
+    expect_word(words, &mut cursor, INSTRUMENTAL)?;
     let profile_version = take_text(words, &mut cursor)?;
-    expect_word(words, &mut cursor, WITH)?;
+    expect_word(words, &mut cursor, COMITATIVE)?;
     let entry_count = if profile_version == PROFILE_VERSION {
         let value = take_uint32(words, &mut cursor)?;
-        expect_word(words, &mut cursor, AT)?;
+        expect_word(words, &mut cursor, LOCATIVE)?;
         Some(value)
     } else {
         None
@@ -503,9 +542,9 @@ pub(super) fn parse_toc_v4(
 ) -> Result<DictionarySection, DictionaryReadError> {
     let mut cursor = subject_end(words, &CONTENTS_SUBJECT)?;
     let ordinal = take_number(words, &mut cursor)?;
-    expect_word(words, &mut cursor, OB)?;
+    expect_word(words, &mut cursor, ACCUSATIVE)?;
     let range = take_vector(words, &mut cursor)?;
-    expect_word(words, &mut cursor, FROM)?;
+    expect_word(words, &mut cursor, SOURCE)?;
     expect_end(words, &mut cursor)?;
     if ordinal != expected_ordinal || range.len() != 4 {
         return Err(DictionaryReadError::InvalidRecord(
@@ -522,9 +561,9 @@ pub(super) fn parse_toc_v4(
 pub(super) fn parse_toc(words: &[u16]) -> Result<DictionarySection, DictionaryReadError> {
     let mut cursor = subject_end(words, &CONTENTS_SUBJECT)?;
     let role = take_text(words, &mut cursor)?;
-    expect_word(words, &mut cursor, OB)?;
+    expect_word(words, &mut cursor, ACCUSATIVE)?;
     let range = take_vector(words, &mut cursor)?;
-    expect_word(words, &mut cursor, FROM)?;
+    expect_word(words, &mut cursor, SOURCE)?;
     expect_end(words, &mut cursor)?;
     if range.len() != 4 {
         return Err(DictionaryReadError::InvalidRecord(
@@ -547,13 +586,13 @@ pub(super) fn parse_location(
             "expected an entry-location posting",
         ));
     }
-    expect_word(words, &mut cursor, OB)?;
+    expect_word(words, &mut cursor, ACCUSATIVE)?;
     let key = take_vector(words, &mut cursor)?;
-    expect_word(words, &mut cursor, FROM)?;
+    expect_word(words, &mut cursor, SOURCE)?;
     let range = take_vector(words, &mut cursor)?;
-    expect_word(words, &mut cursor, TO)?;
+    expect_word(words, &mut cursor, DESTINATION)?;
     let definition_words = take_vector(words, &mut cursor)?;
-    expect_word(words, &mut cursor, WITH)?;
+    expect_word(words, &mut cursor, COMITATIVE)?;
     expect_end(words, &mut cursor)?;
     if key.is_empty() || range.len() != 4 || definition_words.len() != 4 {
         return Err(DictionaryReadError::InvalidRecord(

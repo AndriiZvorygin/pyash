@@ -9,11 +9,23 @@ use super::*;
 use super::iwsp_vector_ops::{MAXIMUM_VERB_FIRST, MAXIMUM_VERB_SECOND};
 
 fn skip_named_number_target(cursor: &mut Cursor, words: &[impl VliwWord]) -> Result<(), u32> {
-    if cursor.read(words, false) != Some(NAME_TYPE)
-        || cursor.read(words, false) != Some(NUMBER_TYPE)
-        || cursor.read(words, false) != Some(NAME_TYPE)
-    {
+    // Accept both ordinary `gi <class…> gi <name>` and class-first typed names.
+    if cursor.peek(words, false) == Some(NAME_TYPE) {
+        cursor.read(words, false);
+    }
+    let mut typed = false;
+    while matches!(
+        cursor.peek(words, false),
+        Some(word) if is_width_word(word)
+    ) {
+        cursor.read(words, false);
+        typed = true;
+    }
+    if !typed {
         return Err(ERROR_MALFORMED);
+    }
+    if cursor.peek(words, false) == Some(NAME_TYPE) {
+        cursor.read(words, false);
     }
     let mut name_words = 0;
     while cursor.peek(words, false).is_some() {

@@ -82,3 +82,20 @@ test("accepted vocabulary review fills missing WordNet metadata on an existing b
   assert.equal(bridge.gloss, gloss);
   assert.deepEqual(bridge.lemmas, ["identifier"]);
 });
+
+test("the review catalog that ships in the tree passes its own validator", async () => {
+  // The build tolerates a malformed catalog, so a file the writer cannot open
+  // still reaches the volume. 12 rows once carried a review status in the
+  // modelStatus slot for that reason: no test parsed the shipped file.
+  const { parseReviewCatalog, VOCABULARY_ENTRY_REVIEW_URL } =
+    await import("../program/library/translation/vocabulary_entry_review.mjs");
+  const source = await fs.readFile(VOCABULARY_ENTRY_REVIEW_URL, "utf8");
+  const rows = parseReviewCatalog(source);
+  assert.ok(rows.length > 0, "the shipped catalog has rows");
+  for (const row of rows) {
+    assert.ok(
+      row.modelStatus === undefined || !["accepted-curated", "review-needed"].includes(row.modelStatus),
+      `${row.reviewId} puts a review status in the modelStatus slot`
+    );
+  }
+});

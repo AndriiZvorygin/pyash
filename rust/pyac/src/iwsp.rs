@@ -20,11 +20,14 @@ const REALIS: u32 = 0x217e;
 const DEONTIC: u32 = 0x295e;
 const NAME_TYPE: u32 = 0x225e;
 const NUMBER_TYPE: u32 = 0x327e;
-const PLUK: u32 = 0x2a64;
-const TLAS: u32 = 0x896a;
+const ASSESS: u32 = 0x2a64;
+const WORTH: u32 = 0x896a;
 const PREDICTION: u32 = 0x68b1;
 const ANSWER: u32 = 0x4930;
-const CORRECT_COUNT: u32 = 0xaa90;
+/// `hgut` = count. The slot holds how many predictions were right; the atom
+/// itself just means "count".
+const COUNT: u32 = 0xaa90;
+const CORRECT_COUNT: u32 = COUNT;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IwspScore {
@@ -266,11 +269,13 @@ fn build_judge_pack(predictions: &[u32], reference: &[u32]) -> Option<PyacPack> 
     let mut codelets = Vec::new();
     append_vector(&mut codelets, PREDICTION, predictions)?;
     append_vector(&mut codelets, ANSWER, reference)?;
+    // `gi <prediction> ka | do gi <count> ma | gi <answer> yu | pluk tlas tu`.
+    // The destination carries one class tag (`do`) and one `gi`, because it is a
+    // typed number held under a name.
     let sentence = [
         NAME_TYPE,
         PREDICTION,
         ACCUSATIVE,
-        NAME_TYPE,
         NUMBER_TYPE,
         NAME_TYPE,
         CORRECT_COUNT,
@@ -278,10 +283,10 @@ fn build_judge_pack(predictions: &[u32], reference: &[u32]) -> Option<PyacPack> 
         NAME_TYPE,
         ANSWER,
         INSTRUMENTAL,
-        PLUK,
-        TLAS,
+        ASSESS,
+        WORTH,
         DEONTIC,
     ];
-    append_group(&mut codelets, &sentence, &[2, 7, 10, 13])?;
+    append_group(&mut codelets, &sentence, &[2, 6, 9, 12])?;
     decode_pack(&encode_pack(&codelets).ok()?).ok()
 }

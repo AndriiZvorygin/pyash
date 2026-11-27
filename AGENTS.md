@@ -9,11 +9,11 @@ This guide keeps contributions consistent for the Pyash codebase.
 - Output formatting sits in `program/beautiful.mjs`; Ollama network I/O is in `program/motor/ollama.mjs`.
 - Quizzes are under `quiz/*.test.mjs`; keep helpers near the code they cover.
 - Docs: `documentation/specifications/00-index.md` is the normative spec index (start there); `documentation/specifications/01-sentence-and-grammar.md` and `02-core-execution.md` define the sentence model and dispatch contract. `documentation/pyac.txt` is the broader spec, `documentation/pyash.md` the design goals, `documentation/compositional-cases.md` the case grid. `program/configure/workplace.json` is example data/config; keep secrets out of the repo.
-- Vocabulary work (atoms, compounds, WordNet links, Chinese links, and their sweeps) belongs on the `dev-vocab` branch. Verify the worktree and branch before local or SSH work; do not make vocabulary changes on `dev` or `dev-vliw-backend`. Start with [the dev-vocab operations guide](documentation/runbooks/dev-vocab-operations.md), which is written as the end-to-end agent procedure.
+- Vocabulary work (atoms, compounds, WordNet links, Chinese links, and their sweeps) may be done on the current working branch. The bulk import is finished, so current vocabulary work is fine-tuning rather than authoring the accepted catalog wholesale; branch isolation is no longer required. See [the dev-vocab operations guide](documentation/runbooks/dev-vocab-operations.md) for the end-to-end procedure. Repairing a defect in the deprecated `program/library/pyashWords.json` identity rows is allowed, and the repair belongs in `documentation/reference/pyashwords-deprecated.md`.
 - Ceremonies (`def...prah`) have speakable, multi-word names; bodies run in sandpits during invocation, and `this`/`ret` flow updates the caller’s evoke/targets and records sandpit traces.
 
 ## Build, Quiz, and Development Commands
-- `npm test` (or `node --test quiz`) runs the full suite; run it before pushing.
+- `npm test` (or `node --test quiz`) runs the full suite. On a `dev*` working branch, run the targeted quizzes for the paths you changed instead; the full suite is the merge gate when a branch is merged into `dev` or `master`.
 - `npm test` is pre-approved; no extra confirmation is needed to run it.
 - `node --test quiz/core.test.mjs` runs a targeted file while iterating.
 - `node program/main.mjs` starts the REPL to exercise new verbs interactively.
@@ -41,6 +41,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 
 ## Quiz Guidelines
 - Add quizzes for every new code path; mirror real REPL usage strings where possible.
+- A new verb or signature declares a parity class (`core`, `pure`, `host`, or `legacy`) in `documentation/reference/parity-gate.md`; `core` changes must pass `npm run parity:gate`.
 - Follow `node:test` with `assert/strict` (see `quiz/core.test.mjs`).
 - Name quizzes with readable sentences; reset memory between cases to avoid coupling.
 - Cover at least one happy path and one edge/guard path for each new verb or interpreter change.

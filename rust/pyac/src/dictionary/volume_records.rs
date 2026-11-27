@@ -1,9 +1,9 @@
-use super::operation::{OperationArgumentType, OperationSignature};
+use super::operation::{ArgumentSlot, OperationSignature};
 use super::volume::{DictionaryMetadata, DictionaryVolumeError};
 use super::wire::{
-    AS, AT, BY, FROM, Field, OB, Subject, TO, Value, WITH, encode_index_sentence_v4,
-    encode_sentence, encode_text_sentence,
+    Field, Subject, Value, encode_index_sentence_v4, encode_sentence, encode_text_sentence,
 };
+use super::words::{ACCUSATIVE, COMITATIVE, DESTINATION, ESSIVE, INSTRUMENTAL, LOCATIVE, SOURCE};
 use super::{DictionaryEntry, DictionaryVolumeEntry};
 use crate::WORDS_PER_CODELET;
 
@@ -79,7 +79,7 @@ fn signature_words(signature: &OperationSignature) -> Result<Vec<u16>, Dictionar
         .map_err(|_| DictionaryVolumeError::InvalidEntry("too many operation arguments"))?;
     words.push(count);
     for argument in &signature.arguments {
-        append_argument_type(&mut words, &argument.key)?;
+        append_argument_type(&mut words, &argument.case_type)?;
     }
     Ok(words)
 }
@@ -94,10 +94,10 @@ fn append_sequence(output: &mut Vec<u16>, words: &[u16]) -> Result<(), Dictionar
 
 fn append_argument_type(
     output: &mut Vec<u16>,
-    key: &OperationArgumentType,
+    key: &ArgumentSlot,
 ) -> Result<(), DictionaryVolumeError> {
     append_sequence(output, &key.grammatical_case)?;
-    append_sequence(output, &key.value_type)
+    append_sequence(output, &key.noun_class)
 }
 
 pub(super) fn profile_records_v4(
@@ -106,24 +106,24 @@ pub(super) fn profile_records_v4(
 ) -> Result<(Vec<[u16; WORDS_PER_CODELET]>, Vec<[u16; WORDS_PER_CODELET]>), DictionaryVolumeError> {
     let marker = sentence(
         PROFILE_SUBJECT.as_slice(),
-        &[text_field(OB, &metadata.kind)],
+        &[text_field(ACCUSATIVE, &metadata.kind)],
     )?;
     let revision = [metadata.revision as u16, (metadata.revision >> 16) as u16];
     let languages = metadata.languages.join(",");
     let metadata_record = sentence(
         PROFILE_SUBJECT.as_slice(),
         &[
-            text_field(OB, &metadata.title),
-            vector_field(AS, &revision),
-            text_field(FROM, &languages),
-            text_field(TO, &metadata.normalization_policy),
+            text_field(ACCUSATIVE, &metadata.title),
+            vector_field(ESSIVE, &revision),
+            text_field(SOURCE, &languages),
+            text_field(DESTINATION, &metadata.normalization_policy),
             Field {
-                grammatical_case: BY,
+                grammatical_case: INSTRUMENTAL,
                 value: Value::Uint16(TOC_ROLES_V4.len() as u16),
             },
-            text_field(WITH, PROFILE_VERSION),
+            text_field(COMITATIVE, PROFILE_VERSION),
             Field {
-                grammatical_case: AT,
+                grammatical_case: LOCATIVE,
                 value: Value::Uint32(
                     u32::try_from(entry_count)
                         .map_err(|_| DictionaryVolumeError::TooManyCodelets)?,
@@ -149,10 +149,10 @@ pub(super) fn toc_records_v4(
             CONTENTS_SUBJECT.as_slice(),
             &[
                 Field {
-                    grammatical_case: OB,
+                    grammatical_case: ACCUSATIVE,
                     value: Value::Uint16(ordinal as u16),
                 },
-                vector_field(FROM, &words),
+                vector_field(SOURCE, &words),
             ],
         )?);
     }
@@ -183,9 +183,9 @@ pub(super) fn encode_entry_v4(
         output.extend(encode_sentence(
             Subject::Name(key),
             &[
-                text_field(AS, &form.language),
-                text_field(FROM, &form.surface),
-                text_field(TO, &form.normalized),
+                text_field(ESSIVE, &form.language),
+                text_field(SOURCE, &form.surface),
+                text_field(DESTINATION, &form.normalized),
             ],
         )?);
     }
@@ -193,10 +193,10 @@ pub(super) fn encode_entry_v4(
         output.extend(encode_sentence(
             Subject::Name(key),
             &[
-                text_field(AS, &link.dataset),
-                text_field(FROM, &link.release),
-                text_field(TO, &link.identifier),
-                text_field(BY, &link.relation),
+                text_field(ESSIVE, &link.dataset),
+                text_field(SOURCE, &link.release),
+                text_field(DESTINATION, &link.identifier),
+                text_field(INSTRUMENTAL, &link.relation),
             ],
         )?);
     }
@@ -204,47 +204,47 @@ pub(super) fn encode_entry_v4(
         output.extend(encode_sentence(
             Subject::Name(key),
             &[
-                text_field(AS, &gloss.language),
-                text_field(FROM, &gloss.dataset),
-                text_field(TO, &gloss.release),
-                text_field(BY, &gloss.identifier),
-                text_field(WITH, &gloss.text),
+                text_field(ESSIVE, &gloss.language),
+                text_field(SOURCE, &gloss.dataset),
+                text_field(DESTINATION, &gloss.release),
+                text_field(INSTRUMENTAL, &gloss.identifier),
+                text_field(COMITATIVE, &gloss.text),
             ],
         )?);
     }
     for component in &entry.component_keys {
         output.extend(encode_sentence(
             Subject::Name(key),
-            &[vector_field(FROM, component)],
+            &[vector_field(SOURCE, component)],
         )?);
     }
     for task in &entry.task_keys {
         output.extend(encode_sentence(
             Subject::Name(key),
-            &[vector_field(WITH, task)],
+            &[vector_field(COMITATIVE, task)],
         )?);
     }
     for reference in &entry.references {
         output.extend(encode_sentence(
             Subject::Name(key),
-            &[vector_field(TO, reference)],
+            &[vector_field(DESTINATION, reference)],
         )?);
     }
     for signature in &entry.operation_signatures {
         let dispatch = signature_words(signature)?;
         output.extend(encode_sentence(
             Subject::Name(key),
-            &[vector_field(BY, &dispatch)],
+            &[vector_field(INSTRUMENTAL, &dispatch)],
         )?);
         for argument in &signature.arguments {
             let mut key_words = Vec::new();
-            append_argument_type(&mut key_words, &argument.key)?;
+            append_argument_type(&mut key_words, &argument.case_type)?;
             output.extend(encode_sentence(
                 Subject::Name(key),
                 &[
-                    vector_field(AS, &key_words),
-                    text_field(FROM, &argument.name),
-                    text_field(TO, &argument.description),
+                    vector_field(ESSIVE, &key_words),
+                    text_field(SOURCE, &argument.tag_label),
+                    text_field(DESTINATION, &argument.descriptive_specification),
                 ],
             )?);
         }
@@ -252,9 +252,9 @@ pub(super) fn encode_entry_v4(
             output.extend(encode_sentence(
                 Subject::Name(key),
                 &[
-                    vector_field(AS, &result.value_type),
-                    text_field(BY, &result.name),
-                    text_field(WITH, &result.description),
+                    vector_field(ESSIVE, &result.noun_class),
+                    text_field(INSTRUMENTAL, &result.tag_label),
+                    text_field(COMITATIVE, &result.descriptive_specification),
                 ],
             )?);
         }
@@ -301,7 +301,7 @@ pub(super) fn index_records_v4(
         canonical.extend(encode_index_sentence_v4(
             Subject::Name(&entry.key),
             &[Field {
-                grammatical_case: AT,
+                grammatical_case: LOCATIVE,
                 value: Value::Uint32(offset),
             }],
         )?);
@@ -349,7 +349,7 @@ pub(super) fn index_records_v4(
             .collect::<Vec<_>>();
         surfaces.extend(encode_index_sentence_v4(
             Subject::Text(&surface),
-            &[text_field(AS, language), offsets_field(&offsets)],
+            &[text_field(ESSIVE, language), offsets_field(&offsets)],
         )?);
         cursor = end;
     }
@@ -375,8 +375,8 @@ pub(super) fn index_records_v4(
         sources.extend(encode_index_sentence_v4(
             Subject::Text(identifier),
             &[
-                text_field(AS, dataset),
-                text_field(FROM, release),
+                text_field(ESSIVE, dataset),
+                text_field(SOURCE, release),
                 offsets_field(&offsets),
             ],
         )?);
@@ -407,12 +407,12 @@ pub(super) fn index_records_v4(
 fn offsets_field(offsets: &[u32]) -> Field<'_> {
     if offsets.len() == 1 {
         Field {
-            grammatical_case: AT,
+            grammatical_case: LOCATIVE,
             value: Value::Uint32(offsets[0]),
         }
     } else {
         Field {
-            grammatical_case: AT,
+            grammatical_case: LOCATIVE,
             value: Value::Uint32Vector(offsets),
         }
     }

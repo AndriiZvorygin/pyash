@@ -60,7 +60,7 @@ fn loop_register_updates_its_reserved_slot_and_checks_capacity() {
 #[test]
 fn name_span_handles_compact_and_typed_fields_and_rejects_marker_collisions() {
     let mut words = std::vec::Vec::new();
-    append_sentence(&mut words, &[NAME_TYPE, 0x1234], &[2]);
+    append_sentence(&mut words, &[NAME_TYPE, 0xaaa2], &[2]);
     let view = SentenceView::new(&words, 0, 2);
     let mut name = NameSpan::EMPTY;
     assert_eq!(
@@ -79,27 +79,24 @@ fn name_span_handles_compact_and_typed_fields_and_rejects_marker_collisions() {
     assert_eq!(name.start, 1);
     assert_eq!(name.length, 1);
 
+    // A width-tagged value: `do <literal>`, with no name tag anywhere.
     let mut typed_words = std::vec::Vec::new();
-    append_sentence(
-        &mut typed_words,
-        &[NAME_TYPE, NUMBER_TYPE, NAME_TYPE, 0x5678],
-        &[4],
-    );
-    let typed_view = SentenceView::new(&typed_words, 0, 4);
+    append_sentence(&mut typed_words, &[NUMBER_TYPE, 0xaaa2], &[2]);
+    let typed_view = SentenceView::new(&typed_words, 0, 2);
     assert_eq!(
         name_span(
             &typed_view,
             SentenceField {
                 role: NOMINATIVE,
                 start: 0,
-                length: 4,
+                length: 2,
             },
             true,
             &mut name,
         ),
         0
     );
-    assert_eq!(name.start, 3);
+    assert_eq!(name.start, 1);
     assert_eq!(name.length, 1);
 
     let mut collision_words = std::vec::Vec::new();
@@ -126,10 +123,11 @@ fn name_span_handles_compact_and_typed_fields_and_rejects_marker_collisions() {
 
 #[test]
 fn typed_name_span_decodes_scalar_vector_and_untyped_field_layouts() {
+    // Ordinary Pyash carries `gi`, the width word, `gi`, then the name.
     let mut scalar_words = std::vec::Vec::new();
     append_sentence(
         &mut scalar_words,
-        &[NAME_TYPE, NUMBER_TYPE, NAME_TYPE, 0x1234],
+        &[NAME_TYPE, NUMBER_TYPE, NAME_TYPE, 0xaaa2],
         &[4],
     );
     let scalar_view = SentenceView::new(&scalar_words, 0, 4);
@@ -151,20 +149,41 @@ fn typed_name_span_decodes_scalar_vector_and_untyped_field_layouts() {
     assert_eq!(kind, VALUE_NUMBER);
     assert_eq!((name.start, name.length), (3, 1));
 
+    // Programlet internals also allow the class-first width form.
+    let mut internal_words = std::vec::Vec::new();
+    append_sentence(&mut internal_words, &[NUMBER_TYPE, 0xaaa2], &[2]);
+    let internal_view = SentenceView::new(&internal_words, 0, 2);
+    assert_eq!(
+        typed_name_span(
+            &internal_view,
+            SentenceField {
+                role: NOMINATIVE,
+                start: 0,
+                length: 2
+            },
+            &mut name,
+            &mut kind,
+        ),
+        0
+    );
+    assert_eq!(kind, VALUE_NUMBER);
+    assert_eq!((name.start, name.length), (1, 1));
+
+    // A vector name: class words lead, then `gi`, then the root.
     let mut vector_words = std::vec::Vec::new();
     append_sentence(
         &mut vector_words,
-        &[NAME_TYPE, VECTOR_TYPE, FLOAT_TYPE, NAME_TYPE, 0x5678],
-        &[5],
+        &[VECTOR_TYPE, FLOAT_TYPE, NAME_TYPE, 0xaaa2],
+        &[4],
     );
-    let vector_view = SentenceView::new(&vector_words, 0, 5);
+    let vector_view = SentenceView::new(&vector_words, 0, 4);
     assert_eq!(
         typed_name_span(
             &vector_view,
             SentenceField {
                 role: NOMINATIVE,
                 start: 0,
-                length: 5
+                length: 4
             },
             &mut name,
             &mut kind,
@@ -172,7 +191,7 @@ fn typed_name_span_decodes_scalar_vector_and_untyped_field_layouts() {
         0
     );
     assert_eq!(kind, VALUE_VECTOR_FLOAT);
-    assert_eq!((name.start, name.length), (4, 1));
+    assert_eq!((name.start, name.length), (3, 1));
 
     let mut plain_words = std::vec::Vec::new();
     append_sentence(&mut plain_words, &[NAME_TYPE, 0x9abc], &[2]);
@@ -192,6 +211,38 @@ fn typed_name_span_decodes_scalar_vector_and_untyped_field_layouts() {
     );
     assert_eq!(kind, 0);
     assert_eq!((name.start, name.length), (1, 1));
+}
+
+#[test]
+fn field_tag_validation_accepts_typed_names_in_ordinary_pyash_order() {
+    let mut typed_words = std::vec::Vec::new();
+    append_sentence(
+        &mut typed_words,
+        &[
+            NAME_TYPE,
+            NUMBER_TYPE,
+            NAME_TYPE,
+            0xaaa2,
+            ACCUSATIVE,
+            NUMBER_QUOTE,
+            1,
+            DEONTIC,
+        ],
+        &[4, 7],
+    );
+    let typed_view = SentenceView::new(&typed_words, 0, 8);
+    let mut parsed = ParsedSentence::empty();
+    assert_eq!(parse_sentence(&typed_view, &mut parsed), 0);
+
+    // The vector HNUC is also a valid root name when it follows a single `gi`.
+    let mut untyped_words = std::vec::Vec::new();
+    append_sentence(
+        &mut untyped_words,
+        &[NAME_TYPE, VECTOR_TYPE, ACCUSATIVE, NUMBER_QUOTE, 1, DEONTIC],
+        &[2, 5],
+    );
+    let untyped_view = SentenceView::new(&untyped_words, 0, 6);
+    assert_eq!(parse_sentence(&untyped_view, &mut parsed), 0);
 }
 
 #[test]

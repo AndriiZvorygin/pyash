@@ -190,3 +190,66 @@ export function decodePyacWord(value) {
 }
 
 export const WORD_CODE_TYPES = Object.freeze({ LONG_ROOT, SHORT_ROOT, LONG_GRAMMAR, SHORT_GRAMMAR });
+
+// Glyph classes for deriving word boundaries from written Pyac.
+//
+// These live beside the codec because the codec is what assigns a glyph its
+// role: `1` and `3` are vowel codes here, so they are vowels for segmentation
+// too. The C's `consonant_group` lists `1` as well, which is the same defect
+// that once made `l1` unparseable — the codec's assignment wins.
+const BOUNDARY_CONSONANTS = new Set("ptkfscxbdgvzjnmqrlyw8h.");
+const BOUNDARY_VOWELS = new Set("iaueo631");
+// The C treats `M`, `7`, `2` as tones. The codec additionally codes `E`, but
+// the parser never accepted it as a tone, so segmentation follows the parser.
+const BOUNDARY_TONES = new Set("M72");
+
+/**
+ * Split unspaced Pyac text into its words, using the same boundary rule as the
+ * C's `first_word_derive`: a leading consonant pair makes a four-glyph word,
+ * a consonant+vowel pair makes a two-glyph word, and a tone or final consonant
+ * extends either by one.
+ *
+ * Returns null when the text cannot be consumed exactly — an unknown glyph, a
+ * truncated final word, or a vowel-initial run, which the C also declines.
+ */
+export function segmentPyacWords(value) {
+  if (typeof value !== "string") return null;
+  const text = value.normalize("NFC");
+  if (!text.trim()) return null;
+  const words = [];
+  let at = 0;
+  while (at < text.length) {
+    if (/\s/u.test(text[at])) {
+      at += 1;
+      continue;
+    }
+    const first = text[at];
+    const second = text[at + 1];
+    if (!BOUNDARY_CONSONANTS.has(first)) return null;
+    let length;
+    if (second !== undefined && BOUNDARY_CONSONANTS.has(second)) {
+      // CCV(T)C or CCVT
+      const vowel = text[at + 2];
+      const after = text[at + 3];
+      if (vowel === undefined || !BOUNDARY_VOWELS.has(vowel)) return null;
+      if (after !== undefined && BOUNDARY_TONES.has(after)) {
+        const third = text[at + 4];
+        if (third === undefined || !BOUNDARY_CONSONANTS.has(third)) return null;
+        length = 5;
+      } else if (after !== undefined && BOUNDARY_CONSONANTS.has(after)) {
+        length = 4;
+      } else {
+        return null;
+      }
+    } else if (second !== undefined && BOUNDARY_VOWELS.has(second)) {
+      // CV or CVT
+      const tone = text[at + 2];
+      length = tone !== undefined && BOUNDARY_TONES.has(tone) ? 3 : 2;
+    } else {
+      return null;
+    }
+    words.push(text.slice(at, at + length));
+    at += length;
+  }
+  return words.length ? words : null;
+}

@@ -1,20 +1,14 @@
 use super::reader::{DictionaryReadError, DictionarySection};
 use super::reader_codec::{
-    RecordSubject, expect_end, expect_word, read_codelet, read_sentence, read_sentence_v4,
-    subject_end, take_record_subject, take_text, take_uint32, take_uint32_vector, take_vector,
+    RecordSubject, Sentence, expect_end, expect_word, read_codelet, read_sentence,
+    read_sentence_v4, subject_end, take_record_subject, take_text, take_uint32, take_uint32_vector,
+    take_vector,
 };
 use super::volume_records::INDEX_SUBJECT;
-use super::{OperationArgumentType, OperationSignatureKey};
+use super::words::{ACCUSATIVE, COMITATIVE, DESTINATION, ESSIVE, INSTRUMENTAL, LOCATIVE, SOURCE};
+use super::{ArgumentSlot, OperationSignatureKey};
 use std::io::{Read, Seek};
 use unicode_normalization::UnicodeNormalization;
-
-const OB: u16 = 0x245e;
-const AS: u16 = 0x414f;
-const FROM: u16 = 0x313e;
-const TO: u16 = 0x243e;
-const BY: u16 = 0x287e;
-const WITH: u16 = 0x490f;
-const AT: u16 = 0x615f;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum DirectIndexLookup<'a> {
@@ -62,8 +56,8 @@ pub(super) fn lookup_v4<R: Read + Seek>(
     let section_end = section.codelet_start + section.codelet_count;
     let mut ordinal = low;
     while ordinal < high && ordinal < section_end {
-        let (words, consumed) = read_sentence_v4(source, ordinal, section_end)?;
-        let record = parse_v4_record(&words, ordinal + consumed)?;
+        let sentence = read_sentence_v4(source, ordinal, section_end)?;
+        let record = parse_v4_record(&sentence, ordinal + sentence.consumed)?;
         match compare_lookup(&record.key, lookup) {
             std::cmp::Ordering::Less => ordinal = record.next,
             std::cmp::Ordering::Equal => return Ok(record.offsets),
@@ -100,8 +94,8 @@ pub(super) fn next_canonical_offset_after<R: Read + Seek>(
     }
     let section_end = section.codelet_start + section.codelet_count;
     if low < section_end {
-        let (words, consumed) = read_sentence_v4(source, low, section_end)?;
-        let record = parse_v4_record(&words, low + consumed)?;
+        let sentence = read_sentence_v4(source, low, section_end)?;
+        let record = parse_v4_record(&sentence, low + sentence.consumed)?;
         let offset = match record.key {
             DirectIndexKey::Canonical(_) => record.offsets[0],
             _ => return Err(invalid("canonical index contains a noncanonical row")),
@@ -126,8 +120,8 @@ fn find_canonical_record_at_or_before<R: Read + Seek>(
         start -= 1;
     }
     let section_end = section.codelet_start + section.codelet_count;
-    let (words, consumed) = read_sentence_v4(source, start, section_end)?;
-    let record = parse_v4_record(&words, start + consumed)?;
+    let sentence = read_sentence_v4(source, start, section_end)?;
+    let record = parse_v4_record(&sentence, start + sentence.consumed)?;
     if !matches!(record.key, DirectIndexKey::Canonical(_)) {
         return Err(invalid("canonical index contains a noncanonical row"));
     }
@@ -147,8 +141,8 @@ fn find_next_record<R: Read + Seek>(
             || (ordinal > section.codelet_start && read_codelet(source, ordinal - 1)?[0] & 1 != 0);
         if starts_here {
             match read_sentence_v4(source, ordinal, section_end) {
-                Ok((words, consumed)) => {
-                    if let Ok(record) = parse_v4_record(&words, ordinal + consumed) {
+                Ok(sentence) => {
+                    if let Ok(record) = parse_v4_record(&sentence, ordinal + sentence.consumed) {
                         return Ok(Some(record));
                     }
                 }
@@ -163,28 +157,32 @@ fn find_next_record<R: Read + Seek>(
     Ok(None)
 }
 
-fn parse_v4_record(words: &[u16], next: u32) -> Result<DirectIndexRecord, DictionaryReadError> {
+fn parse_v4_record(
+    sentence: &Sentence,
+    next: u32,
+) -> Result<DirectIndexRecord, DictionaryReadError> {
+    let words = &sentence.words;
     let mut cursor = 0;
-    let subject = take_record_subject(words, &mut cursor)?;
+    let subject = take_record_subject(sentence, &mut cursor)?;
     let key = match subject {
         RecordSubject::Name(name) => {
             let offset = take_uint32(words, &mut cursor)?;
-            expect_word(words, &mut cursor, AT)?;
+            expect_word(words, &mut cursor, LOCATIVE)?;
             DirectIndexKey::Canonical(name).with_offsets(vec![offset], next)
         }
         RecordSubject::Text(surface) => {
             let first = take_text(words, &mut cursor)?;
-            expect_word(words, &mut cursor, AS)?;
+            expect_word(words, &mut cursor, ESSIVE)?;
             let (key, offsets) = if words.get(cursor).copied() == Some(0x0e1d) {
                 let release = take_text(words, &mut cursor)?;
-                expect_word(words, &mut cursor, FROM)?;
+                expect_word(words, &mut cursor, SOURCE)?;
                 let dataset = first;
                 let offsets = take_offsets(words, &mut cursor)?;
-                expect_word(words, &mut cursor, AT)?;
+                expect_word(words, &mut cursor, LOCATIVE)?;
                 (DirectIndexKey::Source(surface, dataset, release), offsets)
             } else {
                 let offsets = take_offsets(words, &mut cursor)?;
-                expect_word(words, &mut cursor, AT)?;
+                expect_word(words, &mut cursor, LOCATIVE)?;
                 (
                     DirectIndexKey::Surface(surface.encode_utf16().collect(), first),
                     offsets,
@@ -194,7 +192,7 @@ fn parse_v4_record(words: &[u16], next: u32) -> Result<DirectIndexRecord, Dictio
         }
         RecordSubject::Uint16Vector(signature) => {
             let offsets = take_offsets(words, &mut cursor)?;
-            expect_word(words, &mut cursor, AT)?;
+            expect_word(words, &mut cursor, LOCATIVE)?;
             DirectIndexKey::Operation(signature).with_offsets(offsets, next)
         }
     };
@@ -259,7 +257,7 @@ fn operation_key_words(key: &OperationSignatureKey) -> Vec<u16> {
     words.push(key.arguments().len() as u16);
     for argument in key.arguments() {
         append_sequence(&mut words, &argument.grammatical_case);
-        append_sequence(&mut words, &argument.value_type);
+        append_sequence(&mut words, &argument.noun_class);
     }
     words
 }
@@ -280,13 +278,13 @@ pub(super) fn lookup_legacy_surface<R: Read + Seek>(
     let mut matches = Vec::new();
     for_each_sentence(source, section, limit, |_, words| {
         let mut cursor = index_subject(words)?;
-        expect_text(words, &mut cursor, OB, "language-surface")?;
+        expect_text(words, &mut cursor, ACCUSATIVE, "language-surface")?;
         let candidate_language = take_text(words, &mut cursor)?;
-        expect_word(words, &mut cursor, AS)?;
+        expect_word(words, &mut cursor, ESSIVE)?;
         let candidate_surface = take_text(words, &mut cursor)?;
-        expect_word(words, &mut cursor, FROM)?;
+        expect_word(words, &mut cursor, SOURCE)?;
         let key = take_vector(words, &mut cursor)?;
-        expect_word(words, &mut cursor, TO)?;
+        expect_word(words, &mut cursor, DESTINATION)?;
         expect_end(words, &mut cursor)?;
         if candidate_language == language && candidate_surface == normalized {
             matches.push(key);
@@ -309,17 +307,17 @@ pub(super) fn lookup_legacy_source<R: Read + Seek>(
     let mut matches = Vec::new();
     for_each_sentence(source, section, limit, |_, words| {
         let mut cursor = index_subject(words)?;
-        expect_text(words, &mut cursor, OB, "external-source")?;
+        expect_text(words, &mut cursor, ACCUSATIVE, "external-source")?;
         let candidate_dataset = take_text(words, &mut cursor)?;
-        expect_word(words, &mut cursor, AS)?;
+        expect_word(words, &mut cursor, ESSIVE)?;
         let candidate_release = take_text(words, &mut cursor)?;
-        expect_word(words, &mut cursor, FROM)?;
+        expect_word(words, &mut cursor, SOURCE)?;
         let candidate_identifier = take_text(words, &mut cursor)?;
-        expect_word(words, &mut cursor, TO)?;
+        expect_word(words, &mut cursor, DESTINATION)?;
         let key = take_vector(words, &mut cursor)?;
-        expect_word(words, &mut cursor, BY)?;
+        expect_word(words, &mut cursor, INSTRUMENTAL)?;
         let _relation = take_text(words, &mut cursor)?;
-        expect_word(words, &mut cursor, WITH)?;
+        expect_word(words, &mut cursor, COMITATIVE)?;
         expect_end(words, &mut cursor)?;
         if candidate_dataset == dataset
             && candidate_release == release
@@ -343,11 +341,11 @@ pub(super) fn lookup_legacy_operation<R: Read + Seek>(
     let mut matches = Vec::new();
     for_each_sentence(source, section, limit, |_, words| {
         let mut cursor = index_subject(words)?;
-        expect_text(words, &mut cursor, OB, "operation-signature")?;
+        expect_text(words, &mut cursor, ACCUSATIVE, "operation-signature")?;
         let dispatch = take_vector(words, &mut cursor)?;
-        expect_word(words, &mut cursor, FROM)?;
+        expect_word(words, &mut cursor, SOURCE)?;
         let key = take_vector(words, &mut cursor)?;
-        expect_word(words, &mut cursor, TO)?;
+        expect_word(words, &mut cursor, DESTINATION)?;
         expect_end(words, &mut cursor)?;
         if &decode_signature(&dispatch)? == lookup {
             matches.push(key);
@@ -368,10 +366,10 @@ fn for_each_sentence<R: Read + Seek>(
     let range = section.range();
     let mut ordinal = range.start;
     while ordinal < range.end {
-        let (words, consumed) = read_sentence(source, ordinal, limit)?;
-        visit(ordinal, &words)?;
+        let sentence = read_sentence(source, ordinal, limit)?;
+        visit(ordinal, &sentence.words)?;
         ordinal = ordinal
-            .checked_add(consumed)
+            .checked_add(sentence.consumed)
             .ok_or_else(|| invalid("index sentence ordinal overflow"))?;
     }
     if ordinal != range.end {
@@ -410,13 +408,13 @@ fn decode_signature(words: &[u16]) -> Result<OperationSignatureKey, DictionaryRe
     let mut arguments = Vec::with_capacity(count);
     for _ in 0..count {
         let grammatical_case = take_sequence(words, &mut cursor)?;
-        let value_type = take_sequence(words, &mut cursor)?;
-        if grammatical_case.is_empty() || value_type.is_empty() {
+        let noun_class = take_sequence(words, &mut cursor)?;
+        if grammatical_case.is_empty() || noun_class.is_empty() {
             return Err(invalid("operation argument type is empty"));
         }
-        arguments.push(OperationArgumentType {
+        arguments.push(ArgumentSlot {
             grammatical_case,
-            value_type,
+            noun_class,
         });
     }
     if cursor != words.len() || verb.is_empty() || mood.is_empty() {

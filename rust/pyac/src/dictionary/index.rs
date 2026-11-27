@@ -35,7 +35,7 @@ impl DictionaryIndex {
             for signature in &mut entry.operation_signatures {
                 signature
                     .arguments
-                    .sort_unstable_by(|left, right| left.key.cmp(&right.key));
+                    .sort_unstable_by(|left, right| left.case_type.cmp(&right.case_type));
             }
         }
         for entry in &entries {

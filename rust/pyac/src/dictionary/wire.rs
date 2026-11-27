@@ -1,19 +1,9 @@
 use crate::WORDS_PER_CODELET;
 
-const NAME_TYPE: u16 = 0x225e;
-const SU: u16 = 0x24de;
-pub(super) const OB: u16 = 0x245e;
-pub(super) const AS: u16 = 0x414f;
-pub(super) const FROM: u16 = 0x313e;
-pub(super) const TO: u16 = 0x243e;
-pub(super) const BY: u16 = 0x287e;
-pub(super) const WITH: u16 = 0x490f;
-pub(super) const AT: u16 = 0x615f;
-const NUMBER_QUOTE: u16 = 0x881d;
-const UINT32_QUOTE: u16 = 0x901d;
-const TEXT_QUOTE: u16 = 0x0e1d;
-const TEXT_VERB: u16 = 0x8a28;
-const REALIS: u16 = 0x217e;
+use super::words::{
+    ACCUSATIVE, COMITATIVE, DESTINATION, ESSIVE, INSTRUMENTAL, LOCATIVE, NAME_MARKER, NOMINATIVE,
+    NUMBER_QUOTE, REALIS, SOURCE, TEXT_QUOTE, TEXT_VERB, UINT32_QUOTE,
+};
 const CODELET_DATA_WORDS: usize = WORDS_PER_CODELET - 1;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -120,7 +110,7 @@ fn encode_value(
             if name.is_empty() {
                 return Err(DictionaryWireError::EmptySubject);
             }
-            words.push(NAME_TYPE);
+            words.push(NAME_MARKER);
             words.extend(name.iter().copied());
         }
     }
@@ -161,7 +151,7 @@ fn encode_sentence_with_quote_layout(
             if name.is_empty() {
                 return Err(DictionaryWireError::EmptySubject);
             }
-            words.push(NAME_TYPE);
+            words.push(NAME_MARKER);
             words.extend(name.iter().copied());
         }
         Subject::Text(text) => {
@@ -179,7 +169,7 @@ fn encode_sentence_with_quote_layout(
             words.extend(values.iter().copied());
         }
     }
-    words.push(SU);
+    words.push(NOMINATIVE);
     boundaries.push(words.len());
     let mut previous_case = 0;
     for field in fields {
@@ -225,13 +215,13 @@ fn append_text(
 
 fn case_order(case: u16) -> Option<u8> {
     match case {
-        OB => Some(1),
-        AS => Some(2),
-        FROM => Some(3),
-        TO => Some(4),
-        BY => Some(5),
-        WITH => Some(6),
-        AT => Some(7),
+        ACCUSATIVE => Some(1),
+        ESSIVE => Some(2),
+        SOURCE => Some(3),
+        DESTINATION => Some(4),
+        INSTRUMENTAL => Some(5),
+        COMITATIVE => Some(6),
+        LOCATIVE => Some(7),
         _ => None,
     }
 }
@@ -321,7 +311,7 @@ mod tests {
         let sentence = encode_text_sentence(
             &DICTIONARY,
             &[Field {
-                grammatical_case: OB,
+                grammatical_case: ACCUSATIVE,
                 value: Value::Text("en Pyash"),
             }],
         )
@@ -343,7 +333,7 @@ mod tests {
         let sentence = encode_text_sentence(
             &DICTIONARY,
             &[Field {
-                grammatical_case: OB,
+                grammatical_case: ACCUSATIVE,
                 value: Value::Text(text),
             }],
         )
@@ -359,7 +349,7 @@ mod tests {
         let sentence = encode_index_sentence_v4(
             Subject::Text(text),
             &[Field {
-                grammatical_case: AT,
+                grammatical_case: LOCATIVE,
                 value: Value::Uint32(123),
             }],
         )
@@ -375,7 +365,7 @@ mod tests {
         let sentence = encode_text_sentence(
             &DICTIONARY,
             &[Field {
-                grammatical_case: OB,
+                grammatical_case: ACCUSATIVE,
                 value: Value::Uint32Vector(&values),
             }],
         )
@@ -399,7 +389,7 @@ mod tests {
         let text = encode_sentence(
             Subject::Text("surface"),
             &[Field {
-                grammatical_case: AT,
+                grammatical_case: LOCATIVE,
                 value: Value::Uint32(123),
             }],
         )
@@ -410,7 +400,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(
             &words[..10],
-            &[TEXT_QUOTE, 7, 115, 117, 114, 102, 97, 99, 101, SU]
+            &[TEXT_QUOTE, 7, 115, 117, 114, 102, 97, 99, 101, NOMINATIVE]
         );
 
         let key = [0x1111, 0x2222];
@@ -420,6 +410,6 @@ mod tests {
             .iter()
             .flat_map(|codelet| codelet[1..].iter().copied())
             .collect::<Vec<_>>();
-        assert!(words.starts_with(&[0x891d, 0x1111, 0x2222, SU]));
+        assert!(words.starts_with(&[0x891d, 0x1111, 0x2222, NOMINATIVE]));
     }
 }

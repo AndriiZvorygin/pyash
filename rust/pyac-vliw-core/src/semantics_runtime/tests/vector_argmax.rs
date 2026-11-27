@@ -6,9 +6,10 @@ fn argmax(values: [f32; 2]) -> CoreResult {
         let bits = value.to_bits();
         tokens.extend([bits & 0xffff, bits >> 16]);
     }
+    // The destination is `do gi hgut` minus the leading `gi`: one class tag
+    // then the name tag.
     tokens.extend([
         ACCUSATIVE,
-        NAME_TYPE,
         NUMBER_TYPE,
         NAME_TYPE,
         0x6851,
@@ -17,8 +18,11 @@ fn argmax(values: [f32; 2]) -> CoreResult {
         0xa831,
         DEONTIC,
     ]);
+    // Boundaries are the case words and the mood, counted from the end so a
+    // longer quote does not shift them: mood, destination, accusative.
+    let length = tokens.len();
     let mut words = std::vec::Vec::new();
-    append_sentence(&mut words, &tokens, &[5, 10, 13]);
+    append_sentence(&mut words, &tokens, &[length - 8, length - 4, length - 1]);
     interpret_group(&words, 0, 1)
 }
 

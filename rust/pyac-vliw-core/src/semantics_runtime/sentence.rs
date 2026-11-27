@@ -1,4 +1,3 @@
-use super::sentence_parse_state::{SentenceParseState, advance_sentence_parse};
 use super::*;
 
 #[derive(Clone, Copy)]
@@ -82,6 +81,24 @@ impl<'a, W: VliwWord> SentenceView<'a, W> {
         } else {
             0
         }
+    }
+
+    /// Head word of the codelet that holds logical token `index`.
+    pub(super) fn header_for(&self, index: usize) -> u32 {
+        let source_index = self.word_index(index);
+        word(self.words, source_index / CODELET_WORDS, 0)
+    }
+
+    /// Slot position (1..CODELET_WORDS) of logical token `index`.
+    pub(super) fn slot_for(&self, index: usize) -> usize {
+        self.word_index(index) % CODELET_WORDS
+    }
+
+    /// Read a payload word by its absolute source index.
+    #[cfg(test)]
+    pub(super) fn source_word(&self, source_index: usize) -> u32 {
+        // SAFETY: callers pass an index validated by the collected sentence span.
+        unsafe { input_word_unchecked(self.words, source_index) }
     }
 
     pub(super) fn boundary(&self, index: usize) -> bool {
@@ -181,6 +198,175 @@ pub(super) fn parse_sentence(
     parse_sentence_range(tokens, 0, tokens.len(), parsed)
 }
 
+pub(super) struct FieldBuilder {
+    fields: [SentenceField; MAX_SENTENCE_FIELDS],
+    field_count: usize,
+    seen_roles: u32,
+    value_start: usize,
+    verb_start: usize,
+    verb_length: usize,
+    mood: u32,
+}
+
+impl FieldBuilder {
+    pub(super) const fn new(start: usize) -> Self {
+        Self {
+            fields: [SentenceField::EMPTY; MAX_SENTENCE_FIELDS],
+            field_count: 0,
+            seen_roles: 0,
+            value_start: start,
+            verb_start: 0,
+            verb_length: 0,
+            mood: 0,
+        }
+    }
+
+    fn accept_boundary(
+        &mut self,
+        tokens: &SentenceView<'_, impl VliwWord>,
+        token: u32,
+        offset: usize,
+        end: usize,
+    ) -> u32 {
+        let role_bit = match token {
+            NOMINATIVE => 1 << 0,
+            ACCUSATIVE => 1 << 1,
+            ESSIVE => 1 << 2,
+            DESTINATION => 1 << 3,
+            SOURCE => 1 << 4,
+            COMITATIVE => 1 << 5,
+            INSTRUMENTAL => 1 << 6,
+            FROM_INDEX => 1 << 7,
+            TO_INDEX => 1 << 8,
+            LOCATIVE => 1 << 9,
+            _ => 0,
+        };
+        if role_bit != 0 {
+            let field_index = self.field_count;
+            if self.value_start >= offset
+                || field_index >= MAX_SENTENCE_FIELDS
+                || self.seen_roles & role_bit != 0
+                || validate_field_tags(tokens, self.value_start, offset) != 0
+            {
+                return ERROR_MALFORMED;
+            }
+            array_put!(
+                &mut self.fields,
+                field_index,
+                SentenceField {
+                    role: token,
+                    start: self.value_start,
+                    length: offset - self.value_start,
+                }
+            );
+            self.seen_roles |= role_bit;
+            self.field_count = field_index + 1;
+            self.value_start = offset + 1;
+            return 0;
+        }
+        if matches!(
+            token,
+            MOOD_DEFINITION | REALIS | DEONTIC | CONDITIONAL | MOOD_RETURN | MOOD_PARAGRAPH
+        ) {
+            let verb_length = offset - self.value_start;
+            if self.mood != 0
+                || (verb_length == 0 && token != MOOD_RETURN)
+                || (verb_length != 0 && token == MOOD_RETURN)
+                || offset + 1 != end
+            {
+                return ERROR_MALFORMED;
+            }
+            self.verb_start = self.value_start;
+            self.verb_length = verb_length;
+            self.mood = token;
+            return 0;
+        }
+        ERROR_UNSUPPORTED
+    }
+
+    /// Clause-free decode: the head bitmap is the field map, so only boundary
+    /// slots are read and value words are never decoded.
+    pub(super) fn parse_from_boundaries(
+        &mut self,
+        tokens: &SentenceView<'_, impl VliwWord>,
+        start: usize,
+        end: usize,
+    ) -> u32 {
+        let mut offset = start;
+        while offset < end {
+            let header = tokens.header_for(offset);
+            let complete = header & 1 != 0;
+            let mut slot = tokens.slot_for(offset);
+            while slot < CODELET_WORDS && offset < end {
+                if (header & (1 << slot) != 0) == complete {
+                    let token = tokens.token_unchecked(offset);
+                    let error = self.accept_boundary(tokens, token, offset, end);
+                    if error != 0 || self.mood != 0 {
+                        return error;
+                    }
+                }
+                slot += 1;
+                offset += 1;
+            }
+        }
+        0
+    }
+
+    /// Clause-aware decode. Clause markers may sit anywhere, so they are
+    /// recognized before the boundary test, exactly as the previous parser did.
+    fn parse_with_clauses(
+        &mut self,
+        tokens: &SentenceView<'_, impl VliwWord>,
+        start: usize,
+        end: usize,
+    ) -> u32 {
+        let mut depth = 0usize;
+        let mut index = start;
+        while index < end {
+            let token = tokens.token_unchecked(index);
+            if token == DEPENDENT_CLAUSE {
+                depth += 1;
+                index += 1;
+                continue;
+            }
+            if token == CLAUSE_TAIL {
+                if depth == 0 {
+                    return ERROR_MALFORMED;
+                }
+                depth -= 1;
+                index += 1;
+                continue;
+            }
+            if depth == 0 && tokens.boundary(index) {
+                let error = self.accept_boundary(tokens, token, index, end);
+                if error != 0 || self.mood != 0 {
+                    return error;
+                }
+            }
+            index += 1;
+        }
+        0
+    }
+
+    fn finish(&self, parsed: &mut ParsedSentence) -> u32 {
+        if self.mood == 0 {
+            return ERROR_MALFORMED;
+        }
+        let mut result = ParsedSentence::empty();
+        let mut index = 0;
+        while index < self.field_count {
+            array_put!(&mut result.fields, index, array_at!(self.fields, index));
+            index += 1;
+        }
+        result.field_count = self.field_count;
+        result.verb_start = self.verb_start;
+        result.verb_length = self.verb_length;
+        result.mood = self.mood;
+        *parsed = result;
+        0
+    }
+}
+
 pub(super) fn parse_sentence_range(
     tokens: &SentenceView<'_, impl VliwWord>,
     start: usize,
@@ -190,50 +376,29 @@ pub(super) fn parse_sentence_range(
     if start >= end || end > tokens.len() {
         return ERROR_MALFORMED;
     }
-    let mut result = ParsedSentence::empty();
-    let mut state = SentenceParseState::new(start);
+    // Clause markers are not phrase boundaries, so a sentence without them can
+    // be decoded from the head bitmap alone. This pass cannot fail; it only
+    // chooses the decode form, so error order is unchanged.
+    let mut has_clause = false;
     let mut index = start;
-    let mut source_index = tokens.word_index(start);
-    let mut codelet = source_index / CODELET_WORDS;
-    let mut slot = source_index % CODELET_WORDS;
-    let mut header = unsafe { input_word_unchecked(tokens.words, codelet * CODELET_WORDS) };
     while index < end {
-        let token = unsafe { input_word_unchecked(tokens.words, source_index) };
-        let complete = header & 1 != 0;
-        let boundary = state.clause_depth == 0
-            && token != DEPENDENT_CLAUSE
-            && token != CLAUSE_TAIL
-            && ((header & (1 << slot) != 0) == complete);
-        let transition = advance_sentence_parse(state, token, boundary, index, end);
-        if transition.error != 0 {
-            return transition.error;
-        }
-        state = transition.state;
-        if transition.writes_field {
-            array_put!(&mut result.fields, state.field_count - 1, transition.field);
-        }
-        if transition.complete {
-            result.field_count = state.field_count;
-            result.verb_start = state.verb_start;
-            result.verb_length = state.verb_length;
-            result.mood = state.mood;
-            *parsed = result;
-            return 0;
+        let token = tokens.token_unchecked(index);
+        if token == DEPENDENT_CLAUSE || token == CLAUSE_TAIL {
+            has_clause = true;
+            break;
         }
         index += 1;
-        if index < end {
-            if slot == CODELET_WORDS - 1 {
-                codelet += 1;
-                slot = 1;
-                source_index = codelet * CODELET_WORDS + slot;
-                header = unsafe { input_word_unchecked(tokens.words, codelet * CODELET_WORDS) };
-            } else {
-                slot += 1;
-                source_index += 1;
-            }
-        }
     }
-    ERROR_MALFORMED
+    let mut builder = FieldBuilder::new(start);
+    let error = if has_clause {
+        builder.parse_with_clauses(tokens, start, end)
+    } else {
+        builder.parse_from_boundaries(tokens, start, end)
+    };
+    if error != 0 {
+        return error;
+    }
+    builder.finish(parsed)
 }
 
 pub(super) fn clause_tail(
@@ -332,38 +497,50 @@ pub(super) fn name_span(
     let Some(end) = field.start.checked_add(field.length) else {
         return ERROR_MALFORMED;
     };
-    if field.length < 2 || end > tokens.len() || sentence_at!(*tokens, field.start) != NAME_TYPE {
+    if field.length < 2 || end > tokens.len() {
         return ERROR_MALFORMED;
     }
-    let name_start = if typed_number {
-        if field.length < 4
-            || !matches!(
-                sentence_at!(*tokens, field.start + 1),
-                NUMBER_TYPE | BOOLEAN_TYPE
-            )
-            || sentence_at!(*tokens, field.start + 2) != NAME_TYPE
-        {
+    if typed_number {
+        // Accept class-first internal fields and ordinary Pyash fields whose
+        // type follows the leading name marker.
+        let mut index = field.start;
+        if sentence_at!(*tokens, index) == NAME_TYPE {
+            index += 1;
+        }
+        let class_start = index;
+        while index < end && is_class_word(sentence_at!(*tokens, index)) {
+            index += 1;
+        }
+        if index == class_start {
             return ERROR_MALFORMED;
         }
-        field.start + 3
-    } else {
-        if sentence_at!(*tokens, field.start + 1) == NAME_TYPE {
+        if index < end && sentence_at!(*tokens, index) == NAME_TYPE {
+            index += 1;
+        }
+        if index >= end || !is_root_name(tokens, index, end) {
             return ERROR_MALFORMED;
         }
-        if field.length == 2 {
-            field.start + 1
-        } else {
-            let mut marker = field.start + 2;
-            while marker < end {
-                if sentence_at!(*tokens, marker) == NAME_TYPE {
-                    return ERROR_MALFORMED;
-                }
-                marker += 1;
-            }
-            field.start + 1
+        *name = NameSpan {
+            start: index,
+            length: end - index,
+        };
+        return 0;
+    }
+    if sentence_at!(*tokens, field.start) != NAME_TYPE {
+        return ERROR_MALFORMED;
+    }
+    if sentence_at!(*tokens, field.start + 1) == NAME_TYPE {
+        return ERROR_MALFORMED;
+    }
+    let mut marker = field.start + 2;
+    while marker < end {
+        if sentence_at!(*tokens, marker) == NAME_TYPE {
+            return ERROR_MALFORMED;
         }
-    };
-    if name_start >= end {
+        marker += 1;
+    }
+    let name_start = field.start + 1;
+    if name_start >= end || !is_root_name(tokens, name_start, end) {
         return ERROR_MALFORMED;
     }
     *name = NameSpan {
@@ -371,6 +548,117 @@ pub(super) fn name_span(
         length: end - name_start,
     };
     0
+}
+
+/// Whether every word in `start..end` is a root word.
+///
+/// A name's payload is one or more roots, never a grammar word: `gi` followed by
+/// a pronoun is not a name, because the pronoun is serving its grammatical
+/// purpose.
+fn is_root_name(tokens: &SentenceView<'_, impl VliwWord>, start: usize, end: usize) -> bool {
+    start < end
+        && (start..end).all(|index| {
+            matches!(
+                word_code::classify_identity(sentence_at!(*tokens, index) as u16),
+                Some(word_code::WordClass::LongRoot) | Some(word_code::WordClass::ShortRoot)
+            )
+        })
+}
+
+/// The `gi` rule, and nothing more.
+///
+/// `gi` marks a name, so it may appear at most once per field, only followed by
+/// root words, and optionally preceded by class words describing the kind of
+/// name:
+///
+/// ```text
+/// gi <root…>               a name
+/// dlek flut gi <hzit>      a vector-float name
+/// ```
+///
+/// `gi sa` is rejected, because `sa` is a pronoun doing its grammatical job
+/// rather than a name. A field with no `gi` is not policed here: it may be a
+/// pronoun, a genitive construction, a quoted value, or a nested clause, and
+/// those are validated by the code that understands them.
+pub(super) fn validate_field_tags(
+    tokens: &SentenceView<'_, impl VliwWord>,
+    start: usize,
+    end: usize,
+) -> u32 {
+    if start >= end {
+        return ERROR_MALFORMED;
+    }
+    // A field holding a nested clause is a sentence in its own right, and is
+    // validated when that clause is parsed.
+    if (start..end)
+        .any(|index| matches!(sentence_at!(*tokens, index), DEPENDENT_CLAUSE | CLAUSE_TAIL))
+    {
+        return 0;
+    }
+    // A quoted value is its own encoding, not a name.
+    if numeric::quote_header(sentence_at!(*tokens, start)).valid != 0 {
+        return 0;
+    }
+
+    // Ordinary Pyash types come after the leading name marker. A repeated
+    // marker closes that type prefix; without it, type-looking root words are
+    // still part of an untyped name.
+    if sentence_at!(*tokens, start) == NAME_TYPE {
+        let mut index = start + 1;
+        while index < end && is_class_word(sentence_at!(*tokens, index)) {
+            index += 1;
+        }
+        if index > start + 1 && index < end && sentence_at!(*tokens, index) == NAME_TYPE {
+            return if is_root_name(tokens, index + 1, end) {
+                0
+            } else {
+                ERROR_MALFORMED
+            };
+        }
+        let root_name = is_root_name(tokens, start + 1, end);
+        let named_class = end == start + 2 && is_class_word(sentence_at!(*tokens, start + 1));
+        return if root_name || named_class {
+            0
+        } else {
+            ERROR_MALFORMED
+        };
+    }
+
+    let mut name_tag = None;
+    for index in start..end {
+        if sentence_at!(*tokens, index) == NAME_TYPE {
+            if name_tag.is_some() {
+                // A name has one payload, so one tag.
+                return ERROR_MALFORMED;
+            }
+            name_tag = Some(index);
+        }
+    }
+    let Some(name_index) = name_tag else {
+        return 0;
+    };
+
+    // Everything before the tag must be a class word: an untyped `gi` has none.
+    let mut index = start;
+    while index < name_index && is_class_word(sentence_at!(*tokens, index)) {
+        index += 1;
+    }
+    if index != name_index {
+        return ERROR_MALFORMED;
+    }
+    // The payload is one or more roots, never a grammar word.
+    if !is_root_name(tokens, name_index + 1, end) {
+        return ERROR_MALFORMED;
+    }
+    0
+}
+
+/// Whether `word` names the kind of value that follows it.
+///
+/// Width words, the boolean class, and the vector/float class words: each says
+/// "what follows is a value of this kind", which is why none of them is a name.
+fn is_class_word(word: u32) -> bool {
+    is_width_word(word) || matches!(word, VECTOR_TYPE | FLOAT_TYPE)
 }
 
 pub(super) fn typed_name_span(
@@ -382,46 +670,62 @@ pub(super) fn typed_name_span(
     let Some(end) = field.start.checked_add(field.length) else {
         return ERROR_MALFORMED;
     };
-    if field.length < 2 || end > tokens.len() || sentence_at!(*tokens, field.start) != NAME_TYPE {
+    if field.length < 2 || end > tokens.len() {
         return ERROR_MALFORMED;
     }
 
-    if field.length >= 3 && sentence_at!(*tokens, field.start + 2) == NAME_TYPE {
-        *kind = match sentence_at!(*tokens, field.start + 1) {
-            NUMBER_TYPE => VALUE_NUMBER,
-            BOOLEAN_TYPE => VALUE_BOOLEAN,
-            FLOAT_TYPE => VALUE_FLOAT,
-            _ => return ERROR_UNSUPPORTED,
-        };
-        if field.length < 4 {
-            return ERROR_MALFORMED;
-        }
-        *name = NameSpan {
-            start: field.start + 3,
-            length: field.length - 3,
-        };
-        return 0;
+    // Both ordinary Pyash fields (`gi <class…> gi <name>`) and programlet
+    // internals (`<class…> [gi] <name>`) carry the same typed-name meaning.
+    let mut index = field.start;
+    let leading_name = sentence_at!(*tokens, index) == NAME_TYPE;
+    if leading_name {
+        index += 1;
     }
-
-    if field.length >= 4 && sentence_at!(*tokens, field.start + 3) == NAME_TYPE {
-        if sentence_at!(*tokens, field.start + 1) != VECTOR_TYPE
-            || sentence_at!(*tokens, field.start + 2) != FLOAT_TYPE
-        {
-            return ERROR_UNSUPPORTED;
+    let class_start = index;
+    let mut has_vector = false;
+    let mut has_float = false;
+    let mut has_boolean = false;
+    let mut has_number = false;
+    while index < end && is_class_word(sentence_at!(*tokens, index)) {
+        match sentence_at!(*tokens, index) {
+            VECTOR_TYPE => has_vector = true,
+            FLOAT_TYPE => has_float = true,
+            BOOLEAN_TYPE => has_boolean = true,
+            _ => has_number = true,
         }
-        if field.length < 5 {
-            return ERROR_MALFORMED;
-        }
-        *kind = VALUE_VECTOR_FLOAT;
-        *name = NameSpan {
-            start: field.start + 4,
-            length: field.length - 4,
-        };
-        return 0;
+        index += 1;
     }
-
-    *kind = 0;
-    name_span(tokens, field, false, name)
+    let has_class = index > class_start;
+    if (!leading_name && !has_class)
+        || (leading_name
+            && (!has_class || index >= end || sentence_at!(*tokens, index) != NAME_TYPE))
+    {
+        // No class word: an ordinary name.
+        *kind = 0;
+        return name_span(tokens, field, false, name);
+    }
+    if index < end && sentence_at!(*tokens, index) == NAME_TYPE {
+        index += 1;
+    }
+    if index >= end || !is_root_name(tokens, index, end) {
+        return ERROR_MALFORMED;
+    }
+    *kind = if has_vector && has_float {
+        VALUE_VECTOR_FLOAT
+    } else if has_float {
+        VALUE_FLOAT
+    } else if has_boolean {
+        VALUE_BOOLEAN
+    } else if has_number {
+        VALUE_NUMBER
+    } else {
+        return ERROR_UNSUPPORTED;
+    };
+    *name = NameSpan {
+        start: index,
+        length: end - index,
+    };
+    0
 }
 
 pub(super) fn typed_output_name(

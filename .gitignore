@@ -114,3 +114,7 @@ radio/lyrics/
 radio/audio/
 radio/lyrics-experiments/
 radio/audio-experiments/
+/.commandcode/
+
+# Rust compiler crash dumps
+rustc-ice-*.txt

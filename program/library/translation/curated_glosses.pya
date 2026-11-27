@@ -1,0 +1,112 @@
+su name translation_curated_glosses be map def
+su text "format" ob text "curated-gloss-v1" ya
+su text "scope" ob text "English glosses for atoms whose concept WordNet does not index. These are interim definitions, not WordNet senses: the logical connectives have no WordNet entries at all, so a linked exact sense is impossible and a plain English gloss stands in until a compositional Pyash definition is authored." ya
+su text "wa" ob text "logical conjunction: the result is true only when both operands are true" ya
+su text "ba" ob text "logical disjunction: the result is true when at least one operand is true" ya
+su text "hkit" ob text "exclusive disjunction: the result is true when the operands differ and false when they agree" ya
+su text "hwan" ob text "the English conjunction and; joins two noun phrases rather than combining truth values" ya
+su text "bluh" ob text "the boolean type marker; a value is either true or false" ya
+su text "sr6h" ob text "a noun class whose members are abstract concepts rather than physical things" ya
+su text "dyah" ob text "a mood warning the hearer against something, expressing that the action is to be avoided" ya
+su text "k6" ob text "agreement that marks a verb for the social rank or gender of the addressee rather than for an argument" ya
+su text "qyih" ob text "a noun class whose members are living beings" ya
+su text "nrih" ob text "a noun class whose members are human beings" ya
+su text "y6" ob text "a noun class whose members are works of art and creative products" ya
+su text "swuh" ob text "a mood presenting the statement as an assumption the speaker takes for granted" ya
+su text "greh" ob text "a case marking the thing around which the predicate's other participants are arranged" ya
+su text "kcuh" ob text "a noun class marking a selection made among alternatives" ya
+su text "gxih" ob text "a noun class containing both masculine and feminine nouns, distinguished only by agreement" ya
+su text "ta2" ob text "an aspect continuing an action already under way from a prior situation" ya
+su text "cyih" ob text "a mood posing a question the speaker is reasoning through rather than asking the hearer" ya
+su text "dweh" ob text "an aspect marking an action as lasting only briefly or as bounded to a short stretch" ya
+su text "tu" ob text "a mood expressing obligation or permission rather than fact" ya
+su text "ma" ob text "a case marking the place or thing toward which motion proceeds" ya
+su text "twuh" ob text "a mood presenting the statement as uncertain or doubted" ya
+su text "si" ob text "a mood marking the speaker's degree of confidence in the statement's truth" ya
+su text "ji" ob text "a noun class whose members take feminine agreement" ya
+su text "fyih" ob text "a number stored as a sign, a significand, and an exponent, so it can represent a wide range of magnitudes at limited precision" ya
+su text "gjih" ob text "a noun class whose members are galaxies" ya
+su text "tleh" ob text "a tense placing the event on the day before the day of speaking" ya
+su text "nri7h" ob text "a noun class whose members are non-living things" ya
+su text "kcu7h" ob text "a mood presenting a conclusion drawn from particular observations rather than stated as fact" ya
+su text "nyeh" ob text "a case marking the participant who initiates an action, distinct from the one who completes it" ya
+su text "bjeh" ob text "a noun class whose members are places and locations" ya
+su text "te" ob text "a case marking the place where the action occurs" ya
+su text "ta7" ob text "a case marking motion with respect to a place, combining location with direction" ya
+su text "pyah" ob text "a noun class whose members are affections and bonds of attachment" ya
+su text "ne" ob text "a noun class whose members take masculine agreement" ya
+su text "vlih" ob text "a noun class whose members are minerals and stone" ya
+su text "gvih" ob text "a case marking the recipient in a clause whose verb assigns a thing to that recipient" ya
+su text "pi2" ob text "a noun class whose members are planets" ya
+su text "dzih" ob text "a case marking the thing possessed rather than its possessor" ya
+su text "cloh" ob text "a noun class whose members are beings capable of reason" ya
+su text "cleh" ob text "a tense placing the event in the immediate past, earlier on the day of speaking" ya
+su text "tli7h" ob text "a tense placing the event in the distant future, beyond the near future" ya
+su text "dxah" ob text "a tense placing the event in the distant past, before the remembered past" ya
+su text "nwuh" ob text "a noun class whose members are inquiries and studies" ya
+su text "tyih" ob text "an aspect viewing a situation from the standpoint of its aftermath" ya
+su text "n6" ob text "a mood marking the statement as based on the speaker's own sensory observation" ya
+su text "gweh" ob text "a tense placing the event in the immediate future, later on the day of speaking" ya
+su text "so" ob text "a case marking the place or thing from which motion proceeds" ya
+su text "lu" ob text "a mood presenting the statement as a guess about what may or will be the case" ya
+su text "qe" ob text "a noun class whose members are stars" ya
+su text "ta" ob text "a case marking the clause's topic, the thing the statement is about" ya
+su text "bxih" ob text "a noun class whose members are universes" ya
+su text "sleh" ob text "a noun class whose members are plants" ya
+su text "xleh" ob text "a noun class whose members are vehicles" ya
+su text "we" ob text "a case marking the route along which motion proceeds" ya
+su text "ga" ob text "a case marking the path a motion follows, synonymous with the vialis" ya
+su text "bwih" ob text "a noun class whose members are wisdom and sound judgement" ya
+su text "zo" ob text "a noun class whose members are animals" ya
+su text "da" ob text "a case expressed by an adposition, whether preposition or postposition" ya
+su text "t6" ob text "a mood affirming that the proposition holds, as opposed to negating it" ya
+su text "je" ob text "a case marking the participant who performs the action" ya
+su text "pyi7h" ob text "a voice promoting an oblique participant to a core argument role" ya
+su text "pceh" ob text "a mood expressing fear that the event may occur" ya
+su text "lyeh" ob text "an aspect presenting the action as having no inherent endpoint" ya
+su text "byih" ob text "a mood expressing a blessing or good wish" ya
+su text "pwah" ob text "a case marking the participant for whose benefit the action occurs" ya
+su text "ksih" ob text "a case marking the cause or reason for the action" ya
+su text "qa" ob text "an aspect marking the cessation of an action" ya
+su text "mweh" ob text "an aspect presenting the action as carried through to completion" ya
+su text "s6" ob text "a tense placing the event on the day after the day of speaking" ya
+su text "dwih" ob text "a mood expressing a desire for the event" ya
+su text "di" ob text "a mood directing the hearer to act" ya
+su text "nwoh" ob text "a mood presenting the event as actually occurring rather than as possible or wished" ya
+su text "nwah" ob text "a case marking the source of the speaker's information" ya
+su text "kweh" ob text "a first-person plural form that excludes the person addressed" ya
+su text "zreh" ob text "a case whose meaning is not derived from any single component of the construction" ya
+su text "go" ob text "an aspect presenting a statement as generally true rather than tied to a particular occasion" ya
+su text "gyih" ob text "a mood presenting a statement as a general truth" ya
+su text "vrih" ob text "a tense used for narrating past events, typical of chronicle style" ya
+su text "pruh" ob text "a mood expressing a curse or malediction" ya
+su text "za" ob text "an aspect marking the beginning of an action or state" ya
+su text "mo" ob text "a first-person plural form that includes the person addressed" ya
+su text "ri" ob text "a mood marking the clause as a question" ya
+su text "jwih" ob text "a mood expressing a command directed at a third person rather than the hearer" ya
+su text "lwoh" ob text "a case marking the place where the action occurs" ya
+su text "mreh" ob text "an aspect presenting the action as a single brief instant" ya
+su text "tl6h" ob text "a number marking a large quantity, contrasted with the paucal" ya
+su text "si2" ob text "a mood expressing that the event must occur" ya
+su text "psih" ob text "a mood expressing a wish for the event to occur" ya
+su text "xwih" ob text "a case marking the participant affected by the action" ya
+su text "po" ob text "a number marking a small countable quantity, more than a few but fewer than many" ya
+su text "mwih" ob text "a mood granting permission for the event" ya
+su text "pu" ob text "a number marking more than one referent" ya
+su text "tsi2h" ob text "a case expressed by a postposition rather than by inflection" ya
+su text "rwih" ob text "a mood expressing a request or entreaty" ya
+su text "ru" ob text "a mood forbidding the event, the negative counterpart of the imperative" ya
+su text "pi7" ob text "a mood proposing a course of action for the group to take" ya
+su text "rwah" ob text "an aspect presenting the event as about to happen" ya
+su text "twoh" ob text "a case marking the material being quoted or reported" ya
+su text "gluh" ob text "a number marking one member singled out of a collective or mass" ya
+su text "si7" ob text "a case marking the thing compared against in a superlative construction" ya
+su text "tfeh" ob text "an aspect presenting the action as directed toward a goal or endpoint" ya
+su text "kxeh" ob text "a case marking the destination or goal of motion" ya
+su text "lo" ob text "a mood expressing the speaker's will that the event occur" ya
+su text "ksuh" ob text "a mood presenting the clause as a statement of fact" ya
+su text "tcih" ob text "a mood encouraging the hearer to act, weaker than a command" ya
+su text "lwah" ob text "a case marking the path across or through which motion proceeds" ya
+su text "sri7h" ob text "a voice marking that two participants act on each other" ya
+su text "fyoh" ob text "a voice marking that the agent acts on itself" ya
+prah

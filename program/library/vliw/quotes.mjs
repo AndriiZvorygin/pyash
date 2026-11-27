@@ -1,5 +1,6 @@
 import pyashWords from "../pyashWords.json" with { type: "json" };
-import { decodePyacWord } from "./word_code.mjs";
+import { defaultVerbSpelling } from "../dictionary/verb_defaults.mjs";
+import { decodePyacWord, encodePyacWord, segmentPyacWords } from "./word_code.mjs";
 import {
   FIXED16_SCALE,
   fixed16ValueFromNumerator
@@ -601,10 +602,70 @@ export function lookupLegacyWordSequence(name) {
   const normalized = name.trim().toLowerCase();
   const direct = lookupLegacyName(normalized);
   if (direct) return [direct];
+  const defaultSpelling = defaultVerbSpelling(normalized);
+  if (defaultSpelling) {
+    const entries = defaultSpelling.map((part) => lookupLegacyName(part));
+    if (entries.every(Boolean)) return entries;
+  }
   const parts = legacyPyashCompoundParts.get(normalized);
-  if (!parts) return null;
-  const entries = parts.map((part) => lookupLegacyName(part));
-  return entries.every(Boolean) ? entries : null;
+  if (parts) {
+    const entries = parts.map((part) => lookupLegacyName(part));
+    if (entries.every(Boolean)) return entries;
+  }
+  // Written Pyac runs compound words together (`kl6mpsas` is `kl6m psas`), so
+  // recover the sequence from the glyph shapes and require every part to be a
+  // known atom. Without this the lookup fails on any unspaced compound that is
+  // not one of the hand-tabled spellings above.
+  if (/\s/u.test(normalized)) return null;
+  const segmented = segmentPyacWords(normalized);
+  if (!segmented || segmented.length < 2) return null;
+  const spelled = segmented.map((part) => lookupLegacyName(part));
+  return spelled.every(Boolean) ? spelled : null;
+}
+
+/**
+ * Resolve written Pyac as Pyac words, never as English.
+ *
+ * `lookupLegacyWordSequence` consults the English table first, so `name`
+ * resolves to the atom `hnim` — the word whose English gloss is "name". That is
+ * the right answer when the caller is typing an English word, and the wrong one
+ * when they are spelling Pyac: `name` written as Pyac glyphs is `na me`.
+ *
+ * This resolves each space-separated token by its Pyac spelling only, splitting
+ * a run-together compound on word shapes when the whole token is not one atom.
+ */
+export function lookupPyaWordSequence(name) {
+  if (typeof name !== "string" || !name.trim()) return null;
+  const tokens = name.trim().toLowerCase().split(/\s+/u).filter(Boolean);
+  // The codec is the identity, so a spelling resolves without a table: encode
+  // it, then decode it back to the canonical spelling. A word that does not
+  // round-trip is not a Pyac word.
+  const round = (candidate) => {
+    try {
+      const word = encodePyacWord(candidate);
+      if (decodePyacWord(word) !== candidate) return null;
+      return { en: null, hnuc: `0x${word.toString(16).toUpperCase().padStart(4, "0")}`, pya: candidate };
+    } catch {
+      return null;
+    }
+  };
+  const entries = [];
+  for (const token of tokens) {
+    const direct = round(token);
+    if (direct) {
+      entries.push(direct);
+      continue;
+    }
+    // Not one word: try it as a run-together compound. `name` is the case that
+    // matters — it is four glyphs with no valid final consonant, so it does not
+    // encode, but it segments cleanly into `na me`.
+    const segmented = segmentPyacWords(token);
+    if (!segmented || segmented.length < 2) return null;
+    const parts = segmented.map(round);
+    if (parts.some((part) => part === null)) return null;
+    entries.push(...parts);
+  }
+  return entries.length ? entries : null;
 }
 
 function legacyNumberWord(value) {

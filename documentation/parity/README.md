@@ -2,6 +2,10 @@
 
 This folder stores the last known parity status across `./run`, `./runjs`, and `./runc`.
 
+This runner checks **success only**, not equal output. For result equality use
+the declared gate: `npm run parity:gate` (see
+`documentation/reference/parity-gate.md`).
+
 ## Update
 
 Run:

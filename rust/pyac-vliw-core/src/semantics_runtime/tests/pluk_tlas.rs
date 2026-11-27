@@ -1,10 +1,12 @@
 use super::*;
 
-const PLUK: u32 = 0x2a64;
-const TLAS: u32 = 0x896a;
+const ASSESS: u32 = 0x2a64;
+const WORTH: u32 = 0x896a;
 const PREDICTION: u32 = 0x68b1;
 const ANSWER: u32 = 0x4930;
-const CORRECT_COUNT: u32 = 0xaa90;
+/// `hgut` = count.
+const COUNT: u32 = 0xaa90;
+const CORRECT_COUNT: u32 = COUNT;
 
 fn append_group(
     words: &mut std::vec::Vec<u32>,
@@ -85,11 +87,11 @@ fn append_f64_vector(words: &mut std::vec::Vec<u32>, name: u32, values: &[f64]) 
 }
 
 fn append_evaluation(words: &mut std::vec::Vec<u32>, prediction: u32, answer: u32) -> usize {
+    // gi bjin ka | do gi hgut ma | gi hnap yu | pluk tlas tu
     let tokens = [
         NAME_TYPE,
         prediction,
         ACCUSATIVE,
-        NAME_TYPE,
         NUMBER_TYPE,
         NAME_TYPE,
         CORRECT_COUNT,
@@ -97,11 +99,11 @@ fn append_evaluation(words: &mut std::vec::Vec<u32>, prediction: u32, answer: u3
         NAME_TYPE,
         answer,
         INSTRUMENTAL,
-        PLUK,
-        TLAS,
+        ASSESS,
+        WORTH,
         DEONTIC,
     ];
-    append_group(words, &tokens, &[2, 7, 10, 13])
+    append_group(words, &tokens, &[2, 6, 9, 12])
 }
 
 fn append_mutable_vector(words: &mut std::vec::Vec<u32>, name: u32, length: u32) {
@@ -169,7 +171,7 @@ fn counts_exact_float32_matches_between_named_vectors() {
     append_f32_vector(&mut words, PREDICTION, &[1.0, 2.0, 3.0]);
     append_f32_vector(&mut words, ANSWER, &[1.0, 2.0, 4.0]);
     let start = append_evaluation(&mut words, PREDICTION, ANSWER);
-    assert_eq!(words[start * CODELET_WORDS], 0x4909, "{words:?}");
+    assert_eq!(words[start * CODELET_WORDS], 0x2489, "{words:?}");
     let result = interpret_group(&words, start, words.len() / CODELET_WORDS);
     assert_eq!(result.error, 0, "{result:?}");
     assert_eq!(result.value_kind, VALUE_UNSIGNED);

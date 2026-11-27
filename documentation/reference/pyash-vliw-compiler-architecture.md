@@ -12,6 +12,22 @@ sectioned VLIW program whose code consists of full Pyash action sentences
 encoded as legacy codelets, and whose named data is also described with Pyash
 vocabulary and sentences.
 
+### Three representations
+
+The same program exists in three stages, and each is authoritative for a
+different question:
+
+| Layer | Artifact | Authority |
+| --- | --- | --- |
+| Sentence | `.pya`, per language (`.en.pya`, `.fr.pya`, `.zh.pya`) | Semantic truth: what the program means. |
+| Codelet | `.pyac`, sixteen 16-bit words | Interlingua encoding: exact bytes, fixed width, lossless with respect to the canonical sentence. The pivot for cross-language round-trip. |
+| Control word | Decoded, host `Vec` or GPU packed `[u32]` | Execution: what runs next. Derived and disposable; never authoritative over the codelet bytes. |
+
+The head bitmap is the bridge between the second and third layers: bits 1..15
+mark phrase boundaries, so a decoder can read the field map instead of walking
+the payload. See
+[`pyash-vliw-decode-and-dispatch.md`](pyash-vliw-decode-and-dispatch.md).
+
 The `.data`, `.symtab`, and `.text` names are useful assembly-format analogies;
 they are not directives to add to Pyash source. Pyash atoms and compounds name
 the concepts, and compilation derives the machine-oriented symbol index.
@@ -128,7 +144,7 @@ senses and the canonical Pyash vocabulary before assigning them VLIW meaning.
 | --- | --- | --- |
 | Pyash `.pya` source | Canonical sentence and paragraph semantics | Canonical source language contract, independent of the VLIW execution backend |
 | Searchable `.pya` VLIW catalog | Semantic identity, provenance, and query/replay view | Separate from a program's source file and from its packed bytes |
-| `.pyac` pack | Header plus deterministic fixed-width codelet bytes | Version 1 is a flat codelet sequence; no embedded data/code sections or mutable variable store; the interpreter allocates implemented numeric locals per invocation |
+| `.pyac` pack | Header plus deterministic fixed-width codelet bytes | Interlingua encoding and executable pack; the pivot for round-tripping canonical sentences across natural-language surfaces. Version 1 is a flat codelet sequence; no embedded data/code sections or mutable variable store; the interpreter allocates implemented numeric locals per invocation |
 | JavaScript VLIW tools | Source lowering, codelet encoding/decoding, and compatibility helpers | Not the semantic authority; execution behavior is defined by the shared Rust runtime |
 | C output from `.pyac` | Compile supported codelets to C, then use the host C compiler | Verified arithmetic and invert subset; not a general Pyash-to-C replacement |
 | Shared VLIW semantics runtime | `rust/pyac-vliw-core/src/semantics_runtime.rs`, compiled as a `no_std` Rust library and called by the CPU pack interpreter and GPU kernels | Canonical codelet families plus bounded scalar programlets with nested calls, branches, loops, signed/unsigned numbers, and booleans; not full Pyash interpreter parity |

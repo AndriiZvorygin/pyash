@@ -4,11 +4,48 @@ const ROUTINE: u32 = 0x6123;
 const ARGUMENT: u32 = 0x6124;
 const OUTPUT: u32 = 0x6125;
 const OTHER_ARGUMENT: u32 = 0x6126;
-const INNER_ROUTINE: u32 = 0x6127;
+const INNER_ROUTINE: u32 = 0x6129; // root
 const OUTER_ROUTINE: u32 = 0x6128;
 
-fn typed_name(kind: u32, name: u32) -> [u32; 4] {
-    [NAME_TYPE, kind, NAME_TYPE, name]
+/// A typed formal: one leading tag, the width word. `gi` marks names only.
+fn typed_name(kind: u32, name: u32) -> [u32; 2] {
+    [kind, name]
+}
+
+/// Append a sentence whose field boundaries are its case words and mood.
+fn append_auto(words: &mut std::vec::Vec<u32>, tokens: &[u32]) {
+    let boundaries: std::vec::Vec<usize> = tokens
+        .iter()
+        .enumerate()
+        .filter(|(_, token)| {
+            matches!(
+                **token,
+                NOMINATIVE
+                    | ACCUSATIVE
+                    | ESSIVE
+                    | DESTINATION
+                    | SOURCE
+                    | COMITATIVE
+                    | INSTRUMENTAL
+                    | FROM_INDEX
+                    | TO_INDEX
+                    | LOCATIVE
+                    | GENITIVE_CASE
+                    | REALIS
+                    | DEONTIC
+                    | CONDITIONAL
+                    | MOOD_DEFINITION
+                    | MOOD_RETURN
+                    | MOOD_PARAGRAPH
+            )
+        })
+        .map(|(index, _)| index)
+        .collect();
+    if tokens.len() < CODELET_WORDS {
+        append_sentence(words, tokens, &boundaries);
+    } else {
+        append_sentence_any(words, tokens, &boundaries);
+    }
 }
 
 fn append_sentence_any(words: &mut std::vec::Vec<u32>, tokens: &[u32], boundaries: &[usize]) {
@@ -56,7 +93,7 @@ fn append_definition(
     definition.push(SOURCE);
     definition.extend(output_field);
     definition.extend([DESTINATION, CEREMONY, MOOD_DEFINITION]);
-    append_sentence(words, &definition, &[2, 7, 12, 14]);
+    append_auto(words, &definition);
 }
 
 fn append_close(words: &mut std::vec::Vec<u32>, routine: u32) {
@@ -76,7 +113,7 @@ fn append_number_call_to(words: &mut std::vec::Vec<u32>, input: u32, kind: u32, 
     let mut call = std::vec![NUMBER_QUOTE, input, SOURCE];
     call.extend(output);
     call.extend([DESTINATION, routine, DEONTIC]);
-    append_sentence(words, &call, &[2, 7, 9]);
+    append_sentence(words, &call, &[2, 5, 7]);
 }
 
 fn append_boolean_call(words: &mut std::vec::Vec<u32>, value: u32) {
@@ -84,7 +121,7 @@ fn append_boolean_call(words: &mut std::vec::Vec<u32>, value: u32) {
     let mut call = std::vec![value, SOURCE];
     call.extend(output);
     call.extend([DESTINATION, ROUTINE, DEONTIC]);
-    append_sentence(words, &call, &[1, 6, 8]);
+    append_sentence(words, &call, &[1, 4, 6]);
 }
 
 fn run(words: &[u32]) -> CoreResult {
@@ -200,22 +237,17 @@ fn case_source_order_does_not_change_programlet_signature_lookup() {
     definition.push(SOURCE);
     definition.extend(output);
     definition.extend([DESTINATION, CEREMONY, MOOD_DEFINITION]);
-    append_sentence_any(&mut words, &definition, &[2, 7, 12, 17, 19]);
+    append_auto(&mut words, &definition);
 
-    append_sentence(
-        &mut words,
-        &[NUMBER_QUOTE, 23, ACCUSATIVE, MOOD_RETURN],
-        &[2, 3],
-    );
-    append_sentence(
+    append_auto(&mut words, &[NUMBER_QUOTE, 23, ACCUSATIVE, MOOD_RETURN]);
+    append_auto(
         &mut words,
         &[NAME_TYPE, ROUTINE, NOMINATIVE, CEREMONY, MOOD_PARAGRAPH],
-        &[2, 4],
     );
     let mut call = std::vec![NUMBER_QUOTE, 3, SOURCE, NUMBER_QUOTE, 4, COMITATIVE];
     call.extend(output);
     call.extend([DESTINATION, ROUTINE, DEONTIC]);
-    append_sentence(&mut words, &call, &[2, 5, 10, 12]);
+    append_auto(&mut words, &call);
 
     let result = run(&words);
     assert_eq!(result.error, 0, "{result:?}");
@@ -233,11 +265,7 @@ fn nested_programlet_calls_use_the_same_signature_directory() {
         OUTPUT,
         NUMBER_TYPE,
     );
-    append_sentence(
-        &mut words,
-        &[NUMBER_QUOTE, 31, ACCUSATIVE, MOOD_RETURN],
-        &[2, 3],
-    );
+    append_auto(&mut words, &[NUMBER_QUOTE, 31, ACCUSATIVE, MOOD_RETURN]);
     append_close(&mut words, INNER_ROUTINE);
 
     append_definition(
@@ -251,12 +279,8 @@ fn nested_programlet_calls_use_the_same_signature_directory() {
     let mut nested_call = std::vec![NUMBER_QUOTE, 9, SOURCE];
     nested_call.extend(typed_name(NUMBER_TYPE, OUTPUT));
     nested_call.extend([DESTINATION, INNER_ROUTINE, DEONTIC]);
-    append_sentence(&mut words, &nested_call, &[2, 7, 9]);
-    append_sentence(
-        &mut words,
-        &[NAME_TYPE, OUTPUT, NOMINATIVE, MOOD_RETURN],
-        &[2, 3],
-    );
+    append_auto(&mut words, &nested_call);
+    append_auto(&mut words, &[NAME_TYPE, OUTPUT, NOMINATIVE, MOOD_RETURN]);
     append_close(&mut words, OUTER_ROUTINE);
     append_number_call_to(&mut words, 5, NUMBER_TYPE, OUTER_ROUTINE);
 
@@ -266,25 +290,29 @@ fn nested_programlet_calls_use_the_same_signature_directory() {
 }
 
 #[test]
-fn rejects_missing_signatures_and_duplicate_definitions() {
+fn rejects_missing_signatures_and_applies_latest_definition() {
     let mut missing = std::vec::Vec::new();
     append_overload(&mut missing, NUMBER_TYPE, NUMBER_TYPE, &[NUMBER_QUOTE, 41]);
     append_boolean_call(&mut missing, TRUTH);
     assert_eq!(run(&missing).error, ERROR_UNSUPPORTED);
 
-    let mut duplicate = std::vec::Vec::new();
+    // Revision is latest-wins: the second definition of the same signature
+    // replaces the first, so the call returns the newer body.
+    let mut redefined = std::vec::Vec::new();
     append_overload(
-        &mut duplicate,
+        &mut redefined,
         NUMBER_TYPE,
         NUMBER_TYPE,
         &[NUMBER_QUOTE, 41],
     );
     append_overload(
-        &mut duplicate,
+        &mut redefined,
         NUMBER_TYPE,
         NUMBER_TYPE,
         &[NUMBER_QUOTE, 42],
     );
-    append_number_call(&mut duplicate, 7, NUMBER_TYPE);
-    assert_eq!(run(&duplicate).error, ERROR_DUPLICATE_SIGNATURE);
+    append_number_call(&mut redefined, 7, NUMBER_TYPE);
+    let result = run(&redefined);
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.values[0], 42);
 }

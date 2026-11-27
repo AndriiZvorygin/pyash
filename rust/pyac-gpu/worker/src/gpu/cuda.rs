@@ -254,7 +254,7 @@ impl CudaDevice {
             storage_names.len() as u32,
             storage_payload.len() as u32,
         );
-        let mut args: [*mut c_void; 9] = [
+        let mut args: [*mut c_void; 13] = [
             from_mut(&mut src).cast(),
             from_mut(&mut count).cast(),
             from_mut(&mut dst).cast(),
@@ -264,6 +264,10 @@ impl CudaDevice {
             from_mut(&mut storage_name_count).cast(),
             null_mut(),
             from_mut(&mut storage_payload_words).cast(),
+            null_mut(),
+            null_mut(),
+            null_mut(),
+            null_mut(),
         ];
         let (mut storage_descriptor_address, mut storage_name_address, mut storage_payload_address) = (
             storage_descriptor_buffer.address,
@@ -273,14 +277,27 @@ impl CudaDevice {
         args[3] = from_mut(&mut storage_descriptor_address).cast();
         args[5] = from_mut(&mut storage_name_address).cast();
         args[7] = from_mut(&mut storage_payload_address).cast();
+        args[8] = from_mut(&mut storage_payload_words).cast();
         let (entry, blocks, block_size) = if section_count > 0 {
             args[3] = from_mut(&mut descriptors).cast();
             args[4] = from_mut(&mut section_total).cast();
             args[5] = from_mut(&mut ticket).cast();
             args[6] = from_mut(&mut directory).cast();
+            args[7] = from_mut(&mut storage_descriptor_address).cast();
+            args[8] = from_mut(&mut storage_descriptor_words).cast();
+            args[9] = from_mut(&mut storage_name_address).cast();
+            args[10] = from_mut(&mut storage_name_count).cast();
+            args[11] = from_mut(&mut storage_payload_address).cast();
+            args[12] = from_mut(&mut storage_payload_words).cast();
             (2, section_total, 1)
         } else if programlet {
             args[3] = from_mut(&mut directory).cast();
+            args[4] = from_mut(&mut storage_descriptor_address).cast();
+            args[5] = from_mut(&mut storage_descriptor_words).cast();
+            args[6] = from_mut(&mut storage_name_address).cast();
+            args[7] = from_mut(&mut storage_name_count).cast();
+            args[8] = from_mut(&mut storage_payload_address).cast();
+            args[9] = from_mut(&mut storage_payload_words).cast();
             (1, 1, 1)
         } else {
             (0, count.div_ceil(64), 64)

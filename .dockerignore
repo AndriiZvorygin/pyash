@@ -32,3 +32,4 @@
 !web/
 !web/**
 **/target/**
+!container/pyac-vliw-runtime/Dockerfile.cuda

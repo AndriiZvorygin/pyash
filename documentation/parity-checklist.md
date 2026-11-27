@@ -2,6 +2,16 @@
 
 This checklist tracks parity work with explicit gates.
 
+## Authority and parity classes
+
+See `reference/parity-gate.md`. A new verb or signature declares one class:
+`core`, `pure`, `host`, or `legacy`. A `core` change must pass
+`npm run parity:gate`. The VLIW conformance matrix remains the `pure` gate.
+
+The legacy JavaScript interpreter is a historical implementation, not an
+authority. Its behavior is never a conformance target; where it diverges from
+spec 27 or the declared signature tables, the interpreter is the defect.
+
 ## 1) Recurrence Grammar Lock
 
 Status: done
@@ -91,3 +101,29 @@ env -u PYA_MIND_RESPONSE -u PYA_HEAR_FIXTURE -u PYA_PIPER_FIXTURE -u PYA_COMMAND
 npm test
 git diff --check
 ```
+
+## 8) Result-level parity gate
+
+Status: done; all declared families agree.
+
+Gate:
+- `core` cases produce identical normalized output on the interpreter, compiled JavaScript, and compiled C.
+- Known divergences can be pinned per backend; any change, a regression or a fix, fails the gate.
+- The authority map and parity classes are in `reference/parity-gate.md`.
+
+Verification:
+```sh
+npm run parity:gate
+node --test quiz/parity_gate.test.mjs
+```
+
+Formerly pinned divergences, now green:
+- numeric fact write
+- ceremony numeric result
+- file read result
+- nested comparison leaves
+
+Literal arithmetic covers `plus`, `subtract`, `multiply`, `divide`, `remains`,
+`exponential`, and `xor`, each restricted to the operand roles the interpreter
+accepts. Division by zero must exit 1 with no stdout and the same
+`divide: by cannot be zero` message on every backend.

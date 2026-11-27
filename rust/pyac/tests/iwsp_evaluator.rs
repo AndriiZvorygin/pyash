@@ -71,13 +71,16 @@ fn dot_product(left: u32, right: u32) -> [u16; WORDS_PER_CODELET] {
 }
 
 fn linear_candidate(weights: [[f32; 2]; 3]) -> PyacPack {
+    // These are section names in a synthetic candidate, not vocabulary
+    // references: the evaluator compares them by value, so any distinct words
+    // work. They are spelled as readable words for that reason.
+    const SECTION_NAMES: [u32; 3] = [0x4567, 0x6844, 0x5111]; // fcih, psin (weight), -
     let mut codelets = Vec::new();
     append_named_f32(&mut codelets, 0x4123, [1.0, 2.0]);
     for (index, weight) in weights.into_iter().enumerate() {
-        let name = [0x4567, 0x4890, 0x5111][index];
-        append_named_f32(&mut codelets, name, weight);
+        append_named_f32(&mut codelets, SECTION_NAMES[index], weight);
     }
-    for name in [0x4567, 0x4890, 0x5111] {
+    for name in SECTION_NAMES {
         codelets.push(dot_product(0x4123, name));
     }
     decode_pack(&encode_pack(&codelets).expect("linear candidate encodes"))

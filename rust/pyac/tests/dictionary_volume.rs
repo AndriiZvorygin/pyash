@@ -2,10 +2,9 @@ use std::fs::File;
 use std::io::Cursor;
 
 use pyac::dictionary::{
-    DictionaryField, DictionaryFileReader, DictionaryMetadata, DictionaryValue, DictionaryVolume,
-    DictionaryVolumeEntry, LexicalForm, OperationArgument, OperationArgumentType,
-    OperationSignature, OperationSignatureKey, SourceGloss, SourceLink, encode_dictionary,
-    encode_text_sentence,
+    ArgumentSlot, DictionaryField, DictionaryFileReader, DictionaryMetadata, DictionaryValue,
+    DictionaryVolume, DictionaryVolumeEntry, LexicalForm, OperationParameter, OperationSignature,
+    OperationSignatureKey, SourceGloss, SourceLink, encode_dictionary, encode_text_sentence,
 };
 
 const ENTRY_KEY: [u16; 2] = [0xa96a, 0x6c22]; // tlat kwon
@@ -67,13 +66,13 @@ fn sample_volume() -> DictionaryVolume {
             operation_signatures: vec![OperationSignature {
                 verb: vec![0x1111],
                 mood: vec![0x217e],
-                arguments: vec![OperationArgument {
-                    key: OperationArgumentType {
+                arguments: vec![OperationParameter {
+                    case_type: ArgumentSlot {
                         grammatical_case: vec![0x245e],
-                        value_type: vec![0x0e1d],
+                        noun_class: vec![0x0e1d],
                     },
-                    name: "subject".into(),
-                    description: "the value being evaluated".into(),
+                    tag_label: "subject".into(),
+                    descriptive_specification: "the value being evaluated".into(),
                 }],
                 results: vec![],
             }],
@@ -140,9 +139,9 @@ fn writer_emits_reproducible_pack_and_seek_reader_reads_entry_on_demand() {
     let signature = OperationSignatureKey::new(
         vec![0x1111],
         vec![0x217e],
-        vec![OperationArgumentType {
+        vec![ArgumentSlot {
             grammatical_case: vec![0x245e],
-            value_type: vec![0x0e1d],
+            noun_class: vec![0x0e1d],
         }],
     );
     assert_eq!(
@@ -375,6 +374,48 @@ fn canonical_ranges_end_at_the_next_entry_even_for_multicodelet_keys() {
     }
 }
 
+/// Every canonical entry must be readable back by its own key.
+///
+/// This is the regression guard for the `na` defect: the reader used to find the
+/// end of a name subject by scanning for the SU word value, so any key whose
+/// word *is* SU could not be read, and its neighbours in the same codelet group
+/// failed with it. A sampled test missed it; walking the whole index cannot.
+#[test]
+fn every_canonical_entry_reads_back_by_its_own_key() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../program/library/dictionary/reference.pyac");
+    let mut reader = DictionaryFileReader::open(
+        File::open(path).expect("tracked reference dictionary is available"),
+    )
+    .expect("open reference dictionary by seeking");
+
+    // Every key mentioned by the canonical index must read back. The index row
+    // addresses an entry offset, so this covers the whole volume without
+    // guessing entry boundaries.
+    let keys = reader.canonical_keys().expect("enumerate canonical keys");
+    assert!(
+        keys.len() > 1_000,
+        "the canonical index must list the whole vocabulary, saw {}",
+        keys.len()
+    );
+
+    let mut failures: Vec<String> = Vec::new();
+    for key in &keys {
+        match reader.read_entry(key) {
+            Ok(words) if !words.is_empty() => {}
+            Ok(_) => failures.push(format!("key {key:x?} decoded as empty")),
+            Err(error) => failures.push(format!("key {key:x?}: {error}")),
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "{} of {} entries failed to read back: {:?}",
+        failures.len(),
+        keys.len(),
+        &failures[..failures.len().min(10)]
+    );
+}
+
 #[test]
 fn published_reference_volume_indexes_the_promoted_sumo_concepts() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -385,7 +426,14 @@ fn published_reference_volume_indexes_the_promoted_sumo_concepts() {
     .expect("open reference dictionary by seeking");
 
     assert_eq!(reader.profile_version(), "pyac-vliw-dictionary/4");
-    assert_eq!(reader.entry_count(), 64_572);
+    // The published volume grows as vocabulary is added, so pin a floor rather
+    // than an exact count: an exact number fails on every legitimate addition
+    // and says nothing about what this test actually checks.
+    assert!(
+        reader.entry_count() > 64_000,
+        "expected the whole vocabulary, saw {}",
+        reader.entry_count()
+    );
     let offsets = reader
         .lookup_surface("en", "map")
         .expect("scan reference surface index");
