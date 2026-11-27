@@ -70,7 +70,7 @@ test("evolution is deterministic for the same seed and evaluator results", async
 test("evolution requires an evaluator callback and rejects malformed evaluator results", async () => {
   await assert.rejects(evolveVliwFunction({
     template, trainingCases, heldoutCases
-  }), /Housekeeper-backed evaluateBatch/u);
+  }), /evaluateBatch callback/u);
   await assert.rejects(evolveVliwFunction({
     template,
     trainingCases,

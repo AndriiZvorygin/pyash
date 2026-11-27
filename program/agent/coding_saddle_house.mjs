@@ -232,7 +232,7 @@ export async function seedCodingSaddleHouseGuide({ agentHouse, cwd } = {}) {
     "- `artifacts/`: generated evidence and outputs when a workflow writes them.",
     "- `program/` in the Pyash repository contains the shared runtime; do not duplicate project source or the Knowledge Core in this house.",
     "",
-    "Project files remain in the working directory. File tools resolve ordinary relative paths from that directory; `~/...` and explicit absolute paths under the home directory are available to saddle file tools. Shell commands continue to run from the project directory under their existing command sandbox and authorization rules."
+    "Project files remain in the working directory. File tools resolve ordinary relative paths from that directory; `~/...` and explicit absolute paths under the home directory are available to saddle file tools. The coding saddle can run commands, including destructive changes, in the project directory without a per-command approval prompt. The command runner still enforces its configured sandbox and writable-root checks."
   ].join("\n") + "\n";
   await fs.mkdir(path.dirname(filename), { recursive: true });
   await fs.writeFile(filename, content, { encoding: "utf8", flag: "wx" }).catch(async (writeError) => {

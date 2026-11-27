@@ -8,6 +8,7 @@ const NON_CASE_FIELDS = new Set([
   "mood",
   "be",
   "exists",
+  "quoteKinds",
   "signatureWords",
   "signature",
   "ret",

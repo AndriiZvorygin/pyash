@@ -191,7 +191,7 @@ export function parseVliwFunctionSource(sourceText, { functionName = "" } = {}) 
   if (!selected) fail(`VLIW function not found: ${requestedName}`, { functionName: requestedName });
 
   const { block, fields } = selected;
-  requireFields(fields, [
+  const requiredFunctionFields = [
     "function name",
     "slots",
     "input slots",
@@ -199,7 +199,10 @@ export function parseVliwFunctionSource(sourceText, { functionName = "" } = {}) 
     "instruction series",
     "training case series",
     "heldout case series"
-  ], `function map ${block.name}`);
+  ];
+  const functionFields = [...requiredFunctionFields];
+  if (fields.has("step budget")) functionFields.push("step budget");
+  requireFields(fields, functionFields, `function map ${block.name}`);
 
   const name = textValue(requiredField(fields, "function name", block.name), "function name");
   const slots = textVector(requiredField(fields, "slots", block.name), "function slots");
@@ -215,6 +218,7 @@ export function parseVliwFunctionSource(sourceText, { functionName = "" } = {}) 
     slots,
     inputSlots,
     outputSlot,
+    ...(fields.has("step budget") ? { stepBudget: requiredField(fields, "step budget", block.name)?.num } : {}),
     instructions: resolveSeries(blocks, instructionSeriesName, "instruction")
       .map((instructionName) => loadInstruction(blocks, instructionName))
   });
@@ -268,6 +272,7 @@ export function renderVliwFunctionSource({ definition: rawDefinition, trainingCa
       ["slots", { ve: { type: "text", values: definition.slots } }],
       ["input slots", { ve: { type: "text", values: definition.inputSlots } }],
       ["output slot", { name: definition.outputSlot }],
+      ["step budget", { num: definition.stepBudget }],
       ["instruction series", { name: "vliw function instructions" }],
       ["training case series", { name: "vliw function training" }],
       ["heldout case series", { name: "vliw function heldout" }]

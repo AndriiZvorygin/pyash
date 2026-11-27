@@ -7,6 +7,7 @@ import { isErrorSentence, throwErrorSentence } from "../../error.mjs";
 import { getEffectiveVyahAspect } from "../../library/grammar/vyah.mjs";
 import { resolveConfigBool } from "../../configure/env.mjs";
 import { ensureAgentPathDir, resolveAgentPath } from "../../library/agent_cwd.mjs";
+import { buildFilesystemPathDiagnostic } from "../../library/filesystem_diagnostics.mjs";
 import { appendWorldActivity, isWorldToolsActive, resolveWorldAgent, resolveWorldPath, resolveWorldPlace, resolveWorldPlaceDir } from "../../library/world.mjs";
 import { renderWriteValue, normalizeNewlines } from "./write_helpers.mjs";
 import { startFileTail, makeStreamIncrementalWriter } from "./write_stream.mjs";
@@ -208,12 +209,44 @@ export default async function write(sentence, { remember: rememberFn = remember,
         raw: { target }
       });
     }
-    await ensureAgentPathDir(resolved, { agentCwd: resolvedAgentCwd, outside });
     target = resolved;
-    if (worldMode) {
-      await fs.mkdir(path.dirname(target), { recursive: true });
+    try {
+      await ensureAgentPathDir(resolved, { agentCwd: resolvedAgentCwd, outside });
+      if (worldMode) {
+        await fs.mkdir(path.dirname(target), { recursive: true });
+      }
+      await fs.writeFile(target, normalized, "utf8");
+    } catch (error) {
+      const diagnostic = await buildFilesystemPathDiagnostic({
+        operation: "write file",
+        targetPath: target,
+        expected: "a directory for the file's parent path",
+        inspectPath: path.dirname(target),
+        error,
+        nextSteps: (inspection) => {
+          if (inspection.status === "not-directory") {
+            return [
+              `Read the existing entry at "${inspection.path}" to inspect it,`,
+              "or choose a different destination under a directory path.",
+              "Do not replace or remove the blocking entry unless that is explicitly intended."
+            ];
+          }
+          if (inspection.status === "missing") {
+            return [
+              `Create the missing parent directory "${inspection.path}" first,`,
+              "or choose a destination under an existing directory."
+            ];
+          }
+          return ["Check the parent directory and write permissions, then retry after correcting the reported filesystem error."];
+        }
+      });
+      throwErrorSentence({
+        name: "write defective",
+        message: diagnostic.message,
+        from: { name: "write" },
+        raw: diagnostic.details
+      });
     }
-    await fs.writeFile(target, normalized, "utf8");
     const buffer = Buffer.from(normalized, "utf8");
     try {
       const artifact = recordArtifact({ locator: target, producer: "exchange", bytes: buffer });

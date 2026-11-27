@@ -1,0 +1,7 @@
+su name count once to name num answer be ceremony def
+exists su name count ob num 0 as name variable be number ya
+ob num 1 to name num count be plus do
+su name count ret
+su name count once be ceremony prah
+
+to name num answer be count once do

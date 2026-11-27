@@ -9,6 +9,7 @@ import { listAgents } from "../agent/admin.mjs";
 import { listWarmOllamaMinds } from "../motor/ollama_admin.mjs";
 import { listSayBackends } from "../motor/say_admin.mjs";
 import { resolveAgentPath } from "../library/agent_cwd.mjs";
+import { buildFilesystemPathDiagnostic, inspectFilesystemPath } from "../library/filesystem_diagnostics.mjs";
 
 function resolveFilename(value, { rememberFn } = {}) {
   if (!value) return "";
@@ -93,6 +94,39 @@ function resolveSchedulerTarget(sentence) {
   if (typeof sentence?.su?.name === "string" && sentence.su.name.trim()) return sentence.su.name.trim();
   if (typeof sentence?.to?.name === "string" && sentence.to.name.trim()) return sentence.to.name.trim();
   return "";
+}
+
+async function throwListPathError(root, error = null) {
+  const diagnostic = await buildFilesystemPathDiagnostic({
+    operation: "list directory",
+    targetPath: root,
+    expected: "a directory",
+    error,
+    nextSteps: (inspection) => {
+      if (inspection.status === "not-directory") {
+        if (inspection.path === path.resolve(root)) {
+          return [
+            `Read this file at "${inspection.path}" to inspect its contents,`,
+            `or list its parent directory "${path.dirname(inspection.path)}".`
+          ];
+        }
+        return [
+          `Inspect the blocking entry at "${inspection.path}",`,
+          "then choose a directory path that does not pass through it."
+        ];
+      }
+      if (inspection.status === "missing") {
+        return [`Check the path, or list its parent directory "${path.dirname(inspection.path)}".`];
+      }
+      return ["Check the path and directory permissions, then retry with a valid directory."];
+    }
+  });
+  throwErrorSentence({
+    name: "list defective",
+    message: diagnostic.message,
+    from: { name: "list" },
+    raw: diagnostic.details
+  });
 }
 
 export async function list(sentence, { remember: rememberFn = remember } = {}) {
@@ -181,39 +215,32 @@ export async function list(sentence, { remember: rememberFn = remember } = {}) {
   const recursive = mode === "recursive";
   const filter = recursive ? "all" : normalizeFilter(mode);
 
+  const pathInspection = await inspectFilesystemPath(root);
+  if (pathInspection.status === "not-directory") {
+    await throwListPathError(root);
+  }
   if (worldMode && root) {
-    await ensureWorldDir(root);
+    try {
+      await ensureWorldDir(root);
+    } catch (err) {
+      await throwListPathError(root, err);
+    }
   }
   let stats;
   try {
     stats = await fs.stat(root);
   } catch (err) {
-    throwErrorSentence({
-      name: "list defective",
-      message: `list defective: ${root}`,
-      from: { name: "list" },
-      raw: { error: err?.message }
-    });
+    await throwListPathError(root, err);
   }
   if (!stats?.isDirectory?.()) {
-    throwErrorSentence({
-      name: "list defective",
-      message: `list defective: ${root}`,
-      from: { name: "list" },
-      raw: { root }
-    });
+    await throwListPathError(root);
   }
 
   let entries;
   try {
     entries = await walkDir(root, { filter, hidden, recursive });
   } catch (err) {
-    throwErrorSentence({
-      name: "list defective",
-      message: `list defective: ${root}`,
-      from: { name: "list" },
-      raw: { error: err?.message }
-    });
+    await throwListPathError(root, err);
   }
 
   if (!entries.length) {

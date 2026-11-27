@@ -8,6 +8,7 @@ REPOSITORY=${PYA_MASTER_SAFETY_REPOSITORY:-$DEFAULT_REPOSITORY}
 REMOTE=${PYA_MASTER_SAFETY_REMOTE:-github}
 BRANCH=${PYA_MASTER_SAFETY_BRANCH:-master}
 DEV_BRANCH=${PYA_MASTER_SAFETY_DEV_BRANCH:-dev}
+ADDITIONAL_SOURCE_BRANCHES=${PYA_MASTER_SAFETY_ADDITIONAL_SOURCE_BRANCHES:-dev-vocab}
 PUSH_REMOTES=${PYA_MASTER_SAFETY_PUSH_REMOTES:-origin github}
 MODEL=${PYA_MASTER_SAFETY_MODEL:-gpt-6-luna}
 REASONING=${PYA_MASTER_SAFETY_REASONING:-xhigh}
@@ -51,6 +52,21 @@ if ! [[ "$DEV_BRANCH" =~ ^[A-Za-z0-9._-]+$ ]] || [[ "$DEV_BRANCH" == "$BRANCH" ]
   printf 'PYA_MASTER_SAFETY_DEV_BRANCH must be a different simple branch name.\n' >&2
   exit 2
 fi
+read -r -a additional_source_branches <<< "$ADDITIONAL_SOURCE_BRANCHES"
+source_branch_names=("$DEV_BRANCH" "${additional_source_branches[@]}")
+declare -A source_branch_seen=()
+for source_branch in "${source_branch_names[@]}"; do
+  if ! [[ "$source_branch" =~ ^[A-Za-z0-9._-]+$ ]] || [[ "$source_branch" == "$BRANCH" ]]; then
+    printf 'invalid promotion source branch: %s\n' "$source_branch" >&2
+    exit 2
+  fi
+  if [[ -n "${source_branch_seen[$source_branch]:-}" ]]; then
+    printf 'duplicate promotion source branch: %s\n' "$source_branch" >&2
+    exit 2
+  fi
+  source_branch_seen[$source_branch]=1
+done
+SOURCE_BRANCH_LIST="${source_branch_names[*]}"
 
 mkdir -p "$REPOSITORY/artifacts/local-$BRANCH-safety" "$WORKTREE_PARENT"
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
@@ -100,6 +116,7 @@ write_result() {
     printf 'su name source remote ob text "%s" ya\n' "$REMOTE"
     printf 'su name source branch ob text "%s" ya\n' "$BRANCH"
     printf 'su name source commit ob text "%s" ya\n' "$BASE_SHA"
+    printf 'su name source branch list ob text "%s" ya\n' "$SOURCE_BRANCH_LIST"
     printf 'su name source dev branch ob text "%s" ya\n' "$DEV_BRANCH"
     printf 'su name source dev commit ob text "%s" ya\n' "$DEV_SHA"
     if [[ -n "$MERGE_INPUTS" ]]; then
@@ -135,8 +152,8 @@ write_result() {
 trap finish EXIT
 
 printf 'local master maintainer run %s\n' "$RUN_ID"
-printf 'repository: %s\nsource remote: %s\nmaster: %s\ndev: %s\npush remotes: %s\nmodel: %s (%s)\n' \
-  "$REPOSITORY" "$REMOTE" "$BRANCH" "$DEV_BRANCH" "$PUSH_REMOTES" "$MODEL" "$REASONING"
+printf 'repository: %s\nsource remote: %s\nmaster: %s\npromotion source branches: %s\npush remotes: %s\nmodel: %s (%s)\n' \
+  "$REPOSITORY" "$REMOTE" "$BRANCH" "$SOURCE_BRANCH_LIST" "$PUSH_REMOTES" "$MODEL" "$REASONING"
 
 read -r -a push_remote_names <<< "$PUSH_REMOTES"
 if (( ${#push_remote_names[@]} == 0 )); then
@@ -158,16 +175,18 @@ for remote_name in "$REMOTE" "${push_remote_names[@]}"; do
     FINAL_STATUS=configuration-error
     exit 2
   fi
-  git -C "$REPOSITORY" fetch --no-tags "$remote_name" \
-    "+refs/heads/$BRANCH:refs/remotes/$remote_name/$BRANCH" \
-    "+refs/heads/$DEV_BRANCH:refs/remotes/$remote_name/$DEV_BRANCH"
+  fetch_refspecs=("+refs/heads/$BRANCH:refs/remotes/$remote_name/$BRANCH")
+  for source_branch in "${source_branch_names[@]}"; do
+    fetch_refspecs+=("+refs/heads/$source_branch:refs/remotes/$remote_name/$source_branch")
+  done
+  git -C "$REPOSITORY" fetch --no-tags "$remote_name" "${fetch_refspecs[@]}"
   fetched_remotes[$remote_name]=1
   remote_names+=("$remote_name")
 done
 
 BASE_SHA=$(git -C "$REPOSITORY" rev-parse "refs/remotes/$REMOTE/$BRANCH")
 DEV_SHA=$(git -C "$REPOSITORY" rev-parse "refs/remotes/$REMOTE/$DEV_BRANCH")
-for branch_name in "$BRANCH" "$DEV_BRANCH"; do
+for branch_name in "$BRANCH" "${source_branch_names[@]}"; do
   for remote_name in "${remote_names[@]}"; do
     branch_sha=$(git -C "$REPOSITORY" rev-parse "refs/remotes/$remote_name/$branch_name")
     if [[ -n "$MERGE_INPUTS" ]]; then MERGE_INPUTS+=" "; fi
@@ -179,9 +198,9 @@ printf 'remote branch tips selected for merge: %s\n' "$MERGE_INPUTS"
 SHORT_SHA=${DEV_SHA:0:12}
 BRANCH_NAME="local-$BRANCH-safety/$SHORT_SHA-$RUN_ID"
 WORKTREE="$WORKTREE_PARENT/.pyash-$BRANCH-safety-$RUN_ID"
-printf 'testing proposed merge: %s %s + %s %s\nworktree: %s\n' "$REMOTE" "$BASE_SHA" "$DEV_BRANCH" "$DEV_SHA" "$WORKTREE"
+printf 'testing proposed merge from branch inputs: %s\nworktree: %s\n' "$MERGE_INPUTS" "$WORKTREE"
 git -C "$REPOSITORY" worktree add -b "$BRANCH_NAME" "$WORKTREE" "$BASE_SHA"
-for branch_name in "$BRANCH" "$DEV_BRANCH"; do
+for branch_name in "$BRANCH" "${source_branch_names[@]}"; do
   for remote_name in "${remote_names[@]}"; do
     merge_sha=$(git -C "$REPOSITORY" rev-parse "refs/remotes/$remote_name/$branch_name")
     printf 'merging %s/%s at %s into candidate\n' "$remote_name" "$branch_name" "$merge_sha"
@@ -236,7 +255,7 @@ while :; do
   cat > "$prompt" <<EOF
 # Local master maintainer full-suite repair
 
-This fresh local worktree contains the proposed merge of GitHub $BRANCH at $BASE_SHA and $DEV_BRANCH at $DEV_SHA. Its full repository CI-tier suite failed; inspect this in-worktree test output:
+This fresh local worktree contains the proposed promotion from these fetched branch inputs: $MERGE_INPUTS. Its full repository CI-tier suite failed; inspect this in-worktree test output:
 
 $evidence_relative
 

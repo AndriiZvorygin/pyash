@@ -13,6 +13,37 @@ import {
   renderLegacyNumericPlusCodelet
 } from "../program/library/vliw/quotes.mjs";
 import { decodeNumericPlusCodelet } from "../program/library/vliw/plus.mjs";
+import { decodeLegacyCodelet, decodeLegacyCodeletSequence } from "../program/library/vliw/codelets.mjs";
+import { QUOTED_GRAMMAR_WORD } from "../program/library/vliw/quotes.mjs";
+
+function paragraphQuote(text) {
+  return [
+    PARAGRAPH_LETTER_QUOTE_WORD,
+    text.length,
+    ...Array.from({ length: text.length }, (_, index) => text.charCodeAt(index))
+  ];
+}
+
+function indexedVectors(words) {
+  const chunks = [];
+  for (let offset = 0; offset < words.length; offset += 15) {
+    chunks.push(words.slice(offset, offset + 15));
+  }
+  return chunks.map((chunk, index) => {
+    const vector = new Uint16Array(16);
+    vector[0] = index === chunks.length - 1 ? 1 : (index === 0 ? 2 : 0);
+    vector.set(chunk, 1);
+    return vector;
+  });
+}
+
+function taggedQuoteWords({ tag = "pyash", payload = "body", optional = [] } = {}) {
+  const tagWords = paragraphQuote(tag);
+  return [
+    QUOTED_GRAMMAR_WORD, 0, ...tagWords, ...optional, 0,
+    ...paragraphQuote(payload), 0, ...tagWords, 0, QUOTED_GRAMMAR_WORD
+  ];
+}
 
 const onePlusOneWords = [
   0x0149, 0x881d, 0x0001, 0x245e, 0x881d, 0x0001, 0x243e, 0x8a64,
@@ -40,6 +71,9 @@ test("quote descriptors identify legacy quote families", () => {
   });
   assert.equal(decodeQuoteWord(LETTER_QUOTE_WORD).family, "letter");
   assert.equal(decodeQuoteWord(PARAGRAPH_LETTER_QUOTE_WORD).family, "paragraph-letter");
+  assert.equal(QUOTED_GRAMMAR_WORD, 0x229e);
+  assert.equal(decodeQuoteHeader(0xee1d).sortName, "function");
+  assert.equal(errorCode(() => decodeQuoteWord(0xee1d)), "unknown-quote");
 });
 
 test("numeric quote decodes its typed payload", () => {
@@ -89,6 +123,72 @@ test("letter and paragraph-letter quotes decode their character payloads", () =>
   assert.equal(paragraph.lengthWord, 3);
   assert.equal(paragraph.value, "Thi");
   assert.equal(paragraph.nextOffset, 5);
+});
+
+test("tagged quote frames parse kind and payload by their typed lengths", () => {
+  const frame = decodeLegacyCodeletSequence(indexedVectors(taggedQuoteWords({
+    tag: "py\u0000ash",
+    payload: "body"
+  })));
+  const item = frame.items.find(({ kind }) => kind === "tagged-quote");
+
+  assert.equal(item.tag, "py\u0000ash");
+  assert.equal(item.quote.value, "body");
+  assert.equal(item.payloadLength, undefined);
+  assert.deepEqual(item.tagWords, paragraphQuote("py\u0000ash"));
+});
+
+test("tagged quote frames accept optional length and variable-length hash quotes", () => {
+  const payload = "payload body";
+  const lengthOnly = decodeLegacyCodeletSequence(indexedVectors(taggedQuoteWords({
+    payload,
+    optional: [NUMBER_QUOTE_WORD, payload.length]
+  })));
+  const lengthOnlyFrame = lengthOnly.items.find(({ kind }) => kind === "tagged-quote");
+  assert.equal(lengthOnlyFrame.payloadLength, payload.length);
+  assert.equal(lengthOnlyFrame.hashQuote, undefined);
+
+  for (const hash of ["sum", "long-digest"]) {
+    const frame = decodeLegacyCodeletSequence(indexedVectors(taggedQuoteWords({
+      payload,
+      optional: [NUMBER_QUOTE_WORD, payload.length, ...paragraphQuote(hash)]
+    })));
+    const item = frame.items.find(({ kind }) => kind === "tagged-quote");
+
+    assert.equal(item.payloadLength, payload.length);
+    assert.equal(item.hashQuote.value, hash);
+    assert.equal(item.quote.value, payload);
+  }
+});
+
+test("tagged quote frames reject a mismatched closing tag and hash without length", () => {
+  const mismatched = taggedQuoteWords();
+  const closeTagCharacter = mismatched.lastIndexOf(0x0079);
+  mismatched[closeTagCharacter] = 0x0078;
+  assert.throws(
+    () => decodeLegacyCodeletSequence(indexedVectors(mismatched)),
+    (error) => error.code === "mismatched-quote-frame"
+  );
+
+  assert.throws(
+    () => decodeLegacyCodeletSequence(indexedVectors(taggedQuoteWords({
+      optional: paragraphQuote("hash")
+    }))),
+    (error) => error.code === "invalid-quote-frame"
+  );
+
+  assert.throws(
+    () => decodeLegacyCodeletSequence(indexedVectors(taggedQuoteWords({
+      optional: [NUMBER_QUOTE_WORD, 5]
+    }))),
+    (error) => error.code === "invalid-quote-frame"
+  );
+});
+
+test("zi followed by zero padding remains an ordinary delimiter word", () => {
+  const words = new Uint16Array(16);
+  words[0] = QUOTED_GRAMMAR_WORD;
+  assert.equal(decodeLegacyCodelet(words).items[0].word, QUOTED_GRAMMAR_WORD);
 });
 
 test("fixed-width legacy vector quotes decode without promoting sentence semantics", () => {

@@ -9,6 +9,7 @@ import { allRemember, forget } from "../program/remember/index.mjs";
 import { deriveSignatureFromCall, joinSignatureWords } from "../program/bridge/signature.mjs";
 import { resetMindLogs } from "../program/verbs/mind/mind.mjs";
 import { callStreamingToolTurn, extractExplicitToolCalls, runToolChat } from "../program/verbs/mind/tool_chat.mjs";
+import { buildToolSchemas } from "../program/verbs/mind/tooling.mjs";
 
 test("missing tool-stream terminal includes command process diagnostics", async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-mind-stream-error-"));
@@ -63,6 +64,69 @@ test("mind tool chat ignores prose that is not an explicit allowed tool call", (
     extractExplicitToolCalls("I should search the web before answering.", [{ function: { name: "search" } }]),
     []
   );
+});
+
+test("Bash approval results give the model concise pretty JSON instead of escaped Pyash", async () => {
+  forget();
+  resetMindLogs();
+  await interpret(parse("su name command configure be map def"));
+  await interpret(parse("su name policy mode ob wo ask ya"));
+  await interpret(parse("su name classifier enabled ob bool truth ya"));
+  await interpret(parse("prah"));
+
+  const capability = parse("su name command be command ob text input to name text out can");
+  const requests = [];
+  const events = [];
+  const responses = [
+    {
+      message: {
+        role: "assistant",
+        content: "",
+        tool_calls: [{
+          id: "remove-magazine",
+          type: "function",
+          function: { name: "bash", arguments: { command: "rm -rf magaiize" } }
+        }]
+      }
+    },
+    { message: { role: "assistant", content: "The removal needs approval." } }
+  ];
+
+  const answer = await runToolChat({
+    sentence: parse('be write ob text "remove the scaffold" for name helper to name helper-out do'),
+    ob: {},
+    mindName: "helper",
+    model: "fixture-model",
+    dialogue: "helper readable approval result test",
+    callPrompt: "Use the requested command.",
+    resolvedConfigPrompt: "Run the requested task.",
+    historyMessages: [],
+    toolMap: new Map([["bash", capability]]),
+    tools: [{ type: "function", function: { name: "bash", parameters: { type: "object" } } }],
+    toolBlock: "",
+    backendName: "test backend",
+    mindDebug: false,
+    debugMind: () => {},
+    onToolCall: async (event) => events.push(event),
+    stream: false,
+    inputs: { inputText: "Remove magaiize." },
+    callBackend: async ({ payload }) => {
+      requests.push(structuredClone(payload));
+      return responses.shift();
+    }
+  });
+
+  assert.equal(answer, "The removal needs approval.");
+  const result = events.find((event) => event.stage === "result");
+  const approval = JSON.parse(result.toolText);
+  assert.equal(approval.status, "approval_required");
+  assert.equal(approval.command, "rm -rf magaiize");
+  assert.equal(approval.command_class, "destructive");
+  assert.match(approval.request, /^command request \d{6}$/u);
+  assert.doesNotMatch(result.toolText, /fromtext|resume token|\\\\/u);
+
+  const toolMessage = requests[1].messages.find((message) => message.role === "tool");
+  assert.deepEqual(JSON.parse(toolMessage.content), approval);
 });
 
 test("mind tool chat forwards top-level provider usage metadata to the saddle", async () => {
@@ -806,4 +870,116 @@ test("runtime status tool receives the current model context", async () => {
   assert.match(toolResultPrompt, /temperature/);
   assert.match(toolResultPrompt, /think/);
   assert.match(toolResultPrompt, /mriczo/);
+});
+
+async function runBashToolScenario({ commandText, cwd = process.cwd() } = {}) {
+  forget();
+  resetMindLogs();
+  const modulePath = path.resolve("module/saddle_bash_tools.pya");
+  await interpret(parse(`from filename ${JSON.stringify(modulePath)} ob name saddle command tools to name saddle command tools be import do`));
+  await interpret(parse("su name command configure be map def"));
+  await interpret(parse("su name policy mode ob wo allow ya"));
+  await interpret(parse("su name classifier enabled ob bool truth ya"));
+  await interpret(parse("prah"));
+  await interpret(parse("su name sandbox configure be map def"));
+  await interpret(parse(`su name cwd ob filename ${JSON.stringify(cwd)} ya`));
+  await interpret(parse(`su name writable roots ob ve filename ${JSON.stringify(cwd)} ya`));
+  await interpret(parse("prah"));
+
+  const tools = buildToolSchemas("saddle command tools");
+  const requests = [];
+  const events = [];
+  const responseText = await runToolChat({
+    sentence: parse('be write ob text "run a command" for name helper to name helper-out do'),
+    ob: {},
+    mindName: "helper",
+    model: "fixture-model",
+    dialogue: "Bash diagnostic scenario",
+    callPrompt: "Run the requested shell command and report the result.",
+    resolvedConfigPrompt: "Use the Bash tool.",
+    historyMessages: [],
+    toolMapName: "saddle command tools",
+    toolMap: tools.toolMap,
+    tools: tools.tools,
+    toolBlock: tools.toolBlock,
+    backendName: "ollama command mind",
+    mindDebug: false,
+    debugMind: () => {},
+    onToolCall: async (event) => events.push(event),
+    stream: true,
+    inputs: { inputText: "Run the requested shell command and report the result." },
+    callStream: async ({ payload }) => {
+      requests.push(payload);
+      if (requests.length === 1) {
+        return {
+          message: {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "bash-diagnostic-call",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: commandText }) }
+            }]
+          }
+        };
+      }
+      return { message: { role: "assistant", content: "I read the Bash diagnostic." } };
+    }
+  });
+  const toolMessage = requests.at(-1)?.messages?.find((message) => message.role === "tool");
+  return { responseText, toolText: String(toolMessage?.content ?? ""), events };
+}
+
+test("Bash subprocess stderr and command diagnostics reach the next model request", async () => {
+  const commandText = "node -e \"process.stdout.write('BASH_STDOUT_MARKER'); process.stderr.write('BASH_STDERR_MARKER'); process.exit(7)\"";
+  const result = await runBashToolScenario({ commandText });
+
+  assert.equal(result.responseText, "I read the Bash diagnostic.");
+  assert.match(result.toolText, /command defective: status=7/u);
+  assert.ok(result.toolText.includes(`command: ${commandText}`), result.toolText);
+  assert.match(result.toolText, /stdout:\nBASH_STDOUT_MARKER/u);
+  assert.match(result.toolText, /stderr:\nBASH_STDERR_MARKER/u);
+  assert.match(result.toolText, /command ran and failed/u);
+  const toolResult = result.events.find((event) => event.stage === "result");
+  assert.match(toolResult?.toolText ?? "", /BASH_STDERR_MARKER/u);
+  assert.deepEqual(toolResult?.commandOutcome, { exitCode: 7, signal: null, timedOut: false });
+});
+
+test("Bash subprocess stderr reaches the next model request when the command succeeds", async () => {
+  const commandText = "node -e \"process.stdout.write('BASH_SUCCESS_STDOUT'); process.stderr.write('BASH_SUCCESS_STDERR')\"";
+  const result = await runBashToolScenario({ commandText });
+
+  assert.equal(result.responseText, "I read the Bash diagnostic.");
+  assert.ok(result.toolText.includes(commandText));
+  assert.match(result.toolText, /exit code: 0/u);
+  assert.match(result.toolText, /stdout:\nBASH_SUCCESS_STDOUT/u);
+  assert.match(result.toolText, /stderr:\nBASH_SUCCESS_STDERR/u);
+  const toolResult = result.events.find((event) => event.stage === "result");
+  assert.match(toolResult?.toolText ?? "", /BASH_SUCCESS_STDERR/u);
+  assert.deepEqual(toolResult?.commandOutcome, { exitCode: 0, signal: null, timedOut: false });
+});
+
+test("Bash sandbox rejection tells the model which command and roots blocked execution", async () => {
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-mind-bash-sandbox-"));
+  const outsidePath = path.join(os.tmpdir(), `pyash-bash-denied-${process.pid}-${Date.now()}`);
+  const commandText = `mkdir -p ${outsidePath}`;
+  try {
+    const result = await runBashToolScenario({ commandText, cwd });
+
+    assert.equal(result.responseText, "I read the Bash diagnostic.");
+    assert.match(result.toolText, /command sandbox defective: command path outside writable roots/u);
+    assert.ok(result.toolText.includes(commandText), result.toolText);
+    assert.doesNotMatch(result.toolText, /command sandbox defective: command sandbox defective/u);
+    assert.ok(result.toolText.includes(`working directory: ${cwd}`));
+    assert.ok(result.toolText.includes(`writable roots: ${cwd}`));
+    assert.ok(result.toolText.includes(`blocked path: ${outsidePath}`));
+    assert.match(result.toolText, /blocked before process launch/u);
+    assert.match(result.toolText, /Adjust its paths to fit the listed writable roots/u);
+    assert.match(result.toolText, /stderr: <unavailable/u);
+    assert.match(result.events.find((event) => event.stage === "result")?.toolText ?? "", /blocked path/u);
+    await assert.rejects(fs.access(outsidePath));
+  } finally {
+    await fs.rm(cwd, { recursive: true, force: true });
+    await fs.rm(outsidePath, { recursive: true, force: true });
+  }
 });

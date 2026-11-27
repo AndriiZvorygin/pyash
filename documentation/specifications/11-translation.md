@@ -12,8 +12,6 @@ Define the translation pipeline for Pyash text ↔ natural language, including:
 - placeholder rules,
 - fallback language detection during parsing.
 
-This spec documents current behavior so future changes remain consistent and low-churn.
-
 ## 1.1 Source-to-VLIW refinery
 
 The end-to-end document path is declared in
@@ -313,12 +311,14 @@ These entries come from the lwonprom noun-phrase and grammatical-case
 construction. The catalog supplies composition evidence while canonical lemma,
 alias, and compound indexes remain authoritative.
 
+Chinese character-to-atom links are one-to-one. Rank competing characters for
+each atom by frequency of that relevant use. The highest-frequency use claims
+it; others fall back to their next relevant use or remain unlinked. This
+preserves round-trip precision.
+
 ---
 
 ## 5.2 Pyash/Pyac phrase contract
-
-This is the compact grammar contract for agents working on English-to-Pyac
-translation. Keep this section beside the implementation when resuming work.
 
 Terminology:
 

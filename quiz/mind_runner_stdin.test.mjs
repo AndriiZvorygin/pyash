@@ -9,6 +9,10 @@ import path from "node:path";
 import { enqueueInputEnvelope, queueDepth } from "../program/runtime/gpu/queue.mjs";
 import { readGpuHandleStatus, writeGpuHandleStatus } from "../program/runtime/gpu/handle_status.mjs";
 import { runGpuWorkerOnce } from "../program/runtime/gpu/worker.mjs";
+import { parse } from "../program/understand/index.mjs";
+import { interpret } from "../program/bridge/index.mjs";
+import { doRemember, forget, remember } from "../program/remember/index.mjs";
+import { configureSaddleSelection, prepareSaddleContextForTurn, runSaddleTurn } from "../command/pyash_saddle.mjs";
 
 function runWithStdin(script, payload, env = {}) {
   return new Promise((resolve, reject) => {
@@ -37,6 +41,170 @@ test("mind ollama runner reads stdin payload when spawned as child process", asy
   });
   const res = await runWithStdin("command/mind_ollama_runner.mjs", payload);
   assert.equal(/missing request payload/i.test(res.stderr), false);
+});
+
+test("switching Ollama models from a project cwd resolves the runner and completes the first turn", async () => {
+  const previousModel = "qwen3.5:9b";
+  const selectedModel = "SparkLLM/Spark-X2.6-4B:q4_k_m";
+  const directRunnerPrompt = "runner path from external project cwd";
+  const modelSwitchSystemPrompt = `Coding saddle model-switch scenario\n${"large-context ".repeat(25000)}`;
+  const calls = [];
+  const jobs = new Map();
+  let nextJobId = 0;
+  const manager = http.createServer(async (req, res) => {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const body = Buffer.concat(chunks).toString("utf8");
+    calls.push({ method: req.method, path: req.url, body: body ? JSON.parse(body) : null });
+    res.setHeader("content-type", "application/json");
+    if (req.method === "POST" && req.url === "/submit") {
+      const remoteJobId = `ceremony-runner-job-${++nextJobId}`;
+      jobs.set(remoteJobId, calls.at(-1).body.jobSpec.payload);
+      res.end(JSON.stringify({ remoteJobId }));
+      return;
+    }
+    if (req.method === "GET" && req.url.startsWith("/job/ceremony-runner-job-")) {
+      const remoteJobId = req.url.slice("/job/".length);
+      const payload = jobs.get(remoteJobId);
+      const messages = Array.isArray(payload?.messages) ? payload.messages : [];
+      const text = messages.map((message) => String(message?.content ?? "")).join("\n");
+      let message = { role: "assistant", content: "ceremony model reply" };
+      if (text.includes("Create a compact continuity note")) {
+        message = { role: "assistant", content: "Compacted scenario history." };
+      } else if (text.includes(directRunnerPrompt)) {
+        message = { role: "assistant", content: "External project runner path verified." };
+      } else if (messages.some((entry) => entry?.role === "tool")) {
+        message = { role: "assistant", content: "I answered directly after the internal runner request was blocked." };
+      } else if (messages.some((entry) => entry?.role === "user" && entry?.content === "what do you think?")) {
+        message = {
+          role: "assistant",
+          content: "",
+          tool_calls: [{
+            id: "selected-model-runner-attempt",
+            type: "function",
+            function: {
+              name: "bash",
+              arguments: JSON.stringify({ command: "PYA_COMMAND_TIMEOUT_MS=900000 node ../../pyac/pyash/command/mind_ollama_runner.mjs" })
+            }
+          }]
+        };
+      }
+      res.end(JSON.stringify({
+        status: "success",
+        result: { message }
+      }));
+      return;
+    }
+    res.statusCode = 404;
+    res.end(JSON.stringify({ error: "not found" }));
+  });
+  await new Promise((resolve) => manager.listen(0, "127.0.0.1", resolve));
+  const address = manager.address();
+  const usageDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-ollama-ceremony-usage-"));
+  const agentHouse = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-ollama-ceremony-house-"));
+  const worldRoot = path.join(usageDir, "world");
+  const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-ollama-saddle-project-"));
+  const envKeys = ["PYA_COMMAND_RESPONSE", "PYA_GPU_MANAGER_REQUIRED", "PYA_GPU_HOUSEKEEPER_URL", "PYA_GPU_MANAGER_POLL_MS", "PYA_OLLAMA_USAGE_DIR", "PYA_WORLD_ROOT"];
+  const previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+  process.env.PYA_GPU_MANAGER_REQUIRED = "true";
+  process.env.PYA_GPU_HOUSEKEEPER_URL = `http://127.0.0.1:${address.port}`;
+  process.env.PYA_GPU_MANAGER_POLL_MS = "1";
+  process.env.PYA_OLLAMA_USAGE_DIR = usageDir;
+  process.env.PYA_WORLD_ROOT = worldRoot;
+  delete process.env.PYA_COMMAND_RESPONSE;
+  forget();
+  doRemember({ mood: "ya", su: { name: "run root" }, be: "default", ob: { filename: process.cwd() } });
+  doRemember({ mood: "ya", su: { name: "world root" }, be: "root", ob: { filename: worldRoot } });
+  doRemember({ mood: "ya", su: { name: "agent cwd" }, be: "cwd", ob: { filename: projectRoot } });
+  doRemember({ mood: "ya", su: { name: "agent sandbox" }, be: "truth", ob: { boolean: true } });
+  doRemember({ mood: "ya", su: { name: "agent name" }, be: "text", ob: { text: "coding saddle" } });
+
+  try {
+    await interpret(parse('from filename "./module/mind_ollama.pya" ob name mind to name ollama command mind be import do'));
+    await interpret(parse('from filename "./module/saddle_bash_tools.pya" ob name saddle command tools to name saddle command tools be import do'));
+    await interpret(parse(`exists su name coding saddle be mind as name "${previousModel}" ya`));
+    configureSaddleSelection({
+      cwd: projectRoot,
+      runtimeRoot: process.cwd(),
+      worldRoot,
+      model: previousModel,
+      backend: "ollama",
+      host: "http://127.0.0.1:1",
+      systemPrompt: modelSwitchSystemPrompt
+    }, { model: selectedModel });
+    assert.equal(path.resolve(remember("run root")?.ob?.filename ?? ""), process.cwd());
+    const runnerResult = await interpret({
+      mood: "do",
+      be: "command",
+      ob: { text: "PYA_COMMAND_TIMEOUT_MS=900000 node ./command/mind_ollama_runner.mjs" },
+      fromtext: { text: JSON.stringify({
+        mode: "chat",
+        model: selectedModel,
+        host: "http://127.0.0.1:1",
+        messages: [{ role: "user", content: directRunnerPrompt }]
+      }) }
+    });
+    assert.equal(JSON.parse(runnerResult?.ob?.text ?? "{}").message?.content, "External project runner path verified.");
+    const directRunnerSubmission = calls.find((call) => call.method === "POST" && call.path === "/submit"
+      && call.body.jobSpec?.payload?.messages?.[0]?.content?.startsWith("runner path from external project cwd"));
+    assert.equal(directRunnerSubmission?.body?.jobSpec?.payload?.messages?.[0]?.content?.length, directRunnerPrompt.length);
+
+    const sessionName = `stdin-scenario-${process.pid}-${Date.now()}`;
+    const context = await prepareSaddleContextForTurn({
+      agentHouse,
+      sessionName,
+      backend: "ollama",
+      model: selectedModel,
+      host: "http://127.0.0.1:1",
+      contextWindow: 100,
+      systemPrompt: "Coding saddle scenario",
+      userInput: `first request after switching to ${selectedModel}`,
+      housekeeperUrl: `http://127.0.0.1:${address.port}`,
+      loadHistory: async () => ({
+        messages: Array.from({ length: 24 }, (_, index) => ({
+          role: index % 2 ? "assistant" : "user",
+          content: `older conversation detail ${index} ` + "confirmed model-switch scenario fact ".repeat(3)
+        }))
+      })
+    });
+    assert.equal(context.compacted, true);
+
+    const turnEvents = [];
+    const result = await runSaddleTurn({
+      input: "what do you think?",
+      model: selectedModel,
+      backend: "ollama",
+      host: "http://127.0.0.1:1",
+      housekeeperUrl: `http://127.0.0.1:${address.port}`,
+      sessionContextSummary: context.summary,
+      historyWindow: context.historyWindow,
+      sessionName,
+      onToolCall: async (event) => turnEvents.push(event)
+    });
+
+    assert.equal(result?.ob?.text, "I answered directly after the internal runner request was blocked.", JSON.stringify(result));
+    assert.match(turnEvents.find((event) => event.stage === "result")?.toolText ?? "", /internal adapters, not shell entry points/u);
+    const submissions = calls.filter((call) => call.method === "POST" && call.path === "/submit"
+      && call.body.jobSpec?.payload?.model === selectedModel);
+    const compactedHistory = submissions.find((call) => JSON.stringify(call.body.jobSpec.payload).includes("Create a compact continuity note"));
+    const selectedModelTurn = submissions.find((call) => JSON.stringify(call.body.jobSpec.payload).includes("what do you think?"));
+    assert.ok(compactedHistory, "compaction should call the newly selected model with old history");
+    assert.ok(JSON.stringify(compactedHistory.body.jobSpec.payload).includes("older conversation detail"));
+    assert.ok(selectedModelTurn, "the first turn should also reach the newly selected model");
+    assert.ok(selectedModelTurn.body.jobSpec.payload.messages.some((message) =>
+      message?.role === "system" && message.content.includes(modelSwitchSystemPrompt)),
+    "the model-switch request must preserve the complete large stdin payload");
+  } finally {
+    forget();
+    for (const key of envKeys) {
+      if (previousEnv[key] === undefined) delete process.env[key];
+      else process.env[key] = previousEnv[key];
+    }
+    await new Promise((resolve) => manager.close(resolve));
+    await fs.rm(usageDir, { recursive: true, force: true });
+    await fs.rm(agentHouse, { recursive: true, force: true });
+    await fs.rm(projectRoot, { recursive: true, force: true });
+  }
 });
 
 test("mind openai runner reads stdin payload when spawned as child process", async () => {
@@ -176,6 +344,71 @@ test("manager-required mind calls submit to the GPU Housekeeper without contacti
     assert.equal(calls[0].body.jobSpec.kind, "ollama-chat");
     assert.equal(calls[0].body.jobSpec.payload.tools[0].function.name, "be_search");
     assert.equal(calls[0].body.jobSpec.payload.model, "qwen3.5:9b");
+  } finally {
+    await new Promise((resolve) => manager.close(resolve));
+    await fs.rm(usageDir, { recursive: true, force: true });
+  }
+});
+
+test("manager-required Ollama retries a reported context overflow at a fitting request window", async () => {
+  const calls = [];
+  let nextJobId = 0;
+  const manager = http.createServer(async (req, res) => {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const bodyText = Buffer.concat(chunks).toString("utf8");
+    const body = bodyText ? JSON.parse(bodyText) : null;
+    calls.push({ method: req.method, path: req.url, body });
+    res.setHeader("content-type", "application/json");
+    if (req.method === "POST" && req.url === "/submit") {
+      res.end(JSON.stringify({ remoteJobId: `context-retry-job-${++nextJobId}` }));
+      return;
+    }
+    if (req.method === "GET" && req.url === "/job/context-retry-job-1") {
+      res.end(JSON.stringify({
+        status: "failed",
+        error: {
+          message: "Ollama inference request failed: ollama request failed 400: {\"error\":\"request (66958 tokens) exceeds the available context size (32768 tokens), try increasing it\"}"
+        }
+      }));
+      return;
+    }
+    if (req.method === "GET" && req.url === "/job/context-retry-job-2") {
+      res.end(JSON.stringify({
+        status: "success",
+        result: { message: { role: "assistant", content: "context retry succeeded" } }
+      }));
+      return;
+    }
+    res.statusCode = 404;
+    res.end(JSON.stringify({ error: "not found" }));
+  });
+  await new Promise((resolve) => manager.listen(0, "127.0.0.1", resolve));
+  const address = manager.address();
+  const usageDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-context-retry-usage-"));
+  try {
+    const payload = JSON.stringify({
+      mode: "chat",
+      model: "SparkLLM/Spark-X2.6-4B:q4_k_m",
+      host: "http://127.0.0.1:1",
+      messages: [{ role: "user", content: "first request after switching models" }]
+    });
+    const result = await runWithStdin("command/mind_ollama_runner.mjs", payload, {
+      PYA_GPU_MANAGER_REQUIRED: "true",
+      PYA_GPU_HOUSEKEEPER_URL: `http://127.0.0.1:${address.port}`,
+      PYA_GPU_MANAGER_POLL_MS: "1",
+      PYA_GPU_MANAGER_TIMEOUT_MS: "5000",
+      PYA_OLLAMA_USAGE_DIR: usageDir
+    });
+
+    assert.equal(result.code, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout.trim()), {
+      message: { role: "assistant", content: "context retry succeeded" }
+    });
+    const submissions = calls.filter((call) => call.method === "POST" && call.path === "/submit");
+    assert.equal(submissions.length, 2);
+    assert.equal(submissions[0].body.jobSpec.payload.options?.num_ctx, undefined);
+    assert.equal(submissions[1].body.jobSpec.payload.options.num_ctx, 131072);
   } finally {
     await new Promise((resolve) => manager.close(resolve));
     await fs.rm(usageDir, { recursive: true, force: true });

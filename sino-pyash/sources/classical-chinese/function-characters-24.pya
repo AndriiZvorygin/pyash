@@ -1,0 +1,28 @@
+su name classical_chinese_function_character_candidates be map def
+su text "meta:format" ob text "classical-chinese-function-character-candidates-v1" ya
+su text "meta:source" ob text "CCL-15-112 section 4.3; Yu Ningyi, Rao Gaoqi, and Xun Endong (2015), An Attempt to Ancient Chinese Extraction based on Statistical and Rule based Methods; candidate list for text classification, not a grammar lexicon" ya
+su text "character:之" ob text "{\"character\":\"之\",\"source\":\"CCL-2015-112\"}" ya
+su text "character:乎" ob text "{\"character\":\"乎\",\"source\":\"CCL-2015-112\"}" ya
+su text "character:者" ob text "{\"character\":\"者\",\"source\":\"CCL-2015-112\"}" ya
+su text "character:也" ob text "{\"character\":\"也\",\"source\":\"CCL-2015-112\"}" ya
+su text "character:耶" ob text "{\"character\":\"耶\",\"source\":\"CCL-2015-112\"}" ya
+su text "character:矣" ob text "{\"character\":\"矣\",\"source\":\"CCL-2015-112\"}" ya
+su text "character:哉" ob text "{\"character\":\"哉\",\"source\":\"CCL-2015-112\"}" ya
+su text "character:於" ob text "{\"character\":\"於\",\"source\":\"CCL-2015-112\"}" ya
+su text "character:吾" ob text "{\"character\":\"吾\",\"source\":\"CCL-2015-112\"}" ya
+su text "character:汝" ob text "{\"character\":\"汝\",\"source\":\"CCL-2015-112\"}" ya
+su text "character:尔" ob text "{\"character\":\"尔\",\"source\":\"CCL-2015-112\"}" ya
+su text "character:而" ob text "{\"character\":\"而\",\"source\":\"CCL-2015-112\"}" ya
+su text "character:何" ob text "{\"character\":\"何\",\"source\":\"CCL-2015-112\"}" ya
+su text "character:乃" ob text "{\"character\":\"乃\",\"source\":\"CCL-2015-112\"}" ya
+su text "character:其" ob text "{\"character\":\"其\",\"source\":\"CCL-2015-112\"}" ya
+su text "character:且" ob text "{\"character\":\"且\",\"source\":\"CCL-2015-112\"}" ya
+su text "character:若" ob text "{\"character\":\"若\",\"source\":\"CCL-2015-112\"}" ya
+su text "character:所" ob text "{\"character\":\"所\",\"source\":\"CCL-2015-112\"}" ya
+su text "character:为" ob text "{\"character\":\"为\",\"source\":\"CCL-2015-112\"}" ya
+su text "character:焉" ob text "{\"character\":\"焉\",\"source\":\"CCL-2015-112\"}" ya
+su text "character:以" ob text "{\"character\":\"以\",\"source\":\"CCL-2015-112\"}" ya
+su text "character:因" ob text "{\"character\":\"因\",\"source\":\"CCL-2015-112\"}" ya
+su text "character:于" ob text "{\"character\":\"于\",\"source\":\"CCL-2015-112\"}" ya
+su text "character:则" ob text "{\"character\":\"则\",\"source\":\"CCL-2015-112\"}" ya
+prah

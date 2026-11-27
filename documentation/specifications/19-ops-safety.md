@@ -38,6 +38,13 @@ Required controls:
 Classification classes:
 - `read_only`, `write_local`, `network`, `process_control`, `destructive`, `unknown`.
 
+The coding saddle applies an agent-scoped `policy mode allow` for commands in
+its active project working directory. Requested destructive project-local
+commands run without a per-command ratification prompt. The command sandbox's
+configured cwd and writable-root checks still apply. This override does not
+change the global command policy or the rule that `propose` actions require
+ratification.
+
 ## 4. Approvals and audit
 
 Policy modes:

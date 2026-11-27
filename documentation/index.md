@@ -1,5 +1,8 @@
 # Documentation Index
 
+- [GPU Housekeeper operator guide](../container/gpu-housekeeper/README.md) — SSH
+  setup and permissions, model/runtime inventory, benchmarking, multi-host
+  routing, and operations.
 - `documentation/design.md` — architecture overview and module layout.
 - `documentation/reference.md` — how to run the REPL, traces, and helper scripts.
 - `documentation/state.md` — current scope, goals, and known edges.

@@ -84,6 +84,7 @@ import {
   buildSaddleMindSentence,
   buildSaddleOllamaContextOptions,
   buildSaddleStrataContextOptions,
+  buildSaddleSteeringInput,
   buildSaddleWorktreeReviewCommand,
   formatSaddleCompletionEvidence,
   runSaddleTurnWithEvidence,
@@ -104,14 +105,14 @@ import {
   resolveSaddleModelOption,
   resolveSaddleMindProfile,
   parseSaddleMindCommand,
-  saddleToolEventLabel,
+  saddleToolEventPreview,
   saddleSlashCommandCompletions,
   startSaddleProgress
 } from "../program/agent/coding_saddle.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const AGENT_NAME = "coding saddle";
-const TOOL_MAP_NAME = "saddle tools";
+const TOOL_MAP_NAME = "saddle command tools";
 const SESSION_NAME = "coding";
 const RECENT_MODEL_SESSION = "__recent_model__";
 
@@ -328,9 +329,9 @@ function resolveConfiguredSaddleMind(mindName) {
   });
 }
 
-async function importSaddleTools() {
-  const modulePath = path.join(root, "module", "saddle_tools.pya");
-  const sentence = parse(`from filename ${JSON.stringify(modulePath)} ob name saddle tools to name saddle tools be import do`);
+async function importSaddleBashTools() {
+  const modulePath = path.join(root, "module", "saddle_bash_tools.pya");
+  const sentence = parse(`from filename ${JSON.stringify(modulePath)} ob name saddle command tools to name saddle command tools be import do`);
   await interpret(sentence);
 }
 
@@ -345,6 +346,20 @@ function configureSaddle({ cwd, runtimeRoot, worldRoot, model, backend, host, sy
       at: { filename: cwd }
     });
   }
+  const agentCommandConfigure = remember("agent command configure");
+  doRemember({
+    ...(agentCommandConfigure?.be === "map" ? agentCommandConfigure : {}),
+    mood: "ya",
+    su: { name: "agent command configure" },
+    be: "map",
+    ob: {
+      ...(agentCommandConfigure?.ob ?? {}),
+      map: {
+        ...(agentCommandConfigure?.ob?.map ?? {}),
+        "policy mode": { ob: { wo: "allow" } }
+      }
+    }
+  });
   doRemember({
     mood: "ya",
     su: { name: "run root" },
@@ -392,7 +407,9 @@ function configureSaddle({ cwd, runtimeRoot, worldRoot, model, backend, host, sy
   });
 }
 
+
 export function configureSaddleSelection(config, selection = {}) {
+
   configureSaddle({
     cwd: config.cwd,
     runtimeRoot: config.runtimeRoot,
@@ -423,7 +440,7 @@ export async function prepareSaddle({
   setEntryModulePath(resolvedCwd);
   forget();
   await loadDefaultConfig({ cwd: resolvedRuntimeRoot, interpretFn: interpret, entryPath: path.join(resolvedRuntimeRoot, "saddle.pya") });
-  await importSaddleTools();
+  await importSaddleBashTools();
   const newspaperMaximumBytes = Number(configValue("newspaper maximum bytes", 524288000));
   const newspaperSegmentMaximumBytes = Number(configValue("newspaper segment maximum bytes", 4194304));
   const housekeeperUrl = resolveSaddleHousekeeperUrl(resolvedRuntimeRoot);
@@ -746,8 +763,10 @@ export async function dischargeSaddleModel(model, backend, {
 let activeSaddleUi = null;
 let activeSaddleResizeHandler = null;
 let activeSaddleOutputFailed = false;
+let saddleOutputHandlersInstalled = false;
 
 function handleSaddleOutputError(error) {
+  if (activeSaddleOutputFailed) return;
   activeSaddleOutputFailed = true;
   const detail = error?.code ? ` (${error.code})` : "";
   try {
@@ -756,6 +775,13 @@ function handleSaddleOutputError(error) {
     // The diagnostic stream may share the same closed pipe.
   }
   process.exit(1);
+}
+
+function installSaddleOutputErrorHandlers() {
+  if (saddleOutputHandlersInstalled) return;
+  saddleOutputHandlersInstalled = true;
+  process.stdout.on("error", handleSaddleOutputError);
+  process.stderr.on("error", handleSaddleOutputError);
 }
 
 function writeLine(text = "") {
@@ -880,6 +906,7 @@ async function resumeDuty(dutyId) {
 }
 
 async function main() {
+  installSaddleOutputErrorHandlers();
   if (process.argv[2] === "resume") {
     await resumeDuty(process.argv[3]);
     return;
@@ -933,10 +960,19 @@ async function main() {
   let promptLabel = "pyash> ";
   let inputDecoder = null;
   const queuedInputs = [];
+
+  let queuedInputSequence = 0;
   const saddleUi = createSaddleTerminalUi({ onOutputError: handleSaddleOutputError });
+
   activeSaddleUi = saddleUi;
   saddleUi.enter();
   process.once("exit", restoreActiveSaddleUi);
+  const pendingSteeringInputs = [];
+  let activeTurnInput = "";
+  let activeAssistantResponseText = "";
+  let activeInterruptController = null;
+  let activeSteeringInterruptRequested = false;
+  let steeringInterruptPromise = null;
 
   const saddleHousekeeper = () => createGpuHousekeeperAdapter({ baseUrl: config.housekeeperUrl });
   const getOllamaContextOptions = async () => {
@@ -1053,17 +1089,34 @@ async function main() {
     renderStatus({ report });
   };
   const currentInputLabel = () => busy
-    ? (queuedInputs.length ? `queue ${queuedInputs.length + 1}> ` : "next> ")
+    ? (activeInterruptController
+      ? `steer ${pendingSteeringInputs.length + 1}> `
+      : `queue ${queuedInputs.length + 1}> `)
     : promptLabel;
   const prompt = ({ label = promptLabel } = {}) => {
     if (!busy) promptLabel = label;
     saddleUi.setInput(inputDecoder?.getState() ?? { value: "", cursor: 0 }, currentInputLabel());
   };
-  const dispatchQueuedInput = () => {
+  const dispatchQueuedInput = async () => {
     if (busy || closing) return;
+    if (steeringInterruptPromise) await steeringInterruptPromise;
+    if (busy || closing) return;
+    if (pendingSteeringInputs.length) {
+      const steering = pendingSteeringInputs.splice(0).sort((left, right) => left.sequence - right.sequence);
+      const original = steering[0].originalInput;
+      const additions = steering.map(({ text }) => text).join("\n\n");
+      const combined = buildSaddleSteeringInput({
+        originalInput: original,
+        assistantResponse: activeAssistantResponseText,
+        additions
+      });
+      void submit(combined, { alreadyDisplayed: true });
+      return;
+    }
+    queuedInputs.sort((left, right) => left.sequence - right.sequence);
     const nextInput = queuedInputs.shift();
     if (nextInput !== undefined) {
-      void submit(nextInput, { alreadyDisplayed: true });
+      void submit(nextInput.text, { alreadyDisplayed: true });
       return;
     }
     prompt();
@@ -1084,7 +1137,7 @@ async function main() {
       busy = false;
       saddleUi.setBusy(false);
       promptLabel = "pyash> ";
-      dispatchQueuedInput();
+      void dispatchQueuedInput();
     }
   };
   const getBackendOptions = () => listSaddleBackendOptions({
@@ -1158,7 +1211,9 @@ async function main() {
       configuredEffort: configValue("mind reasoning effort")
     });
     await restoreSessionHistory();
+
     configureSaddleSelection(config, { model, backend, host });
+
     renderStatus();
     try {
       await persistSelection({ includeProfile: false });
@@ -1361,12 +1416,45 @@ async function main() {
     }
     if (busy) {
       if (input.trim().startsWith("/")) {
-        writeLine("commands wait until the current response finishes; ordinary messages are queued");
+        writeLine("commands wait until the current response finishes; Enter steers now and Tab queues to turn end");
         prompt({ clear: false });
         return;
       }
-      queuedInputs.push(input);
-      writeLine(`[queued ${queuedInputs.length}] you> ${input}`);
+      if (!activeInterruptController || !activeTurnInput) {
+        queuedInputs.push({ text: input, sequence: ++queuedInputSequence });
+        writeLine(`[queued until saddle is ready] you> ${input}`);
+        prompt({ clear: false });
+        return;
+      }
+      pendingSteeringInputs.push({
+        text: input,
+        originalInput: activeTurnInput,
+        sequence: ++queuedInputSequence
+      });
+      writeLine(`[steer now] you> ${input}`);
+      if (!activeSteeringInterruptRequested) {
+        activeSteeringInterruptRequested = true;
+        const controller = activeInterruptController;
+        let interruptPromise;
+        interruptPromise = requestMindInterrupt({
+          worldRoot: config.worldRoot,
+          agentName: AGENT_NAME,
+          source: "coding saddle",
+          reason: "user steering input"
+        }).then((result) => {
+
+          if (!result.requested && controller && !controller.signal.aborted) {
+            controller.abort("user steering input");
+          }
+        }).catch((error) => {
+          if (controller && !controller.signal.aborted) controller.abort("user steering input");
+
+          writeLine(`steer interrupt note: ${error?.message ?? error}`);
+        }).finally(() => {
+          if (steeringInterruptPromise === interruptPromise) steeringInterruptPromise = null;
+        });
+        steeringInterruptPromise = interruptPromise;
+      }
       prompt({ clear: false });
       return;
     }
@@ -1484,7 +1572,9 @@ async function main() {
         configuredEffort: configValue("mind reasoning effort")
       });
       promptLabel = "pyash> ";
+
       configureSaddleSelection(config, { model, backend, host });
+
       renderStatus();
       writeLine(`mind: ${mindName} | backend: ${backend} | model: ${model}`);
       await reportSelectionSaved();
@@ -1566,7 +1656,9 @@ async function main() {
         configuredEffort: configValue("mind reasoning effort")
       });
       mindModels.set(mindName, model);
+
       configureSaddleSelection(config, { model, backend, host });
+
       renderStatus();
       writeLine(`mind: ${mindName} | model: ${model}`);
       await reportSelectionSaved();
@@ -1697,7 +1789,9 @@ async function main() {
         savedEffort: thinkSetting?.value,
         configuredEffort: configValue("mind reasoning effort")
       });
+
       configureSaddleSelection(config, { model, backend, host });
+
       renderStatus();
       writeLine(`model: ${model}`);
       await reportSelectionSaved();
@@ -1707,7 +1801,9 @@ async function main() {
     const hostMatch = input.trim().match(/^\/host\s+(.+)$/i);
     if (hostMatch) {
       host = normalizeSaddleHost(hostMatch[1], host);
+
       configureSaddleSelection(config, { model, backend, host });
+
       renderStatus();
       writeLine(`host: ${host}`);
       await reportSelectionSaved();
@@ -1719,6 +1815,10 @@ async function main() {
     const activeTurn = new Promise((resolve) => { settleActiveSubmit = resolve; });
     activeSubmitDone = activeTurn;
     const interruptController = new AbortController();
+    activeInterruptController = interruptController;
+    activeTurnInput = input;
+    activeAssistantResponseText = "";
+    activeSteeringInterruptRequested = false;
     let finishActiveMindRun = async () => {};
     busy = true;
     saddleUi.setBusy(true);
@@ -1780,6 +1880,7 @@ async function main() {
         onAssistantDelta: (delta) => {
           const textDelta = String(delta ?? "");
           if (!textDelta) return;
+          activeAssistantResponseText += textDelta;
           if (!responseStream) {
             writeLine("saddle>");
             responseStream = saddleUi.beginMarkdownStream();
@@ -1833,12 +1934,12 @@ async function main() {
             if (event?.stage === "context_compacted") {
               writeLine(`[prompt trimmed] ${String(event.toolText ?? "").slice(0, 400)}`);
             } else {
-              writeLine(`${saddleToolEventLabel(event)}${event.toolText ? `: ${String(event.toolText).slice(0, 400)}` : ""}`);
+              writeLine(saddleToolEventPreview(event));
             }
           }
         },
         onFollowup: (assessment) => {
-          writeLine(`[saddle] completion check missing ${assessment.missing.join("; ")}; making one completion pass`);
+          writeLine(`[saddle] completion check missing ${assessment.missing.join("; ")}; continuing the task`);
         },
         onReview: async () => {
           const review = await interpret({
@@ -1921,6 +2022,9 @@ async function main() {
     } finally {
       await consumeMindInterrupt({ agentHouse: config.agentHouse, agentName: AGENT_NAME }).catch(() => {});
       await finishActiveMindRun().catch((error) => writeLine(`[interrupt cleanup failed] ${error.message}`));
+      if (activeInterruptController === interruptController) activeInterruptController = null;
+      activeTurnInput = "";
+      activeSteeringInterruptRequested = false;
       if (traceTurnId) {
         try {
           saddleTrace.finishTurn({ status: traceStatus, error: traceError, sessionTurnId });
@@ -1934,8 +2038,23 @@ async function main() {
       saddleUi.setActivity("ready");
       settleActiveSubmit();
       if (activeSubmitDone === activeTurn) activeSubmitDone = null;
-      dispatchQueuedInput();
+      void dispatchQueuedInput();
     }
+  };
+
+  const queueInputUntilTurnEnd = (value) => {
+    const input = String(value ?? "");
+    if (!busy || closing || !input.trim()) return false;
+
+    if (input.trim().startsWith("/")) {
+      writeLine("commands wait until the current response finishes; ordinary messages are queued");
+      return false;
+    }
+
+    queuedInputs.push({ text: input, sequence: ++queuedInputSequence });
+    writeLine(`[queued until the current turn finishes] you> ${input}`);
+    prompt({ clear: false });
+    return true;
   };
 
   process.stdin.setEncoding("utf8");
@@ -1951,6 +2070,8 @@ async function main() {
   await restoreSessionHistory({ detail: `model selection source: ${config.selectionSource}` });
   inputDecoder = createSaddleInputDecoder({
     onSubmit: submit,
+    onQueue: queueInputUntilTurnEnd,
+    shouldQueue: () => busy,
     onCancel: async () => {
       if (!busy) return;
       const result = await requestMindInterrupt({

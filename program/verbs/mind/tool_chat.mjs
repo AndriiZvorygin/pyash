@@ -1,3 +1,4 @@
+import path from "node:path";
 import { remember } from "../../remember/index.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { buildErrorSentence, throwErrorSentence, surfaceErrorSentence } from "../../error.mjs";
@@ -8,6 +9,7 @@ import { mapSentenceToPyash } from "../exchange/json_map.mjs";
 import { recordMindJson, stripContext } from "./logging.mjs";
 import { appendLog } from "./history.mjs";
 import { buildToolSentence, formatWebSearchToolResult } from "./tooling.mjs";
+import { formatRatifyToolResult } from "./tool_result.mjs";
 import { deriveSignatureFromCall, joinSignatureWords } from "../../bridge/signature.mjs";
 import { resolveRatifyDecision } from "../../agent/ratify_policy.mjs";
 import { submitRunToolEvent } from "../../bridge/newspaper.mjs";
@@ -32,6 +34,52 @@ function buildPromptText(messages) {
 
 function isZaiPromptLengthError(error) {
   return /(?:code\s*=\s*1261|prompt exceeds max length)/iu.test(String(error?.message ?? error));
+}
+
+function formatCommandToolErrorDetails({ toolName, toolSentence, surfacedTool, errorMessage } = {}) {
+  if (String(toolName ?? "").toLowerCase() !== "bash") return [];
+  const raw = surfacedTool?.ob?.raw && typeof surfacedTool.ob.raw === "object" ? surfacedTool.ob.raw : {};
+  const command = String(raw.command ?? toolSentence?.ob?.text ?? toolSentence?.ob?.wo ?? "").trim();
+  const message = String(errorMessage ?? "");
+  const details = [];
+  if (command && !message.includes(`command: ${command}`)) {
+    details.push(`command:\n\`\`\`sh\n${command.slice(0, 1600)}${command.length > 1600 ? "\n...[command truncated]" : ""}\n\`\`\``);
+  }
+  if (raw.cwd && !message.includes(`working directory: ${raw.cwd}`)) {
+    details.push(`working directory: ${raw.cwd}`);
+  }
+  if (raw.class) details.push(`command class: ${raw.class}`);
+  if (Array.isArray(raw.outsideRoots) && raw.outsideRoots.length) {
+    details.push(`blocked path: ${raw.outsideRoots.join(", ")}`);
+  }
+  if (Array.isArray(raw.commandRoots) && raw.commandRoots.length) {
+    details.push(`command roots: ${raw.commandRoots.join(", ")}`);
+  }
+  if (Array.isArray(raw.writableRoots) && raw.writableRoots.length) {
+    details.push(`writable roots: ${raw.writableRoots.join(", ")}`);
+  }
+  if (raw.processStarted === false) {
+    details.push(
+      "execution: blocked before process launch",
+      "stdout: <unavailable; the command did not run>",
+      "stderr: <unavailable; the command did not run>"
+    );
+  }
+  return details;
+}
+
+function formatCommandToolSuccess({ toolSentence, surfacedTool } = {}) {
+  const raw = surfacedTool?.ob?.raw && typeof surfacedTool.ob.raw === "object" ? surfacedTool.ob.raw : {};
+  const command = String(raw.command ?? toolSentence?.ob?.text ?? toolSentence?.ob?.wo ?? "").trim();
+  const stdout = String(raw.stdout ?? surfacedTool?.ob?.text ?? "");
+  const stderr = String(raw.stderr ?? "");
+  return [
+    command ? `command:\n\`\`\`sh\n${command.slice(0, 1600)}${command.length > 1600 ? "\n...[command truncated]" : ""}\n\`\`\`` : "",
+    raw.cwd ? `working directory: ${raw.cwd}` : "",
+    `exit code: ${Number.isInteger(raw.status) ? raw.status : 0}`,
+    `stdout:\n${stdout.trim() ? stdout : "<empty>"}`,
+    `stderr:\n${stderr.trim() ? stderr : "<empty>"}`
+  ].filter(Boolean).join("\n");
 }
 
 function trimOldestHistoryMessages(messages, start, end) {
@@ -171,6 +219,92 @@ function normalizeVisionInput(input) {
 
 function buildToolUseDirective() {
   return "Use supplied tools for requested actions; report tool failures truthfully.";
+}
+
+function cleanTerminalOutput(value) {
+  return String(value ?? "")
+    .replace(/\u001b(?:\[[0-?]*[ -/]*[@-~]|\][^\u0007]*(?:\u0007|\u001b\\))/gu, "")
+    .replace(/\r\n?/gu, "\n")
+    .trimEnd();
+}
+
+function formatCommandSessionResult(toolName, surfacedTool) {
+  if (!String(toolName ?? "").startsWith("command_session_")) return "";
+  const raw = surfacedTool?.ob?.text;
+  if (typeof raw !== "string") return "";
+  let result;
+  try {
+    result = JSON.parse(raw);
+  } catch {
+    return "";
+  }
+  if (!result || typeof result !== "object" || Array.isArray(result)) return "";
+  const action = String(result.action ?? toolName.replace(/^command_session_/u, "")).trim();
+  const lines = [`Command session ${action} result:`];
+
+  if (action === "list") {
+    const sessions = Array.isArray(result.sessions) ? result.sessions : [];
+    lines.push(`Retained sessions: ${sessions.length}.`);
+    for (const session of sessions) {
+      const details = [
+        session?.id ? `id ${session.id}` : "id unavailable",
+        session?.status ? `status ${session.status}` : "status unavailable",
+        session?.command ? `command ${session.command}` : "command unavailable",
+        session?.cwd ? `working directory ${session.cwd}` : "working directory unavailable"
+      ];
+      if (session?.exitCode !== null && session?.exitCode !== undefined) details.push(`exit code ${session.exitCode}`);
+      lines.push(`- ${details.join("; ")}`);
+    }
+    if (!sessions.length) lines.push("No retained command sessions.");
+    return lines.join("\n");
+  }
+
+  if (result.id) lines.push(`Session ID: ${result.id}`);
+  if (result.status) lines.push(`Status: ${result.status}`);
+  if (result.command) lines.push(`Command: ${result.command}`);
+  if (Array.isArray(result.args) && result.args.length) lines.push(`Arguments: ${JSON.stringify(result.args)}`);
+  if (result.cwd) lines.push(`Working directory: ${result.cwd}`);
+  if (result.exitCode !== null && result.exitCode !== undefined) {
+    const outcome = Number(result.exitCode) === 0 ? "success" : "failure";
+    lines.push(`Exit code: ${result.exitCode} (${outcome})`);
+  }
+  const signal = String(result.signal ?? "").trim();
+  if (signal && signal !== "0") lines.push(`Signal: ${signal}`);
+  if (Number.isSafeInteger(result.outputBytes)) lines.push(`Total terminal output captured: ${result.outputBytes} bytes.`);
+  if (Number.isSafeInteger(result.cursor)) lines.push(`Output cursor: ${result.cursor}.`);
+
+  if (typeof result.output === "string") {
+    const output = cleanTerminalOutput(result.output);
+    lines.push("Terminal output:");
+    lines.push(output || "<empty>");
+    if (result.truncated === true) lines.push("Output note: earlier terminal output was truncated from this read.");
+  } else if (result.outputReadError) {
+    lines.push(`Could not attach terminal output to the start result: ${result.outputReadError}`);
+    lines.push(`Read the session with command_session_read using id ${result.id} and after 0.`);
+  } else if (result.status === "running") {
+    lines.push(`No terminal output was included in this response. Read session ${result.id} with command_session_read and after 0.`);
+  }
+  if (result.persistenceError) lines.push(`Session event persistence error: ${result.persistenceError}`);
+  if (result.persistenceTruncated === true) lines.push("Session event persistence reached its retention limit.");
+  return lines.join("\n");
+}
+
+function formatDirectoryList(toolName, toolSentence, surfacedTool) {
+  if (!String(toolName ?? "").startsWith("be_list_from_filename")) return "";
+  const values = surfacedTool?.ob?.ve?.values;
+  if (!Array.isArray(values)) return "";
+  const from = toolSentence?.from;
+  const requested = String(from?.filename ?? from?.text ?? from?.name ?? from?.wo ?? ".").trim() || ".";
+  const projectRootRaw = remember("agent cwd")?.ob?.filename
+    ?? remember("agent cwd")?.ob?.text
+    ?? process.cwd();
+  const directory = path.isAbsolute(requested)
+    ? path.resolve(requested)
+    : path.resolve(String(projectRootRaw), requested);
+  const lines = [`Directory: ${directory}`, `Entries (${values.length}):`];
+  if (values.length) lines.push(...values.map((value) => `- ${String(value)}`));
+  else lines.push("<empty>");
+  return lines.join("\n");
 }
 
 function toolNames(tools = [], toolMap = null) {
@@ -589,6 +723,7 @@ export async function runToolChat({
       const capability = toolMap.get(toolName);
       const toolSentence = buildToolSentence({
         capability,
+        toolName,
         args: call?.function?.arguments ?? call?.arguments
       });
       const toolSignatureWords = deriveSignatureFromCall(capability, { remember });
@@ -718,11 +853,34 @@ export async function runToolChat({
         if (surfacedTool.be === "error") {
           const errorName = String(surfacedTool.su?.name ?? "").trim();
           const errorMessage = String(surfacedTool.ob?.text ?? "tool failed").trim();
+          const commandRaw = surfacedTool.ob?.raw && typeof surfacedTool.ob.raw === "object"
+            ? surfacedTool.ob.raw
+            : {};
+          const commandDetails = formatCommandToolErrorDetails({
+            toolName,
+            toolSentence,
+            surfacedTool,
+            errorMessage
+          });
+          const formattedError = errorName && errorMessage.startsWith(`${errorName}:`)
+            ? errorMessage
+            : [errorName, errorMessage].filter(Boolean).join(": ");
+          const failureGuidance = String(toolName ?? "").toLowerCase() === "bash"
+            ? commandRaw.processStarted === false
+              ? "The command was blocked before execution. Adjust its paths to fit the listed writable roots before retrying. No stdout or stderr exists for a command that did not run."
+              : "The command ran and failed. Use its exit status and captured stdout/stderr to correct it before retrying."
+            : "This call failed. Do not claim it succeeded or repeat the same call unchanged; use another suitable tool if possible, otherwise state the blocker.";
           toolText = [
-            [errorName, errorMessage].filter(Boolean).join(": "),
-            "This call failed. Do not claim it succeeded or repeat the same call unchanged; use another suitable tool if possible, otherwise state the blocker."
+            formattedError,
+            ...commandDetails,
+            failureGuidance
           ].filter(Boolean).join("\n");
+        } else if (String(toolName ?? "").toLowerCase() === "bash" && surfacedTool.be === "command") {
+          toolText = formatCommandToolSuccess({ toolSentence, surfacedTool });
+        } else if (surfacedTool.be === "ratify") {
+          toolText = formatRatifyToolResult(toolName, surfacedTool);
         }
+        if (!toolText) toolText = formatCommandSessionResult(toolName, surfacedTool);
         if (!toolText && (toolName === "web_search" || toolName === "web_search_source")) {
           toolText = formatWebSearchToolResult(surfacedTool);
         }
@@ -731,7 +889,8 @@ export async function runToolChat({
         if (!toolText && surfacedTool.be === "read" && typeof surfacedTool.ob?.text === "string") {
           toolText = surfacedTool.ob.text;
         } else if (!toolText && surfacedTool.be === "list" && Array.isArray(surfacedTool.ob?.ve?.values)) {
-          toolText = surfacedTool.ob.ve.values.join("\n");
+          toolText = formatDirectoryList(toolName, toolSentence, surfacedTool)
+            || surfacedTool.ob.ve.values.join("\n");
         } else if (!toolText && mapFact && (mapFact.be === "json map" || mapFact.be === "map" || mapFact.be === "csv map")) {
           toolText = mapDefChainFromName(mapName, { rememberFn: remember });
         } else if (!toolText && surfacedTool.ob?.map && (surfacedTool.be === "json map" || surfacedTool.be === "map" || surfacedTool.be === "csv map")) {
@@ -746,7 +905,8 @@ export async function runToolChat({
       } else {
         toolText = String(surfacedTool ?? "");
       }
-      const commandOutcome = String(toolName).toLowerCase().startsWith("be_command")
+      const normalizedToolName = String(toolName).toLowerCase();
+      const commandOutcome = (normalizedToolName === "bash" || normalizedToolName.startsWith("be_command"))
         ? (surfacedTool?.be === "command"
           ? { exitCode: 0, signal: null, timedOut: false }
           : (() => {

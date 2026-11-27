@@ -61,7 +61,7 @@ export async function lookupSumoEvidence(keys, {
         records: [],
         total: 0,
         truncated: false,
-        warning: "SUMO lookup index is stale; refresh it with node command/sumo_wordnet_import.mjs"
+        warning: "SUMO lookup index is stale; refresh it with node command/vocab_lookup_index.mjs"
       };
     }
     throw error;

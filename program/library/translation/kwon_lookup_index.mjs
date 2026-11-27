@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 export const KWON_LOOKUP_INDEX_FORMAT = "pyash-kwon-lookup-index-v4";
 export const KWON_LOOKUP_INDEX_KINDS = Object.freeze(["english", "pyac", "wordnet", "open-wordnet", "sumo"]);
+
 const CORE_LOOKUP_INDEX_KINDS = Object.freeze(["english", "pyac", "wordnet", "open-wordnet"]);
 const INDEX_ENTRY_PREFIX = "kwon-entry:";
 const OPEN_WORDNET_JSON_FILE = /^(?:adj|adv|noun|verb)\..+\.json$/u;
@@ -217,6 +218,7 @@ function indexPyaRow(indexes, locator, line, enabledKinds = null) {
   }
   if (!enabledKinds || enabledKinds.has("sumo")) {
     if (payload && typeof payload === "object") {
+      if (typeof payload.label === "string") addValue(indexes, "sumo", payload.label, locator);
       for (const sumoId of [payload.sumoId, ...(Array.isArray(payload.sumoIds) ? payload.sumoIds : [])]) {
         if (typeof sumoId !== "string" || !sumoId) continue;
         addValue(indexes, "sumo", sumoId, locator);
@@ -839,6 +841,7 @@ export async function buildKwonLookupIndexes({ root = PYASH_REPOSITORY_ROOT, sou
   for (const sourceId of pyaSources) {
     const source = sourcesById.get(sourceId);
     sourceHashes[sourceId] = hash(source);
+
     scanPyaLines(source, sourceId, indexes, new Set(CORE_LOOKUP_INDEX_KINDS));
   }
   for (const sourceId of jsonSources) {

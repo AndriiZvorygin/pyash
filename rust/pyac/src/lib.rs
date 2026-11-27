@@ -16,11 +16,14 @@ pub use literal::{
     format_date, index_word,
 };
 pub use semantic::{
-    GOLDEN_NUMERIC_PLUS_CODELET, NumericArithmeticInstruction, NumericInvertInstruction,
-    NumericOperandCase, NumericOperator, NumericPlusInstruction, SemanticError,
-    decode_numeric_arithmetic, decode_numeric_invert, decode_numeric_plus,
-    execute_numeric_arithmetic, execute_numeric_arithmetic_codelet, execute_numeric_invert,
-    execute_numeric_invert_codelet, execute_numeric_plus, execute_numeric_plus_codelet,
+    ConditionalNumberInstruction, GOLDEN_NUMERIC_PLUS_CODELET, NumericArithmeticInstruction,
+    NumericInvertInstruction, NumericOperandCase, NumericOperator, NumericPlusInstruction,
+    NumericVectorArithmeticInstruction, NumericVectorOperand, SemanticError,
+    decode_conditional_number, decode_numeric_arithmetic, decode_numeric_invert,
+    decode_numeric_plus, decode_numeric_vector_arithmetic, execute_conditional_number,
+    execute_conditional_number_codelets, execute_numeric_arithmetic,
+    execute_numeric_arithmetic_codelet, execute_numeric_invert, execute_numeric_invert_codelet,
+    execute_numeric_plus, execute_numeric_plus_codelet, execute_numeric_vector_arithmetic,
 };
 
 use std::fmt::{Display, Formatter};
@@ -87,6 +90,39 @@ impl Display for NumericPackExecutionError {
 }
 
 impl std::error::Error for NumericPackExecutionError {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PyacValue {
+    Unsigned(u64),
+    Signed(i64),
+    Boolean(bool),
+    DateEpochMs(u64),
+    Vector(VectorElements),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PackExecutionError {
+    pub index: usize,
+    pub source: SemanticError,
+}
+
+impl PackExecutionError {
+    pub fn code(&self) -> &'static str {
+        self.source.code()
+    }
+}
+
+impl Display for PackExecutionError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "PyAC codelet {} failed: {}",
+            self.index, self.source
+        )
+    }
+}
+
+impl std::error::Error for PackExecutionError {}
 
 impl PyacError {
     pub fn code(&self) -> &'static str {
@@ -285,6 +321,147 @@ pub fn execute_numeric_arithmetic_pack(
                 .map_err(|source| NumericPackExecutionError { index, source })
         })
         .collect()
+}
+
+pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionError> {
+    use semantic::{
+        NumericCodeletValue, execute_conditional_number_codelets, execute_numeric_codelet,
+    };
+
+    let words = pack
+        .codelets
+        .iter()
+        .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
+        .collect::<Vec<_>>();
+    if pyac_vliw_core::is_numeric_programlet(&words, pack.codelets.len()) {
+        let mut sentence_words = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
+        let mut sentence_boundaries = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
+        let mut symbol_words = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
+        let mut frames =
+            [pyac_vliw_core::ProgramletFrame::EMPTY; pyac_vliw_core::MAX_PROGRAMLET_CALL_DEPTH];
+        let result = pyac_vliw_core::execute_numeric_programlet(
+            &words,
+            pack.codelets.len(),
+            pyac_vliw_core::DEFAULT_PROGRAMLET_STEP_BUDGET,
+            &mut sentence_words,
+            &mut sentence_boundaries,
+            &mut symbol_words,
+            &mut frames,
+        );
+        if result.error != 0 {
+            let source = match result.error {
+                pyac_vliw_core::ERROR_DIVISION_BY_ZERO => SemanticError::DivisionByZero,
+                pyac_vliw_core::ERROR_FRAME_CAPACITY => SemanticError::ProgramletFrameCapacity,
+                pyac_vliw_core::ERROR_CONSTANT_WRITE => SemanticError::ProgramletConstantWrite,
+                pyac_vliw_core::ERROR_STEP_BUDGET => SemanticError::ProgramletStepBudget,
+                pyac_vliw_core::ERROR_PROGRAM_CAPACITY => SemanticError::ProgramletProgramCapacity,
+                pyac_vliw_core::ERROR_CALL_DEPTH => SemanticError::ProgramletCallDepth,
+                pyac_vliw_core::ERROR_UNSUPPORTED => SemanticError::UnsupportedProgramlet,
+                _ => SemanticError::MalformedProgramlet,
+            };
+            return Err(PackExecutionError { index: 0, source });
+        }
+        return Ok(vec![match result.value_kind {
+            pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(result.values[0] != 0),
+            pyac_vliw_core::VALUE_SIGNED => PyacValue::Signed(i64::from(result.values[0] as i32)),
+            _ => PyacValue::Unsigned(u64::from(result.values[0])),
+        }]);
+    }
+
+    let mut values = Vec::new();
+    let mut index = 0;
+    while index < pack.codelets.len() {
+        let shared = pyac_vliw_core::interpret_group(&words, index, pack.codelets.len());
+        if shared.error == pyac_vliw_core::ERROR_DIVISION_BY_ZERO {
+            return Err(PackExecutionError {
+                index,
+                source: SemanticError::DivisionByZero,
+            });
+        }
+        if shared.error == 0 && shared.value_kind != 0 {
+            let value = match shared.value_kind {
+                pyac_vliw_core::VALUE_UNSIGNED => PyacValue::Unsigned(
+                    u64::from(shared.values[0]) | (u64::from(shared.values[1]) << 32),
+                ),
+                pyac_vliw_core::VALUE_SIGNED => {
+                    PyacValue::Signed(i64::from(shared.values[0] as i32))
+                }
+                pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(shared.values[0] != 0),
+                pyac_vliw_core::VALUE_DATE => PyacValue::DateEpochMs(
+                    u64::from(shared.values[0]) | (u64::from(shared.values[1]) << 32),
+                ),
+                pyac_vliw_core::VALUE_VECTOR_U16 => PyacValue::Vector(VectorElements::Numbers(
+                    shared.values[..shared.length as usize]
+                        .iter()
+                        .map(|value| *value as u16)
+                        .collect(),
+                )),
+                pyac_vliw_core::VALUE_VECTOR_U32 => PyacValue::Vector(VectorElements::Numbers32(
+                    shared.values[..shared.length as usize].to_vec(),
+                )),
+                pyac_vliw_core::VALUE_VECTOR_BOOL => PyacValue::Vector(VectorElements::Booleans(
+                    shared.values[..shared.length as usize]
+                        .iter()
+                        .map(|value| *value != 0)
+                        .collect(),
+                )),
+                _ => unreachable!("shared VLIW core returned an unknown value kind"),
+            };
+            values.push(value);
+            index += shared.consumed_codelets as usize;
+            continue;
+        }
+
+        let start = index;
+        while index < pack.codelets.len() && pack.codelets[index][0] & 1 == 0 {
+            index += 1;
+        }
+        if index == pack.codelets.len() {
+            return Err(PackExecutionError {
+                index: start,
+                source: SemanticError::UnsupportedCodelet,
+            });
+        }
+
+        let group = &pack.codelets[start..=index];
+        if group.len() > 1 {
+            values.push(
+                execute_conditional_number_codelets(group)
+                    .map(|value| PyacValue::Unsigned(u64::from(value)))
+                    .map_err(|source| PackExecutionError {
+                        index: start,
+                        source,
+                    })?,
+            );
+        } else {
+            let codelet = &group[0];
+            if let Some(result) = execute_numeric_codelet(codelet) {
+                values.push(
+                    result
+                        .map(|value| match value {
+                            NumericCodeletValue::Unsigned(value) => PyacValue::Unsigned(value),
+                            NumericCodeletValue::Signed(value) => PyacValue::Signed(value),
+                            NumericCodeletValue::Vector(value) => PyacValue::Vector(value),
+                        })
+                        .map_err(|source| PackExecutionError {
+                            index: start,
+                            source,
+                        })?,
+                );
+            } else if let Ok(value) = execute_date_codelet(codelet) {
+                values.push(PyacValue::DateEpochMs(value));
+            } else if let Ok(value) = execute_vector_codelet(codelet) {
+                values.push(PyacValue::Vector(value));
+            } else {
+                return Err(PackExecutionError {
+                    index: start,
+                    source: SemanticError::UnsupportedCodelet,
+                });
+            }
+        }
+        index += 1;
+    }
+    Ok(values)
 }
 
 #[cfg(test)]

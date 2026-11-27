@@ -58,16 +58,21 @@ with urllib.request.urlopen("http://127.0.0.1:18886/queue", timeout=3) as respon
         echo "refusing IPv6 network migration: cannot verify the running Housekeeper queue through host or container API" >&2
         exit 1
       fi
-      pending_jobs="$(printf '%s' "$queue_payload" | python3 -c '
+      running_jobs="$(printf '%s' "$queue_payload" | python3 -c '
 import json
 import sys
 
-jobs = json.load(sys.stdin).get("jobs", [])
-pending = {"queued", "running", "starting", "submitted"}
-print(sum(1 for job in jobs if str(job.get("status", "")).lower() in pending))
+queue = json.load(sys.stdin)
+count = queue.get("localRunningCount")
+if not isinstance(count, int):
+  count = sum(
+    1 for job in queue.get("jobs", [])
+    if str(job.get("status", "")).lower() == "running" and not job.get("forwarded", False)
+  )
+print(count)
 ')"
-      if (( pending_jobs > 0 )); then
-        echo "refusing IPv6 network migration: $pending_jobs Housekeeper jobs are queued or running; retry after they finish" >&2
+      if (( running_jobs > 0 )); then
+        echo "refusing IPv6 network migration: $running_jobs local Housekeeper jobs are running; retry after they finish (queued jobs are durable and will resume)" >&2
         exit 1
       fi
     fi

@@ -301,6 +301,9 @@ Still evolving or fragile:
 
 ## Documentation Map
 
+- [GPU Housekeeper operator guide](container/gpu-housekeeper/README.md) — setup
+  over SSH, account permissions, model/runtime inventory, benchmarking,
+  multi-host routing, and operations.
 - `documentation/pyash.md` — high-level design goals and interlanguage framing
 - `documentation/design.md` — architecture overview and module layout
 - `documentation/specifications/00-index.md` — normative spec index

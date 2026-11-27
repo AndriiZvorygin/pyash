@@ -66,13 +66,16 @@ export function resolveCommandIdentity({ sentence } = {}) {
   });
 }
 
-export function commandResultSentence({ requestIdentity, output } = {}) {
+export function commandResultSentence({ requestIdentity, output, raw } = {}) {
   return {
     mood: "ya",
     exists: true,
     be: "command",
     su: { name: requestIdentity.name },
-    ob: { text: String(output ?? "") }
+    ob: {
+      text: String(output ?? ""),
+      ...(raw && typeof raw === "object" ? { raw } : {})
+    }
   };
 }
 

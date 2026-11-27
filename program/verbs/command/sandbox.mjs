@@ -133,7 +133,7 @@ function parseAbsolutePathTokens(commandText = "") {
 export function rewriteRunRootCommandPath(commandText, { cwd, rememberFn = remember } = {}) {
   const text = String(commandText ?? "").trim();
   if (!text) return text;
-  const match = text.match(/^((?:[A-Za-z_][A-Za-z0-9_]*=[^\s]+\s+)*)node\s+command\/([^\s]+)([\s\S]*)$/u);
+  const match = text.match(/^((?:[A-Za-z_][A-Za-z0-9_]*=[^\s]+\s+)*)node\s+(?:\.\/)?command\/([^\s]+)([\s\S]*)$/u);
   if (!match) return text;
   const prefix = match[1] ?? "";
   const commandFile = match[2] ?? "";
@@ -252,12 +252,20 @@ export function buildAllowedEnv({ allowlist = [], cwd, runRoot } = {}) {
 }
 
 export function validateSandboxWritePolicy({ sentence, commandText, commandClass, sandbox } = {}) {
+  const rejectionContext = (details = {}) => ({
+    ...details,
+    command: String(commandText ?? ""),
+    cwd: String(sandbox?.cwd ?? ""),
+    commandRoots: Array.isArray(sandbox?.commandRoots) ? [...sandbox.commandRoots] : [],
+    writableRoots: Array.isArray(sandbox?.writableRoots) ? [...sandbox.writableRoots] : [],
+    processStarted: false
+  });
   if (!Array.isArray(sandbox?.writableRoots) || sandbox.writableRoots.length === 0) {
     throwErrorSentence({
       name: "command sandbox defective",
       message: "command sandbox defective: writable roots missing",
       from: { la: sentence },
-      raw: { sandbox }
+      raw: rejectionContext({ sandbox })
     });
   }
   if (!Array.isArray(sandbox?.commandRoots) || sandbox.commandRoots.length === 0) {
@@ -265,7 +273,7 @@ export function validateSandboxWritePolicy({ sentence, commandText, commandClass
       name: "command permission defective",
       message: "command permission defective: command license missing",
       from: { la: sentence },
-      raw: { commandRoots: sandbox?.commandRoots }
+      raw: rejectionContext()
     });
   }
   if (!isPathWithinRoots(sandbox.cwd, sandbox.commandRoots)) {
@@ -273,7 +281,7 @@ export function validateSandboxWritePolicy({ sentence, commandText, commandClass
       name: "command sandbox defective",
       message: `command sandbox defective: cwd outside command roots (${sandbox.cwd})`,
       from: { la: sentence },
-      raw: { cwd: sandbox.cwd, commandRoots: sandbox.commandRoots }
+      raw: rejectionContext()
     });
   }
   if (sentence?.to?.filename) {
@@ -284,7 +292,7 @@ export function validateSandboxWritePolicy({ sentence, commandText, commandClass
         name: "command sandbox defective",
         message: `command sandbox defective: write target outside writable roots (${sentence.to.filename})`,
         from: { la: sentence },
-        raw: { target: sentence.to.filename, resolvedTarget, writableRoots: sandbox.writableRoots }
+        raw: rejectionContext({ target: sentence.to.filename, resolvedTarget })
       });
     }
   }
@@ -295,7 +303,7 @@ export function validateSandboxWritePolicy({ sentence, commandText, commandClass
     name: "command sandbox defective",
     message: `command sandbox defective: command path outside writable roots (${outsideRoots[0]})`,
     from: { la: sentence },
-    raw: { class: commandClass, outsideRoots, writableRoots: sandbox.writableRoots }
+    raw: rejectionContext({ class: commandClass, outsideRoots })
   });
 }
 

@@ -23,11 +23,33 @@ Both text files were acquired as raw UTF-8 text on 2026-10-31. Their embedded he
 
 Project Gutenberg identifies these items as public domain in the United States, but its policy asks users outside the US to check their local copyright law. See the [eBook 4094 record](https://www.gutenberg.org/ebooks/4094), [eBook 23839 record](https://www.gutenberg.org/ebooks/23839), and [Project Gutenberg permissions guidance](https://www.gutenberg.org/policy/permission.html).
 
+## Acquired character dictionary data
+
+[`shuowen.json`](sources/classical-chinese/shuowen/shuowen.json) is the character-entry dataset
+published with the [Chinese Classical Corpus](https://github.com/gujilab/chinese-classical-corpus).
+The upstream project reports 9,831 entries, including 356 unresolved characters, and labels this
+dataset CC0 1.0. Retrieved 2026-11-17 from its
+[raw source file](https://raw.githubusercontent.com/gujilab/chinese-classical-corpus/main/output/shuowen.json).
+The local file is preserved unchanged; SHA-256:
+`dd162dc3c9f8251c873aa79c497e8e599bea539e1d992e7b2d4d7605ed5eb046`.
+
+The refinery uses a matching character's *Shuowen* definition as historically situated evidence
+alongside modern dictionary glosses and readings. The dataset publisher does not identify the
+historical source edition or provide entry-level transcription provenance, so those remain open
+source questions. A *Shuowen* definition is not treated as a complete modern meaning or as proof
+that a character maps to a particular Pyash atom.
+
 ## Acquired segmentation reference
 
 [`ke-2024-ccl-1.64.pdf`](sources/classical-chinese/references/ke-2024-ccl-1.64.pdf) is Yonghong Ke's 2024 paper, “Construction of Ancient Chinese Word Segmentation and Part-of-Speech Corpus,” *Proceedings of the 23rd Chinese National Conference on Computational Linguistics*, pp. 819–829. The ACL Anthology describes a corpus of 46 works, over 3.23 million characters and 2.17 million words, annotated with segmentation and POS, using manual and machine-assisted work. This is a method/reference paper: the Anthology record links the paper, not a downloadable annotated corpus. The article is included under the ACL Anthology's CC BY 4.0 license for 2016-and-later materials. SHA-256: `4a5bd60c0664c893ab15b22fe0eca98e4efaf0f20b66280ea69f42b86b9dc03c`.
 
 Citation and access: Yonghong Ke (2024), [ACL Anthology 2024.ccl-1.64](https://aclanthology.org/2024.ccl-1.64/). The paper informs segmentation methodology; it does not supply the text edition for our *Analects* corpus.
+
+## Function-character candidate list
+
+[`function-characters-24.pya`](sources/classical-chinese/function-characters-24.pya) preserves 24 characters selected in section 4.3 of Yu Ningyi, Rao Gaoqi, and Xun Endong (2015), [“An Attempt to Ancient Chinese Extraction based on Statistical and Rule based Methods”](https://cips-cl.org/static/anthology/CCL-2015/CCL-15-112.pdf). The authors used these characters as features in a Classical-versus-modern text classifier and note that modern words can contain the same characters. This is a candidate seed list, not an annotated grammar lexicon or an exhaustive inventory of Classical Chinese function words. The grammar refinery therefore checks attestations and dictionary senses before asking the model to consider an existing Pyash grammar target.
+
+The modern POS backup is the pinned [UD Chinese-GSDSimp](https://universaldependencies.org/treebanks/zh_gsdsimp/) snapshot documented in [`SOURCES.md`](SOURCES.md). Its automatically converted UPOS annotations include manual corrections but can tag lexical words as particles; the refinery uses POS to bound candidate evidence and requires a direct CC-CEDICT grammar-target gloss match. Neither the 24-character list nor modern POS by itself establishes a character-to-grammar link.
 
 ## Acquired idiom reference
 

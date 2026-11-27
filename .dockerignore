@@ -1,6 +1,17 @@
 **
 !package.json
 !package-lock.json
+!rust-toolchain.toml
+!rust/
+!rust/pyac/
+!rust/pyac/**
+!rust/pyac-vliw-core/
+!rust/pyac-vliw-core/**
+!rust/pyac-gpu/
+!rust/pyac-gpu/**
+!rust/pyac-browser/
+!rust/pyac-browser/src/
+!rust/pyac-browser/src/**
 !command/
 !command/**
 !configure/
@@ -20,3 +31,4 @@
 !program/**
 !web/
 !web/**
+**/target/**
