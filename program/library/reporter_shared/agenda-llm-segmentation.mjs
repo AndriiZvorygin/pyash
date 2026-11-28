@@ -9,7 +9,7 @@ import { readPyaMapArtifact, writePyaMapArtifact } from "./agenda-stage-contract
 const CANDIDATES_ROOT = "agenda gross chunks artifact";
 const MATCHES_ROOT = "agenda matches artifact";
 const GROUNDING_ROOT = "agenda section grounding artifact";
-const BOUNDARY_RECOVERY_VERSION = "minutes_like_child_boundaries_v3";
+export const BOUNDARY_RECOVERY_VERSION = "minutes_like_child_boundaries_v3";
 const ROLES = new Set([
   "procedural",
   "minutes",

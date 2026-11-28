@@ -2545,10 +2545,14 @@ function normalizedEvidenceText(value = "") {
 }
 
 export function hasAffirmativeGroundingNotes(...audits) {
-  const explicitSourceSupport = /\b(?:source|transcript|excerpt)\s+(?:explicitly\s+)?(?:records?|states?|shows?|includes?|confirms?)\s+(?!no\b|none\b|nothing\b|not\b)/iu;
   const groundedClaims = /\b(?:candidate|summary)\s+claims?\s+(?:are|were)\s+(?:all\s+)?grounded\b|\bclaims?\s+(?:are|were)\s+(?:fully\s+)?grounded\b|\b(?:every|all)\s+(?:candidate\s+)?claims?\s+(?:(?:is|are|was|were)\s+)?(?:independently\s+)?supported\b/iu;
-  return audits.some((audit) => groundedClaims.test(String(audit?.notes || ""))
-    || explicitSourceSupport.test(String(audit?.notes || "")));
+  const explicitClaimSupport = /\b(?:source|transcript|excerpt)\b[\s\S]{0,180}\b(?:directly\s+)?supports?\b[\s\S]{0,180}\b(?:candidate|summary|claim)\b|\b(?:candidate|summary|claim)\b[\s\S]{0,180}\b(?:directly\s+)?supported\s+by\b[\s\S]{0,180}\b(?:source|transcript|excerpt)\b/iu;
+  const contradictoryEvidence = /\b(?:unsupported|contradict\w*|incorrect|wrong|not\s+supported|does\s+not|doesn['’]t|rather\s+than|instead\s+of|except|however|but)\b/iu;
+  return audits.some((audit) => {
+    const notes = String(audit?.notes || "");
+    if (!notes || contradictoryEvidence.test(notes) || (audit?.unsupportedClaims || []).length > 0) return false;
+    return groundedClaims.test(notes) || explicitClaimSupport.test(notes);
+  });
 }
 
 export async function verifyCandidateClaimsWithLiteralEvidenceLlm({
@@ -3142,7 +3146,7 @@ export async function repairChapterTitleLlm({
         "Do not end with a comma, conjunction, preposition, or an unfinished -ing participle such as arguing, proposing, discussing, or considering.",
         "If the rejected headline was too long, rewrite it; never truncate it mid-phrase.",
         attempt >= 2 ? "Start a fresh headline from the source evidence and avoid the rejected shape." : "",
-        attempt >= 4 ? "Use a short, direct 4 to 8 word subject-action headline when the summary is concise. CURRENT SUMMARY is the primary evidence. Do not explain the repair, pad a complete headline, repeat the parent heading, or follow a minor source detail." : "",
+        attempt >= 4 ? "Use a short, direct subject-action-outcome headline of 4 to 8 words when the summary is concise. CURRENT SUMMARY is the primary evidence. Do not explain the repair, pad a complete headline, repeat the parent heading, or follow a minor source detail." : "",
         "Return exactly {\"title\":\"...\"} and no other keys.",
         `PARENT HEADING: ${normalizeText(heading)}`,
         `AUDIT FEEDBACK: ${rejection}`,
@@ -5615,9 +5619,12 @@ export async function summarizeGroundedUnit({
           ? "Second repair pass: discard the prior wording and audit every actor, addressee, handoff, and role against the same source block before writing the replacement."
           : "Final repair pass: omit only the role, name, or actor-action pairing that remains unsupported after checking the complete source. Keep every unrelated source-supported topic, actor, role, motion action, and outcome.",
       "A person being addressed, thanked, or named in a handoff is not automatically the speaker. Do not use 'council member', 'councillor', 'mayor', 'chair', or 'staff' merely because the source mentions Mayor and Council, Your Worship, a council agenda, or a staff question. Keep role labels that are explicitly paired with their own source actions.",
+      "ABSOLUTE ROLE BLOCKLIST: never assign an office, civic title, institutional role, or generic meeting role to a speaker unless the complete bounded source explicitly pairs that role with the same claim or action. An addressee, agenda label, nearby person, or meeting setting cannot establish the speaker's role.",
       "ROLE-NEUTRAL OUTPUT CONTRACT: when the role pairing is unclear, use impersonal wording such as 'the source records a response' while retaining the supported topic and action; do not use 'a speaker', 'another speaker', 'a third speaker', or another generic actor to preserve a disputed action.",
-      "ACTOR-CLAUSE REPAIR PRIORITY: if the audit rejects a generic actor pairing, do not substitute another generic actor. When the complete source explicitly identifies the speaker, correct only the actor phrase to that source-named speaker; otherwise describe the supported content or action impersonally. Omit content only when the content itself lacks source support, not solely because its original actor label is disputed.",
-      "GENERIC-ACTOR AUDIT OVERRIDE: if INDEPENDENT_AUDIT_REJECTION says the candidate used unsupported generic actors, the replacement must not contain 'a speaker', 'another speaker', 'a third speaker', or equivalent generic actor wording. Preserve source-supported substance by using an explicitly identified speaker or impersonal wording, and omit unsupported content without dropping a supported topic merely to avoid its actor label.",
+      "ACTOR-CLAUSE OMISSION PRIORITY: if the audit rejects an actor pairing, do not substitute another generic actor. When the complete source explicitly identifies the speaker, correct only the actor phrase to that source-named speaker; otherwise describe the supported content or action impersonally. Omit content only when the content itself lacks source support, not solely because its original actor label is disputed.",
+      "Do not satisfy the repair by substituting 'a speaker' for a disputed actor; use impersonal wording unless the source explicitly identifies the speaker.",
+      "GENERIC-ACTOR AUDIT OVERRIDE: if INDEPENDENT_AUDIT_REJECTION says the candidate used unsupported generic actors, the replacement must not contain 'a speaker', 'another speaker', 'a third speaker', or equivalent generic actor wording. Do not use a generic actor to preserve an unsupported action; omit the entire actor-specific clause and preserve source-supported substance with an explicitly identified speaker or impersonal wording.",
+      "ACTOR-AUDIT FINAL OVERRIDE: when the independent audit still disputes an actor or role, output no disputed personal name, office, title, or generic actor at all. Keep only the impersonal source-supported action and subject unless the complete bounded source directly pairs the actor with that same claim.",
       "PROCEDURAL-HANDOFF ATTRIBUTION OVERRIDE: a phrase such as 'take questions after [item]', 'I'll continue with [item] narrative', or a call to the next participant is transition evidence, not by itself evidence that the speaker presented the named item's substantive budget or report details. If the audit rejects a presentation attribution, omit the actor-specific presentation clause unless the same speaker block contains the substantive lines; do not replace it with 'staff presented' or another generic subject.",
       handoffRoleDefect
         ? "HARD HANDOFF-ROLE PROMPT: the office or manager named before 'over to [person]' is not the presenter. Follow the literal handoff and use the named recipient for the substantive presentation only when the source immediately gives that person the report or recommendations; otherwise use impersonal wording. Do not repeat the rejected office-presenter pairing."
@@ -5632,7 +5639,7 @@ export async function summarizeGroundedUnit({
         ? "INSTITUTIONAL-ACTOR SAFE RESOLUTION: the audit disputes a particular institutional actor/action pairing. Recheck that pairing against the complete source. If unsupported, rephrase only that clause impersonally; preserve other institutional, staff, and personal actor/action pairings that the source explicitly supports."
         : "",
       collectiveAttributionDefect
-        ? "COLLECTIVE-ATTRIBUTION SAFE RESOLUTION: the audit disputes a collective actor/action pairing. Do not merge separately attributed remarks into that collective action. Correct the actor to a source-named speaker when explicit, or describe the supported remarks impersonally. Preserve the supported topics and actions from the disputed clause, as well as other collective or individual actions explicitly supported by the source."
+        ? "COLLECTIVE-ATTRIBUTION SAFE RESOLUTION: the audit disputes a collective actor/action pairing. Do not merge separately attributed remarks into that collective action. Do not preserve unsupported claims that 'Directors discussed' or 'staff noted' a fact. Correct the actor to a source-named speaker when explicit, or describe the supported remarks impersonally. Preserve the supported topics and actions from the disputed clause, as well as other collective or individual actions explicitly supported by the source."
         : "",
       handoffRoleDefect
         ? "Do not copy the rejected office-presenter pairing or any named actor into this repair; the required resolution is impersonal topic prose."
@@ -5665,6 +5672,26 @@ export async function summarizeGroundedUnit({
     });
     return repaired;
   };
+  const queryConservativeInstitutionalActorOutputBan = async (attempt = 1, rejectedClaims = "", rejectedOutput = "") => callOllamaJson({
+    ollamaUrl,
+    llmModel,
+    appendUniversalContract: false,
+    system: "HARD INSTITUTIONAL-ACTOR OUTPUT BAN: write a source-grounded civic summary and do not assign an unsupported action to a committee, council, board, department, or other institution. Use impersonal wording for supported content whose speaker is not identified, and preserve all other source-supported facts and outcomes. Return strict JSON only.",
+    prompt: [
+      `Conservative institutional-actor output-ban repair attempt ${attempt}.`,
+      "Discard the rejected attribution and rebuild from the complete bounded source. The audit and rejected candidate are diagnostic context, not source evidence.",
+      "Do not claim that an institution presented, noted, stated, recommended, directed, approved, or performed an action unless the source explicitly pairs that institution with the action. Retain the supported recommendation, topic, and factual content in impersonal wording when the source identifies no speaker. Omit only claims the source itself does not support.",
+      rejectedClaims ? `INDEPENDENT_AUDIT_REJECTION: ${rejectedClaims}` : "",
+      rejectedOutput ? `REJECTED_CANDIDATE (UNTRUSTED): ${rejectedOutput}` : "",
+      `AGENDA_LABEL: ${promptLabel}`,
+      `GROUNDED_SOURCE: ${String(parentLiteralSourceExcerpt || parentRepairSourceExcerpt || semanticGroundingSourceExcerpt || unit?.["source excerpt"] || "").slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000))}`,
+      "Return exactly one JSON object with summary, chapter text, confidence, and notes.",
+    ].filter(Boolean).join("\n\n"),
+    maxOutputTokens: 720,
+    temperature: attempt >= 2 ? 0 : 0.1,
+    seed: seed + 9530 + attempt,
+    format: STAGE3_SUMMARY_RESPONSE_FORMAT,
+  });
   const queryConservativeProceduralActorRepair = async (attempt = 1, rejectedClaims = "", rejectedOutput = "") => {
     // Only an independent audit rejection should trigger the vote-strength
     // override. A valid source-supported "unanimous" result in the rejected
@@ -5841,6 +5868,7 @@ export async function summarizeGroundedUnit({
         ? `STRUCTURED SPEAKER-HANDOFF EVIDENCE: ${JSON.stringify(speakerHandoffEvidence)}`
         : "A direct callout or a nested introduction pattern is present in this source. Treat it as a handoff; separate an introductory speaker from named presenters and omit disputed names unless a later source line explicitly pairs that person with a claim or action.",
       "A callout or question does not assign the preceding speaker's facts to the called-out person. Keep a disputed name out of that preceding speaker's claim, but retain a name or role when a later source statement explicitly pairs it with an introduction, presentation, or action. Preserve the source's speech act: concern or opposition is not a question unless the source asks one.",
+      "ACTOR-AUDIT FINAL OVERRIDE: do not attribute any preceding block's question, concern, reason, or motion to the called-out person. If the audit still disputes a speaker role, output no disputed personal name, office, title, or generic actor at all; keep only impersonal source-supported content.",
       "If the source does not identify an actor, use impersonal wording for only that claim. Do not remove names or titles that the source explicitly pairs with other claims.",
       "When the audit says the bounded source ends before a motion, vote, deferral, or conclusion, omit that later procedural outcome. An uncompleted suggestion to defer is only a possible deferral raised or discussed, not a decision or motion disposition.",
       ATTRIBUTION_REPAIR_SCOPE_RULE,
@@ -6455,7 +6483,9 @@ export async function summarizeGroundedUnit({
       const sourceTopicRelationshipDefect = sourceTopicRelationshipGroundingDefect(auditFeedback)
         && /\b(?:recommend(?:ation|ed|s)?|proposal|merit|explore|platform|topic|action|subject|object|qualifier|modifier|phrase)\b/iu.test(generatedProse);
       const actingBodyAttributionDefect = /\b(?:acting\s+body|body\s+label|institutional\s+(?:actor|subject)|committee\s+itself|council\s+itself|rather\s+than\s+a\s+(?:generic\s+)?speaker|does\s+not\s+identify\s+the\s+speaker)\b/iu.test(auditFeedback)
-        && /\b(?:call(?:ed)?|order|open(?:ed)?|announce(?:d)?|present(?:ed)?|ask(?:ed)?|said|speech)\b/iu.test(auditFeedback);
+        && /\b(?:call(?:ed)?|order|open(?:ed)?|announce(?:d)?|present(?:ed)?|ask(?:ed)?|said|speech)\b/iu.test(auditFeedback)
+        || (/(?:committee|council|board|county)\b[^.!?]{0,100}\b(?:called|calls|is\s+calling)\b[^.!?]{0,100}\bto\s+order\b/iu.test(generatedProse)
+          && /\b(?:i(?:'|’)?ll|i\s+will|we(?:'|’)?ll|we\s+will)\s+call\s+(?:the\s+)?meeting\s+of\s+(?:the\s+)?(?:[\p{L}'’-]+\s+){0,3}(?:committee|council|board|county)\b[^.!?]{0,100}\bto\s+order\b/iu.test(semanticGroundingSourceExcerpt));
       const institutionalActorDefect = institutionalActorGroundingDefect(auditFeedback);
       const referredAgendaScopeDefect = referredAgendaScopeGroundingDefect(auditFeedback);
       const genericPluralActorDefect = genericPluralActorGroundingDefect(auditFeedback);
@@ -6556,6 +6586,13 @@ export async function summarizeGroundedUnit({
         ? await queryConservativeProceduralActorRepair(groundingAttempt, auditFeedback, rejectedOutput)
         : voteStrengthDefect
         ? await queryConservativeVoteStrengthRepair(groundingAttempt, auditFeedback, rejectedOutput)
+        : actingBodyAttributionDefect
+        ? await queryConservativeRoleAttributionRepair(
+          groundingAttempt,
+          "Grounding repair: the audit says the acting body was incorrectly used as the speaker for a procedural announcement. Keep the source-supported meeting status, omit the body-as-speaker pairing, and do not invent a named or generic actor unless the source explicitly supports it.",
+          auditFeedback,
+          rejectedOutput,
+        )
         : proceduralActorAttributionDefect
         ? await queryConservativeProceduralActorRepair(groundingAttempt, auditFeedback, rejectedOutput)
         : speakerHandoffRoleTransferDefect
@@ -6593,7 +6630,7 @@ export async function summarizeGroundedUnit({
           auditFeedback,
           rejectedOutput,
         )
-        : (institutionalActorDefect || collectiveActorDefect || roleAttributionRepairOnly)
+        : (collectiveActorDefect || (roleAttributionRepairOnly && !institutionalActorDefect))
           && !documentSourceOnly
           && !speakerIntroductionAttributionDefect
           && !staffRecommendationActorDefect
@@ -6785,7 +6822,9 @@ export async function summarizeGroundedUnit({
           rejectedOutput,
         )
         : institutionalActorDefect
-        ? await queryConservativeRoleAttributionRepair(
+        ? groundingAttempt >= 2
+        ? await queryConservativeInstitutionalActorOutputBan(groundingAttempt, auditFeedback, rejectedOutput)
+        : await queryConservativeRoleAttributionRepair(
           groundingAttempt,
           "Grounding repair: the audit says an institutional committee, council, body, office, or department was incorrectly assigned a presentation, noting, direction, statement, recommendation, reading, or approval action. Use impersonal source-supported wording and omit the unsupported institutional actor/action pairing. If the same audit also mentions floor status or a vote, preserve only the source-supported motion and disposition without inferring discussion.",
           auditFeedback,

@@ -156,6 +156,52 @@ export function normalizeUnambiguousSpokenNumbers(text = "") {
     );
 }
 
+function ordinalSuffix(value) {
+  const lastTwo = value % 100;
+  if (lastTwo >= 11 && lastTwo <= 13) return "th";
+  switch (value % 10) {
+    case 1: return "st";
+    case 2: return "nd";
+    case 3: return "rd";
+    default: return "th";
+  }
+}
+
+const STREET_ORDINAL_WORDS = [
+  ...ORDINAL_VALUES.keys(),
+  ...["twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
+    .flatMap((tens) => ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth"]
+      .map((unit) => `${tens}[\\s-]+${unit}`)),
+].sort((left, right) => right.length - left.length);
+const STREET_ORDINAL_PATTERN = new RegExp(
+  `\\b(${STREET_ORDINAL_WORDS.join("|")})\\s+(?=(?:avenue|ave\\.?|street|st\\.?|road|rd\\.?|boulevard|blvd\\.?|drive|dr\\.?|court|ct\\.?|crescent|lane|way|highway|parkway|terrace|place)\\b)`,
+  "giu",
+);
+
+export function normalizeNumberedStreetOrdinals(text = "") {
+  return String(text || "").replace(STREET_ORDINAL_PATTERN, (phrase) => {
+    const value = numberWordValue(phrase.trim());
+    return Number.isInteger(value) && value > 0 ? `${value}${ordinalSuffix(value)} ` : phrase;
+  });
+}
+
+const SPOKEN_AGENDA_NUMBER_PATTERN = new RegExp(`(?:${NUMBER_WORDS})(?:[\\s-]+(?:(?:and)[\\s-]+)?(?:${NUMBER_WORDS}))*`, "iu");
+
+export function normalizeSpokenAgendaLetterCodes(text = "") {
+  const source = String(text || "");
+  const spoken = new RegExp(
+    `(\\b(?:agenda\\s+)?(?:item|number)(?:\\s+number)?\\s+)(${SPOKEN_AGENDA_NUMBER_PATTERN.source})[\\s-]+(?:letter\\s+)?([a-z])\\b`,
+    "giu",
+  );
+  const numeric = /\b((?:agenda\s+)?(?:item|number)(?:\s+number)?\s+)(\d+(?:\.\d+)*)(?:[\s-]+)(?:letter\s+)?([a-z])\b/giu;
+  return source
+    .replace(spoken, (match, prefix, numberWords, letter) => {
+      const value = numberWordValue(numberWords);
+      return Number.isInteger(value) ? `${prefix}${value}${letter.toLowerCase()}` : match;
+    })
+    .replace(numeric, (_match, prefix, number, letter) => `${prefix}${number}${letter.toLowerCase()}`);
+}
+
 export function unsupportedNumericTokens(generated = "", groundedSource = "") {
   const supported = new Set(
     [...numericTokens(groundedSource), ...numberWordTokens(groundedSource)]

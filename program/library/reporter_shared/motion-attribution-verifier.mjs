@@ -52,6 +52,23 @@ export function unsupportedNamedMotionAttributions({ text = "", sourceExcerpt = 
   ));
 }
 
+export function hasSourceContradictedNamedMotionAttribution({
+  text = "",
+  sourceExcerpt = "",
+  auditFeedback = "",
+} = {}) {
+  const unsupportedClaims = unsupportedNamedMotionAttributions({ text, sourceExcerpt });
+  if (!unsupportedClaims.length) return false;
+
+  const sourceActors = namedMotionClaims(sourceExcerpt);
+  const sourceContradictsActor = unsupportedClaims.some((claim) => sourceActors.some((sourceClaim) => (
+    sourceClaim.actor.toLowerCase() !== claim.actor.toLowerCase()
+    && sourceClaim.role.toLowerCase().startsWith(claim.role.toLowerCase().split(/\s/u)[0])
+  )));
+  const auditContradictsActor = /\b(?:source|transcript|literal)\b[\s\S]{0,260}\b(?:names?|identif\w*|pairs?|attributes?|credits?)\b[\s\S]{0,260}\b(?:different|another|other|not|rather than|instead|conflict|contradict|incorrect|wrong|unsupported)\b[\s\S]{0,220}\b(?:mover|seconder|motion|person|actor|name|attribution)\b/iu.test(String(auditFeedback || ""));
+  return sourceContradictsActor || auditContradictsActor;
+}
+
 function readJsonField(filePath, fieldName) {
   if (!filePath || !fs.existsSync(filePath)) return [];
   const raw = String(readPyaTextValues(filePath, [fieldName])?.[fieldName] || "").trim();
